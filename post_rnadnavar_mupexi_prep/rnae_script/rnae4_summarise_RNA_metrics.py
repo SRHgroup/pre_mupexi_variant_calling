@@ -100,6 +100,11 @@ def build_sample_string(keys: List[str], values: Dict[str, str]) -> str:
     return ":".join(values.get(k, ".") for k in keys)
 
 
+def normalize_header_line(line: str) -> str:
+    """Remove BOM/leading spaces for robust header detection."""
+    return line.lstrip("\ufeff").lstrip()
+
+
 def tumor_spellings(label: str) -> List[str]:
     """Return label plus the alternate spelling if it contains TUMOR/TUMOUR."""
     labels = [label]
@@ -163,6 +168,14 @@ def find_rna_indices(samples: List[str], rna_suffixes: List[str]) -> List[int]:
     return idxs
 
 
+def split_vcf_header_columns(line: str) -> List[str]:
+    """Split #CHROM header columns; fallback to generic whitespace split if needed."""
+    cols = line.rstrip("\n").split("\t")
+    if len(cols) < 10:
+        cols = re.split(r"\s+", line.strip())
+    return cols
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--input", required=True, help="Input multi-sample VCF (.vcf or .vcf.gz)")
@@ -200,12 +213,15 @@ def main() -> None:
     try:
         with open_in(args.input) as fin, open_out(tmp_output) as fout:
             for line in fin:
-                if line.startswith("##"):
+                clean = normalize_header_line(line)
+                if clean.startswith("##"):
                     fout.write(line)
                     continue
 
-                if line.startswith("#CHROM"):
-                    cols = line.rstrip("\n").split("\t")
+                if clean.startswith("#CHROM"):
+                    cols = split_vcf_header_columns(clean)
+                    if len(cols) < 10:
+                        raise SystemExit(f"ERROR: malformed #CHROM header line in input VCF: {args.input}")
                     fixed = cols[:9]
                     samples = cols[9:]
 
@@ -255,7 +271,7 @@ def main() -> None:
                     fout.write(line)
                     continue
 
-                if not line.strip() or line[0] == "#":
+                if not line.strip() or clean.startswith("#"):
                     continue
 
                 n_in += 1
