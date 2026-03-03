@@ -116,6 +116,12 @@ python3 "$rnae_scripts/rnae4_summarise_RNA_metrics.py" \
   --out-normal-name "$out_dna_normal_label" \
   --out-rna-name "$out_rna_tumor_label"
 
+if ! bcftools view -h "$out_vcf" | grep -q '^#CHROM'; then
+  echo "ERROR: malformed output VCF from 4.4 (missing #CHROM): $out_vcf" >&2
+  rm -f "$out_vcf" "$out_vcf.tbi"
+  exit 1
+fi
+
 bcftools index -t "$out_vcf"
 
 in_total=$(bcftools view -H "$annot_vcf" | wc -l)

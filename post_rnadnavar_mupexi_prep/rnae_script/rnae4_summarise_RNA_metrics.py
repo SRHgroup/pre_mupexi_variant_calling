@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import os
 import re
 import sys
 from typing import Dict, List, Optional, TextIO
@@ -167,157 +168,173 @@ def main() -> None:
     n_in = 0
     n_out = 0
 
-    with open_in(args.input) as fin, open_out(args.output) as fout:
-        for line in fin:
-            if line.startswith("##"):
-                fout.write(line)
-                continue
+    tmp_output = f"{args.output}.tmp.{os.getpid()}"
+    try:
+        with open_in(args.input) as fin, open_out(tmp_output) as fout:
+            for line in fin:
+                if line.startswith("##"):
+                    fout.write(line)
+                    continue
 
-            if line.startswith("#CHROM"):
-                cols = line.rstrip("\n").split("\t")
-                fixed = cols[:9]
-                samples = cols[9:]
+                if line.startswith("#CHROM"):
+                    cols = line.rstrip("\n").split("\t")
+                    fixed = cols[:9]
+                    samples = cols[9:]
 
-                # locate DNA normal
-                if args.normal_sample:
-                    try:
-                        normal_idx = samples.index(args.normal_sample)
-                    except ValueError:
-                        raise SystemExit(
-                            f"ERROR: Could not find normal sample named '{args.normal_sample}' in header."
-                        )
-                else:
-                    normal_idx = find_sample_index_by_suffix(samples, normal_label_opts)
-                    if normal_idx is None:
-                        raise SystemExit(
-                            f"ERROR: Could not detect normal sample by label(s) {normal_label_opts} in header."
-                        )
-
-                # locate RNA samples
-                if args.rna_sample:
-                    # if exact sample provided, collapse just that sample
-                    if args.rna_sample in samples:
-                        rna_indices = [samples.index(args.rna_sample)]
+                    # locate DNA normal
+                    if args.normal_sample:
+                        try:
+                            normal_idx = samples.index(args.normal_sample)
+                        except ValueError:
+                            raise SystemExit(
+                                f"ERROR: Could not find normal sample named '{args.normal_sample}' in header."
+                            )
                     else:
-                        # treat as prefix (strip optional .0001): collapse all that start with it
-                        prefix = args.rna_sample.split(".")[0]
-                        rna_indices = [i for i, s in enumerate(samples) if s.split(".")[0] == prefix]
+                        normal_idx = find_sample_index_by_suffix(samples, normal_label_opts)
+                        if normal_idx is None:
+                            raise SystemExit(
+                                f"ERROR: Could not detect normal sample by label(s) {normal_label_opts} in header."
+                            )
+
+                    # locate RNA samples
+                    if args.rna_sample:
+                        # if exact sample provided, collapse just that sample
+                        if args.rna_sample in samples:
+                            rna_indices = [samples.index(args.rna_sample)]
+                        else:
+                            # treat as prefix (strip optional .0001): collapse all that start with it
+                            prefix = args.rna_sample.split(".")[0]
+                            rna_indices = [i for i, s in enumerate(samples) if s.split(".")[0] == prefix]
+                    else:
+                        rna_indices = find_rna_indices(samples, rna_label_opts)
+
+                    # remove normal from RNA indices if it somehow matched
+                    rna_indices = [i for i in rna_indices if i != normal_idx]
+
+                    if not rna_indices:
+                        raise SystemExit(
+                            f"ERROR: No RNA samples detected using rna-label(s) {rna_label_opts} (or --rna-sample)."
+                        )
+
+                    fout.write("\t".join(fixed + [args.out_normal_name, args.out_rna_name]) + "\n")
+                    wrote_header = True
+                    continue
+
+                if not wrote_header:
+                    # Keep passing through meta/header lines until #CHROM is encountered.
+                    # If #CHROM never appears, fail below and do not publish temp output.
+                    fout.write(line)
+                    continue
+
+                if not line.strip() or line[0] == "#":
+                    continue
+
+                n_in += 1
+                toks = line.rstrip("\n").split("\t")
+                if len(toks) < 10:
+                    continue
+
+                fmt_keys = toks[8].split(":")
+                sample_fields = toks[9:]
+
+                dn = parse_sample(fmt_keys, sample_fields[normal_idx])
+
+                # Aggregate RNA
+                agg_ad: Optional[List[int]] = None
+                agg_f1r2: Optional[List[int]] = None
+                agg_f2r1: Optional[List[int]] = None
+                agg_fad: Optional[List[int]] = None
+                agg_sb: Optional[List[int]] = None
+                dp_sum: Optional[int] = 0
+                dp_any = False
+
+                for ridx in rna_indices:
+                    rs = parse_sample(fmt_keys, sample_fields[ridx])
+
+                    agg_ad = sum_lists(agg_ad, parse_int_list(rs.get("AD", ".")))
+                    agg_f1r2 = sum_lists(agg_f1r2, parse_int_list(rs.get("F1R2", ".")))
+                    agg_f2r1 = sum_lists(agg_f2r1, parse_int_list(rs.get("F2R1", ".")))
+                    agg_fad = sum_lists(agg_fad, parse_int_list(rs.get("FAD", ".")))
+                    agg_sb = sum_lists(agg_sb, parse_int_list(rs.get("SB", ".")))
+
+                    dp = safe_int(rs.get("DP", "."))
+                    if dp is not None:
+                        dp_sum = (dp_sum or 0) + dp
+                        dp_any = True
+
+                dp_sum = dp_sum if dp_any else None
+
+                if dp_sum is None and agg_ad is not None:
+                    dp_sum = sum(agg_ad)
+
+                rna_af = recompute_af_from_ad_dp(agg_ad, dp_sum)
+
+                if dp_sum is None or dp_sum == 0 or agg_ad is None:
+                    rna_gt = "./."
                 else:
-                    rna_indices = find_rna_indices(samples, rna_label_opts)
+                    alt_sum = sum(agg_ad[1:]) if len(agg_ad) > 1 else 0
+                    rna_gt = "0/1" if alt_sum > 0 else "0/0"
 
-                # remove normal from RNA indices if it somehow matched
-                rna_indices = [i for i in rna_indices if i != normal_idx]
+                keep_keys = [k for k in WANTED_KEYS_ORDER if k in fmt_keys]
 
-                if not rna_indices:
-                    raise SystemExit(
-                        f"ERROR: No RNA samples detected using rna-label(s) {rna_label_opts} (or --rna-sample)."
-                    )
+                # DNA normal output
+                dn_out: Dict[str, str] = {}
+                dn_ad = parse_int_list(dn.get("AD", ".")) if "AD" in keep_keys else None
+                dn_dp = safe_int(dn.get("DP", ".")) if "DP" in keep_keys else None
+                if dn_dp is None and dn_ad is not None:
+                    dn_dp = sum(dn_ad)
+                dn_af = recompute_af_from_ad_dp(dn_ad, dn_dp) if "AF" in keep_keys else None
 
-                fout.write("\t".join(fixed + [args.out_normal_name, args.out_rna_name]) + "\n")
-                wrote_header = True
-                continue
+                for k in keep_keys:
+                    if k == "GT":
+                        dn_out[k] = dn.get("GT", ".")
+                    elif k == "AD":
+                        dn_out[k] = dn.get("AD", ".")
+                    elif k == "DP":
+                        dn_out[k] = str(dn_dp) if dn_dp is not None else dn.get("DP", ".")
+                    elif k == "AF":
+                        dn_out[k] = fmt_float(dn_af)
+                    else:
+                        dn_out[k] = dn.get(k, ".")
 
-            if not wrote_header:
-                fout.write(line)
-                continue
+                # RNA collapsed output
+                rn_out: Dict[str, str] = {}
+                for k in keep_keys:
+                    if k == "GT":
+                        rn_out[k] = rna_gt
+                    elif k == "AD":
+                        rn_out[k] = ",".join(map(str, agg_ad)) if agg_ad is not None else "."
+                    elif k == "DP":
+                        rn_out[k] = str(dp_sum) if dp_sum is not None else "."
+                    elif k == "AF":
+                        rn_out[k] = fmt_float(rna_af)
+                    elif k == "F1R2":
+                        rn_out[k] = ",".join(map(str, agg_f1r2)) if agg_f1r2 is not None else "."
+                    elif k == "F2R1":
+                        rn_out[k] = ",".join(map(str, agg_f2r1)) if agg_f2r1 is not None else "."
+                    elif k == "FAD":
+                        rn_out[k] = ",".join(map(str, agg_fad)) if agg_fad is not None else "."
+                    elif k == "SB":
+                        rn_out[k] = ",".join(map(str, agg_sb)) if agg_sb is not None else "."
+                    else:
+                        rn_out[k] = "."
 
-            if not line.strip() or line[0] == "#":
-                continue
+                toks[8] = ":".join(keep_keys)
+                out_line = toks[:9] + [build_sample_string(keep_keys, dn_out), build_sample_string(keep_keys, rn_out)]
+                fout.write("\t".join(out_line) + "\n")
+                n_out += 1
 
-            n_in += 1
-            toks = line.rstrip("\n").split("\t")
-            if len(toks) < 10:
-                continue
+        if not wrote_header:
+            raise SystemExit(f"ERROR: Input VCF header is missing #CHROM line: {args.input}")
 
-            fmt_keys = toks[8].split(":")
-            sample_fields = toks[9:]
-
-            dn = parse_sample(fmt_keys, sample_fields[normal_idx])
-
-            # Aggregate RNA
-            agg_ad: Optional[List[int]] = None
-            agg_f1r2: Optional[List[int]] = None
-            agg_f2r1: Optional[List[int]] = None
-            agg_fad: Optional[List[int]] = None
-            agg_sb: Optional[List[int]] = None
-            dp_sum: Optional[int] = 0
-            dp_any = False
-
-            for ridx in rna_indices:
-                rs = parse_sample(fmt_keys, sample_fields[ridx])
-
-                agg_ad = sum_lists(agg_ad, parse_int_list(rs.get("AD", ".")))
-                agg_f1r2 = sum_lists(agg_f1r2, parse_int_list(rs.get("F1R2", ".")))
-                agg_f2r1 = sum_lists(agg_f2r1, parse_int_list(rs.get("F2R1", ".")))
-                agg_fad = sum_lists(agg_fad, parse_int_list(rs.get("FAD", ".")))
-                agg_sb = sum_lists(agg_sb, parse_int_list(rs.get("SB", ".")))
-
-                dp = safe_int(rs.get("DP", "."))
-                if dp is not None:
-                    dp_sum = (dp_sum or 0) + dp
-                    dp_any = True
-
-            dp_sum = dp_sum if dp_any else None
-
-            if dp_sum is None and agg_ad is not None:
-                dp_sum = sum(agg_ad)
-
-            rna_af = recompute_af_from_ad_dp(agg_ad, dp_sum)
-
-            if dp_sum is None or dp_sum == 0 or agg_ad is None:
-                rna_gt = "./."
-            else:
-                alt_sum = sum(agg_ad[1:]) if len(agg_ad) > 1 else 0
-                rna_gt = "0/1" if alt_sum > 0 else "0/0"
-
-            keep_keys = [k for k in WANTED_KEYS_ORDER if k in fmt_keys]
-
-            # DNA normal output
-            dn_out: Dict[str, str] = {}
-            dn_ad = parse_int_list(dn.get("AD", ".")) if "AD" in keep_keys else None
-            dn_dp = safe_int(dn.get("DP", ".")) if "DP" in keep_keys else None
-            if dn_dp is None and dn_ad is not None:
-                dn_dp = sum(dn_ad)
-            dn_af = recompute_af_from_ad_dp(dn_ad, dn_dp) if "AF" in keep_keys else None
-
-            for k in keep_keys:
-                if k == "GT":
-                    dn_out[k] = dn.get("GT", ".")
-                elif k == "AD":
-                    dn_out[k] = dn.get("AD", ".")
-                elif k == "DP":
-                    dn_out[k] = str(dn_dp) if dn_dp is not None else dn.get("DP", ".")
-                elif k == "AF":
-                    dn_out[k] = fmt_float(dn_af)
-                else:
-                    dn_out[k] = dn.get(k, ".")
-
-            # RNA collapsed output
-            rn_out: Dict[str, str] = {}
-            for k in keep_keys:
-                if k == "GT":
-                    rn_out[k] = rna_gt
-                elif k == "AD":
-                    rn_out[k] = ",".join(map(str, agg_ad)) if agg_ad is not None else "."
-                elif k == "DP":
-                    rn_out[k] = str(dp_sum) if dp_sum is not None else "."
-                elif k == "AF":
-                    rn_out[k] = fmt_float(rna_af)
-                elif k == "F1R2":
-                    rn_out[k] = ",".join(map(str, agg_f1r2)) if agg_f1r2 is not None else "."
-                elif k == "F2R1":
-                    rn_out[k] = ",".join(map(str, agg_f2r1)) if agg_f2r1 is not None else "."
-                elif k == "FAD":
-                    rn_out[k] = ",".join(map(str, agg_fad)) if agg_fad is not None else "."
-                elif k == "SB":
-                    rn_out[k] = ",".join(map(str, agg_sb)) if agg_sb is not None else "."
-                else:
-                    rn_out[k] = "."
-
-            toks[8] = ":".join(keep_keys)
-            out_line = toks[:9] + [build_sample_string(keep_keys, dn_out), build_sample_string(keep_keys, rn_out)]
-            fout.write("\t".join(out_line) + "\n")
-            n_out += 1
+        os.replace(tmp_output, args.output)
+    except Exception:
+        try:
+            if os.path.exists(tmp_output):
+                os.remove(tmp_output)
+        except OSError:
+            pass
+        raise
 
     print(f"[done] input_records={n_in} output_records={n_out}", file=sys.stderr)
     print(f"[done] wrote {args.output}", file=sys.stderr)
