@@ -1,3 +1,7 @@
-# sample_name\tfastq_r1\tfastq_r2
-Pat11_TUMOR\t/path/to/Pat11_R1.fastq.gz\t/path/to/Pat11_R2.fastq.gz
-Pat12_TUMOR\t/path/to/Pat12_R1.fastq.gz\t/path/to/Pat12_R2.fastq.gz
+# sample_name fastq_r1 fastq_r2 sample_type
+Pat1_DNA_NORMAL /path/to/your/fastq/Pat1_DNA_NORMAL_R1.fastq.gz /path/to/your/fastq/Pat1_DNA_NORMAL_R2.fastq.gz DNA_NORMAL
+Pat1_DNA_TUMOR /path/to/your/fastq/Pat1_DNA_TUMOR_R1.fastq.gz /path/to/your/fastq/Pat1_DNA_TUMOR_R2.fastq.gz DNA_TUMOR
+Pat1_RNA_TUMOR /path/to/your/fastq/Pat1_RNA_TUMOR_R1.fastq.gz /path/to/your/fastq/Pat1_RNA_TUMOR_R2.fastq.gz RNA_TUMOR
+Pat2_DNA_NORMAL /path/to/your/fastq/Pat2_DNA_NORMAL_R1.fastq.gz /path/to/your/fastq/Pat2_DNA_NORMAL_R2.fastq.gz DNA_NORMAL
+Pat2_DNA_TUMOR /path/to/your/fastq/Pat2_DNA_TUMOR_R1.fastq.gz /path/to/your/fastq/Pat2_DNA_TUMOR_R2.fastq.gz DNA_TUMOR
+Pat2_RNA_TUMOR /path/to/your/fastq/Pat2_RNA_TUMOR_R1.fastq.gz /path/to/your/fastq/Pat2_RNA_TUMOR_R2.fastq.gz RNA_TUMOR

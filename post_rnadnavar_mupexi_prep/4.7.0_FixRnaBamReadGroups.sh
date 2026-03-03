@@ -34,12 +34,20 @@ source "$config"
 sample_base_name() {
   local value="$1"
   local labels=(
-    "${dna_tumor_label:-DNA_TUMOR}" "${rna_tumor_label:-RNA_TUMOR}"
+    "${dna_normal_label:-DNA_NORMAL}" "${dna_tumor_label:-DNA_TUMOR}" "${rna_tumor_label:-RNA_TUMOR}"
+    "${out_dna_normal_label:-DNA_NORMAL}" "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}" "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
     "DNA_TUMOR" "DNA_TUMOUR" "RNA_TUMOR" "RNA_TUMOUR" "TUMOR" "TUMOUR"
   )
   local label
   for label in "${labels[@]}"; do value="${value%_${label}}"; done
   printf '%s\n' "$value"
+}
+
+sample_is_requested() {
+  local sample_id="$1"
+  local patient_id="$2"
+  local requested="${sample:-}"
+  [ -z "$requested" ] || [ "$sample_id" = "$requested" ] || [ "$patient_id" = "$requested" ]
 }
 
 if [ -z "${sample:-}" ]; then
@@ -54,14 +62,17 @@ logdir="${scriptdir}/logs"
 repdir="${scriptdir}/reports"
 mkdir -p "$logdir" "$repdir"
 
+declare -A seen_patients=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   case "$line" in [[:space:]]*'#'*) continue ;; esac
 
   sample_name=$(printf '%s\n' "$line" | awk -F'[,	 ]+' '{print $1}')
-  [ -z "${sample:-}" ] || [ "$sample_name" = "$sample" ] || continue
-
   name=$(sample_base_name "$sample_name")
+  [ -n "$name" ] || continue
+  sample_is_requested "$sample_name" "$name" || continue
+  [[ -n "${seen_patients[$name]:-}" ]] && continue
+  seen_patients["$name"]=1
   rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 
@@ -85,6 +96,7 @@ SCRIPT
     printf 'outbam=%q\n' "$outbam"
     printf 'header_sam=%q\n' "$header_sam"
     printf 'check_txt=%q\n' "$check_txt"
+    printf 'rna_dir_label=%q\n' "$rna_dir_label"
     printf 'out_rna_label=%q\n' "$out_rna_label"
     cat <<'SCRIPT'
 if [ ! -f "$inbam" ]; then
@@ -94,7 +106,8 @@ fi
 
 mkdir -p "$(dirname "$outbam")"
 
-samtools view -H "$inbam" | sed -E "s/SM:[^\t]*_?(RNA_TUMO(U)?R)(\.[0-9]{4})?/SM:${out_rna_label}/g" > "$header_sam"
+escaped_rna_label=$(printf '%s' "$rna_dir_label" | sed -e 's/[][(){}.^$*+?|/]/\\&/g')
+samtools view -H "$inbam" | sed -E "s/SM:[^\t]*_?(${escaped_rna_label})(\\.[0-9]{4})?/SM:${out_rna_label}/g" > "$header_sam"
 samtools reheader "$header_sam" "$inbam" > "$outbam"
 samtools index -@ 8 "$outbam"
 

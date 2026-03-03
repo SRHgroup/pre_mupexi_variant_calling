@@ -35,7 +35,8 @@ source "$config"
 sample_base_name() {
   local value="$1"
   local labels=(
-    "${dna_tumor_label:-DNA_TUMOR}" "${rna_tumor_label:-RNA_TUMOR}"
+    "${dna_normal_label:-DNA_NORMAL}" "${dna_tumor_label:-DNA_TUMOR}" "${rna_tumor_label:-RNA_TUMOR}"
+    "${out_dna_normal_label:-DNA_NORMAL}" "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}" "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
     "DNA_TUMOR" "DNA_TUMOUR" "RNA_TUMOR" "RNA_TUMOUR" "TUMOR" "TUMOUR"
   )
   local label
@@ -43,17 +44,28 @@ sample_base_name() {
   printf '%s\n' "$value"
 }
 
+sample_is_requested() {
+  local sample_id="$1"
+  local patient_id="$2"
+  local requested="${selected_sample:-}"
+  [ -z "$requested" ] || [ "$sample_id" = "$requested" ] || [ "$patient_id" = "$requested" ]
+}
+
 missing=0
 printf "sample\tstatus\tmissing_path\n"
 
+declare -A seen_patients=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   case "$line" in [[:space:]]*'#'*) continue ;; esac
 
   sample_name=$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')
-  [ -z "${selected_sample:-}" ] || [ "$sample_name" = "$selected_sample" ] || continue
-
   name=$(sample_base_name "$sample_name")
+  [ -n "$name" ] || continue
+  sample_is_requested "$sample_name" "$name" || continue
+  [[ -n "${seen_patients[$name]:-}" ]] && continue
+  seen_patients["$name"]=1
+
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   outdir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"

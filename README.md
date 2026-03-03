@@ -69,6 +69,13 @@ out_rna_tumor_label="RNA_TUMOUR"
 
 Detection is suffix-based (not hardcoded exact full sample IDs), including optional RNA suffixes like `.0001`.
 
+4. `SAMPLES` structure:
+
+- One row per biological sample (for example DNA normal, DNA tumor, RNA tumor).
+- First column must include patient ID + sample-type suffix, e.g. `Pat1_DNA_NORMAL`, `Pat1_DNA_TUMOR`, `Pat1_RNA_TUMOR`.
+- The pipeline derives unique patient IDs by stripping configured labels, so each patient is processed once even with 3 rows.
+- Columns after the first are currently ignored by the step scripts (you can still keep FASTQ paths and sample_type columns for compatibility with other pipelines).
+
 ## Run
 
 From repository `post_rnadnavar_mupexi_prep/` directory:
@@ -88,6 +95,8 @@ Single-sample run:
 ```bash
 bash 4.4_SummariseRnaMetrics.sh -c /path/to/CONFIG -s Pat11
 ```
+
+`-s` accepts either full sample ID (for example `Pat11_RNA_TUMOR`) or patient ID (`Pat11`).
 
 Force recompute:
 

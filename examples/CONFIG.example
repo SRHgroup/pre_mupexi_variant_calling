@@ -3,7 +3,12 @@
 # Example CONFIG for RNA-DNA variant analysis extension pipeline (steps 4.1-4.7).
 # Copy this file to your dataset/work folder and edit paths.
 
-# SAMPLES file: first column is sample/patient ID; additional columns are ignored by 4.x scripts.
+# SAMPLES file: first column is sample ID with a suffix label, e.g.
+#   Pat1_DNA_NORMAL
+#   Pat1_DNA_TUMOR
+#   Pat1_RNA_TUMOR
+# The pipeline derives patient ID (Pat1) by stripping configurable labels.
+# Additional columns are ignored by 4.x scripts.
 samples="/path/to/SAMPLES"
 
 # Working directories
@@ -26,7 +31,7 @@ knownsites="/path/to/KnownSites_merged.with_source.collapsed.clean.tsv.gz"
 FASTA="/path/to/reference.fa.gz"
 DICT="/path/to/reference.dict"
 
-# Label variables used for matching sample suffixes in VCF/BAM headers.
+# Label variables used for matching sample suffixes in SAMPLES/VCF/BAM headers.
 # Default uses US spelling. To switch to UK spelling, set DNA_TUMOUR / RNA_TUMOUR.
 dna_normal_label="DNA_NORMAL"
 dna_tumor_label="DNA_TUMOR"
@@ -37,6 +42,21 @@ out_dna_normal_label="DNA_NORMAL"
 out_dna_tumor_label="${dna_tumor_label}"
 out_rna_tumor_label="${rna_tumor_label}"
 
+# GERMLINE PREP
+# 3.0_FilterGermlineVariants.sh
+# 2.0_HaplotypeCaller.sh
+output_extension_20="2.0.HaplotypeCaller.vcf"
+# 2.0.1_FilterGermline.sh
+output_extension_201="2.0.1.Filtered.HaplotypeCaller.vcf"
+# 2.0.2_SelectVariants.sh
+output_extension_202="2.0.2.Filtered.Selected.HaplotypeCaller.vcf"
+
+# 3.0_FilterGermlineVariants.sh
+output_extension_30="3.0.Filtered.vcf"
+output_extension_31="3.1.Filtered.AF.vcf"
+output_extension_32="3.2.Filtered.som.AF.vcf" 
+
+# RNA EDIT PREP
 # Output naming extensions
 rna_only_vcf_extension="4.1_RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.vcf.gz"
 split_vcf_extension="4.2_RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.split.vcf.gz"

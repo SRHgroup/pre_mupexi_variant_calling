@@ -42,16 +42,21 @@ source "$config"
 : "${rna_only_vcf_extension:?CONFIG must define rna_only_vcf_extension}"
 
 sample_is_requested() {
+  local sample_id="$1"
+  local patient_id="$2"
   local requested="${sample:-}"
-  local candidate="$1"
-  [ -z "$requested" ] || [ "$candidate" = "$requested" ]
+  [ -z "$requested" ] || [ "$sample_id" = "$requested" ] || [ "$patient_id" = "$requested" ]
 }
 
 sample_base_name() {
   local value="$1"
   local labels=(
+    "${dna_normal_label:-DNA_NORMAL}"
     "${dna_tumor_label:-DNA_TUMOR}"
     "${rna_tumor_label:-RNA_TUMOR}"
+    "${out_dna_normal_label:-DNA_NORMAL}"
+    "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
+    "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
     "DNA_TUMOR" "DNA_TUMOUR" "RNA_TUMOR" "RNA_TUMOUR" "TUMOR" "TUMOUR"
   )
   local label
@@ -73,6 +78,7 @@ logdir="${scriptdir}/logs"
 repdir="${scriptdir}/reports"
 mkdir -p "$logdir" "$repdir"
 
+declare -A seen_patients=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   case "$line" in
@@ -80,9 +86,11 @@ while IFS= read -r line; do
   esac
 
   sample_name=$(printf '%s\n' "$line" | awk -F'[,	 ]+' '{print $1}')
-  sample_is_requested "$sample_name" || continue
-
   name=$(sample_base_name "$sample_name")
+  [ -n "$name" ] || continue
+  sample_is_requested "$sample_name" "$name" || continue
+  [[ -n "${seen_patients[$name]:-}" ]] && continue
+  seen_patients["$name"]=1
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
