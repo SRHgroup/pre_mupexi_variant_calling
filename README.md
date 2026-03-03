@@ -1,11 +1,11 @@
-# rnadnavar (PBS/qsub RNA-DNA extension pipeline)
+# post_rnadnavar_mupexi_prep (PBS/qsub RNA-DNA extension pipeline)
 
-This repository packages the `rnadnavar/` bash pipeline (steps `4.1` to `4.7.1`) as a versioned, reusable Git project.
+This repository packages the `post_rnadnavar_mupexi_prep/` bash pipeline (steps `4.1` to `4.7.1`) as a versioned, reusable Git project.
 
 ## Repository layout
 
-- `rnadnavar/`: step scripts and `run_all.sh`
-- `rnadnavar/rnae_script/`: helper scripts called by steps
+- `post_rnadnavar_mupexi_prep/`: step scripts and `run_all.sh`
+- `post_rnadnavar_mupexi_prep/rnae_script/`: helper scripts called by steps
 - `examples/CONFIG.example`: template config
 - `examples/SAMPLES.example`: template sample list
 - `bin/check_outputs.sh`: expected-output checker
@@ -53,7 +53,7 @@ cp examples/SAMPLES.example /path/to/your/project/SAMPLES
 - `knownsites`
 - `FASTA`
 - `DICT`
-- `rnae_scripts` (point to this repo clone: `<clone>/rnadnavar/rnae_script`)
+- `rnae_scripts` (point to this repo clone: `<clone>/post_rnadnavar_mupexi_prep/rnae_script`)
 
 3. Label controls:
 
@@ -71,7 +71,7 @@ Detection is suffix-based (not hardcoded exact full sample IDs), including optio
 
 ## Run
 
-From repository `rnadnavar/` directory:
+From repository `post_rnadnavar_mupexi_prep/` directory:
 
 ```bash
 bash 4.1_OnlyRnaVcf.sh -c /path/to/CONFIG
@@ -133,7 +133,7 @@ Recommended pattern:
 1. Clone once in a stable tools path (example):
 
 ```bash
-git clone <repo-url> /hpc/tools/rnadnavar
+git clone <repo-url> /hpc/tools/post_rnadnavar_mupexi_prep
 ```
 
 2. Keep dataset-specific `CONFIG` files outside the repo (one per dataset).
@@ -141,7 +141,7 @@ git clone <repo-url> /hpc/tools/rnadnavar
 4. Update pipeline safely:
 
 ```bash
-cd /hpc/tools/rnadnavar
+cd /hpc/tools/post_rnadnavar_mupexi_prep
 git fetch --tags
 git checkout v0.1.0    # or a newer tag/branch
 ```

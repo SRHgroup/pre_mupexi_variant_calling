@@ -11,7 +11,7 @@ vcfdir="/path/to/project/variant_calling/mutect2"
 bamdir="/path/to/project/preprocessing/markduplicates"
 
 # Helper scripts directory (inside this repo). Keep absolute to run from any folder.
-rnae_scripts="/path/to/this/repo/rnadnavar/rnae_script"
+rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"
 
 # DNA-normal germline VCF location: expected files <PATIENT>_<ndna_vcf>
 nvcf_dir="/path/to/germline_vcfs"

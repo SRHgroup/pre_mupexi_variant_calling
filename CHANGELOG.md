@@ -12,8 +12,8 @@ This project follows a simple Keep-a-Changelog style and semantic version tags (
 
 ### Added
 
-- Initial import of `rnadnavar` step scripts (`4.1`-`4.7.1`) and helper scripts.
-- Repository structure with `rnadnavar/`, `rnadnavar/rnae_script/`, `examples/`, `bin/`.
+- Initial import of `post_rnadnavar_mupexi_prep` step scripts (`4.1`-`4.7.1`) and helper scripts.
+- Repository structure with `post_rnadnavar_mupexi_prep/`, `post_rnadnavar_mupexi_prep/rnae_script/`, `examples/`, `bin/`.
 - `run_all.sh` wrapper, `Makefile` step targets, and `bin/check_outputs.sh` validation utility.
 - Documentation for setup, execution, labels, outputs, and HPC clone/update workflow.
 
