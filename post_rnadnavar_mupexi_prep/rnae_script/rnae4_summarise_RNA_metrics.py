@@ -217,6 +217,8 @@ def main() -> None:
     n_out = 0
 
     tmp_output = f"{args.output}.tmp.{os.getpid()}"
+    if args.output.endswith(".gz"):
+        tmp_output = f"{tmp_output}.gz"
     try:
         with open_in(args.input) as fin, open_out(tmp_output) as fout:
             for line in fin:
