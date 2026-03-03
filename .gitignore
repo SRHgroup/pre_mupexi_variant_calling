@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Generic logs/temp
+*.log
+*.tmp
+*.swp
+
+# Pipeline outputs and indexes
+*.vcf
+*.vcf.gz
+*.vcf.gz.tbi
+*.bcf
+*.bcf.csi
+*.bam
+*.bam.bai
+*.sam
+*.bed
+*.tsv
+*.txt
+
+# Cluster run artifacts
+*.o*
+*.e*
+*.pbs
+logs/
+reports/
+
+# Keep only template examples
+!examples/
+!examples/CONFIG.example
+!examples/SAMPLES.example
+
+# Local dataset configs/samples (non-template)
+CONFIG
+SAMPLES
+*.local

@@ -1,0 +1,52 @@
+#!/usr/bin/bash
+
+# Example CONFIG for RNA-DNA variant analysis extension pipeline (steps 4.1-4.7).
+# Copy this file to your dataset/work folder and edit paths.
+
+# SAMPLES file: first column is sample/patient ID; additional columns are ignored by 4.x scripts.
+samples="/path/to/SAMPLES"
+
+# Working directories
+vcfdir="/path/to/project/variant_calling/mutect2"
+bamdir="/path/to/project/preprocessing/markduplicates"
+
+# Helper scripts directory (inside this repo). Keep absolute to run from any folder.
+rnae_scripts="/path/to/this/repo/rnadnavar/rnae_script"
+
+# DNA-normal germline VCF location: expected files <PATIENT>_<ndna_vcf>
+nvcf_dir="/path/to/germline_vcfs"
+ndna_vcf="2.0.2.Filtered.Selected.HaplotypeCaller.vcf"
+
+# Optional PBS defaults
+qsub_group="srhgroup"
+qsub_account="srhgroup"
+
+# References
+knownsites="/path/to/KnownSites_merged.with_source.collapsed.clean.tsv.gz"
+FASTA="/path/to/reference.fa.gz"
+DICT="/path/to/reference.dict"
+
+# Label variables used for matching sample suffixes in VCF/BAM headers.
+# Default uses US spelling. To switch to UK spelling, set DNA_TUMOUR / RNA_TUMOUR.
+dna_normal_label="DNA_NORMAL"
+dna_tumor_label="DNA_TUMOR"
+rna_tumor_label="RNA_TUMOR"
+
+# Standardized output names (used in downstream steps).
+out_dna_normal_label="DNA_NORMAL"
+out_dna_tumor_label="${dna_tumor_label}"
+out_rna_tumor_label="${rna_tumor_label}"
+
+# Output naming extensions
+rna_only_vcf_extension="4.1_RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.vcf.gz"
+split_vcf_extension="4.2_RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.split.vcf.gz"
+filtered_edit_labeled_vcf_extension="4.2_filtered_edit_labeled.vcf.gz"
+annot_vcf_extension="4.3_filtered_edit_labeled.knownsites.vcf.gz"
+rna_summarised_vcf_extension="4.4_filtered_edit_labeled.knownsites_summarised.vcf.gz"
+rna_vcf_knownsites_extension="4.5_filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
+merged_vcf_extension="4.6_DNAt_DNAn_RNAt_merged.vcf.gz"
+genotyped_vcf_extension="4.6.1_DNAt_DNAn_RNAt_merged_genotyped.vcf.gz"
+phased_vcf_extension="4.7_DNAt_DNAn_RNAt_merged_phased.vcf.gz"
+
+# Optional step 4.7.0 output
+rna_bam_smfixed_suffix="RNA_TUMOUR.md.SMfixed.bam"

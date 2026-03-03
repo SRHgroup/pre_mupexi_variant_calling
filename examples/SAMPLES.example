@@ -1,0 +1,3 @@
+# sample_name\tfastq_r1\tfastq_r2
+Pat11_TUMOR\t/path/to/Pat11_R1.fastq.gz\t/path/to/Pat11_R2.fastq.gz
+Pat12_TUMOR\t/path/to/Pat12_R1.fastq.gz\t/path/to/Pat12_R2.fastq.gz
