@@ -51,8 +51,8 @@ sample_is_requested() {
   [ -z "$requested" ] || [ "$sample_id" = "$requested" ] || [ "$patient_id" = "$requested" ]
 }
 
-missing=0
-printf "sample\tstatus\tmissing_path\n"
+failed=0
+printf "sample\tstatus\tpath\n"
 
 declare -A seen_patients=()
 while IFS= read -r line; do
@@ -88,11 +88,18 @@ while IFS= read -r line; do
   for out in "${expected[@]}"; do
     if [ ! -f "$out" ]; then
       printf "%s\tMISSING\t%s\n" "$name" "$out"
-      missing=1
+      failed=1
+      continue
+    fi
+    if [ ! -s "$out" ]; then
+      printf "%s\tEMPTY\t%s\n" "$name" "$out"
+      failed=1
     fi
   done
 done < "$samples"
 
-if [ "$missing" -eq 0 ]; then
-  echo "All expected files found."
+if [ "$failed" -eq 0 ]; then
+  echo "All expected files found and non-empty."
+else
+  exit 1
 fi
