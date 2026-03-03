@@ -33,6 +33,24 @@ USAGE
 
 die(){ echo "[error] $*" >&2; exit 1; }
 
+resolve_sample_name () {
+  local requested="$1"
+  shift
+  local -a list=("$@")
+  local s alt
+  for s in "${list[@]}"; do
+    [[ "$s" == "$requested" ]] && { echo "$s"; return 0; }
+  done
+  for s in "${list[@]}"; do
+    [[ "${s^^}" == "${requested^^}" || "${s^^}" =~ _${requested^^}$ ]] && { echo "$s"; return 0; }
+  done
+  if [[ "$requested" == *TUMOR* ]]; then alt="${requested/TUMOR/TUMOUR}"; else alt="${requested/TUMOUR/TUMOR}"; fi
+  for s in "${list[@]}"; do
+    [[ "${s^^}" == "${alt^^}" || "${s^^}" =~ _${alt^^}$ || "${s^^}" =~ _${alt^^}(\.[0-9]+)?$ ]] && { echo "$s"; return 0; }
+  done
+  return 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --merged) merged_vcf="$2"; shift 2;;
@@ -73,12 +91,13 @@ command -v bgzip >/dev/null 2>&1 || die "bgzip not found in PATH"
 
 bcftools index -f -t "$merged_vcf" >/dev/null 2>&1 || true
 
-samples=$(bcftools query -l "$merged_vcf" | tr '\n' ' ')
+mapfile -t samples_arr < <(bcftools query -l "$merged_vcf")
+samples=$(printf '%s ' "${samples_arr[@]}")
 echo "[info] merged samples: $samples"
 
-echo "$samples" | grep -qw "$normal_name" || die "$normal_name not in merged VCF"
-echo "$samples" | grep -qw "$dna_name" || die "$dna_name not in merged VCF"
-echo "$samples" | grep -qw "$rna_name" || die "$rna_name not in merged VCF"
+normal_in=$(resolve_sample_name "$normal_name" "${samples_arr[@]}") || die "$normal_name not found (flexible match) in merged VCF"
+dna_in=$(resolve_sample_name "$dna_name" "${samples_arr[@]}") || die "$dna_name not found (flexible match) in merged VCF"
+rna_in=$(resolve_sample_name "$rna_name" "${samples_arr[@]}") || die "$rna_name not found (flexible match) in merged VCF"
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "'$tmpdir'"' EXIT
@@ -125,7 +144,7 @@ bcftools index -f -t "$rna_fix"
 
 # Keep DNA normal genotypes from merged VCF
 normal_vcf="${tmpdir}/${normal_name}.vcf.gz"
-bcftools view -s "$normal_name" -Oz -o "$normal_vcf" "$merged_vcf"
+bcftools view -s "$normal_in" -Oz -o "$normal_vcf" "$merged_vcf"
 bcftools index -f -t "$normal_vcf"
 
 # Merge back to 3-sample VCF (same positions)

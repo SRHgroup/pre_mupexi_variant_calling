@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse, gzip, sys
+import re
 from typing import Dict, List, Optional, TextIO, Tuple
 
 def open_in(path: str) -> TextIO:
@@ -36,6 +37,37 @@ def parse_sample(fmt_keys: List[str], sample_str: str) -> Dict[str, str]:
         d[k] = v
     return d
 
+def tumor_spellings(label: str) -> List[str]:
+    labels = [label]
+    if "TUMOR" in label:
+        labels.append(label.replace("TUMOR", "TUMOUR"))
+    if "TUMOUR" in label:
+        labels.append(label.replace("TUMOUR", "TUMOR"))
+    out: List[str] = []
+    for x in labels:
+        if x not in out:
+            out.append(x)
+    return out
+
+def find_sample_index(samples: List[str], sample_or_suffix: str, allow_lane_suffix: bool = True) -> Optional[int]:
+    target = sample_or_suffix.strip()
+    target_up = target.upper()
+    # exact first
+    for i, s in enumerate(samples):
+        if s == target:
+            return i
+    # suffix / regex fallback
+    if allow_lane_suffix:
+        pat = re.compile(rf"(?:^|_){re.escape(target)}(?:\.\d+)?$", re.IGNORECASE)
+        for i, s in enumerate(samples):
+            if pat.search(s):
+                return i
+    for i, s in enumerate(samples):
+        s_up = s.upper()
+        if s_up == target_up or s_up.endswith("_" + target_up):
+            return i
+    return None
+
 def dp_alt_vaf(sample: Dict[str, str]) -> Tuple[Optional[int], Optional[int], Optional[float]]:
     """
     Compute DP, ALT_READS, VAF from FORMAT fields (prefer AD; DP fallback to sum(AD)).
@@ -61,7 +93,7 @@ def main() -> None:
     ap.add_argument("-o", "--output", required=True, help="Output VCF (.vcf or .vcf.gz)")
 
     ap.add_argument("--normal-sample", default="DNA_NORMAL")
-    ap.add_argument("--rna-sample", default="RNA_TUMOUR")
+    ap.add_argument("--rna-sample", default="RNA_TUMOR")
 
     ap.add_argument("--normal-min-dp", type=int, default=10)
     ap.add_argument("--normal-max-vaf", type=float, default=0.05)  # strict <
@@ -92,15 +124,19 @@ def main() -> None:
             if line.startswith("#CHROM"):
                 cols = line.rstrip("\n").split("\t")
                 samples = cols[9:]
-                for i, s in enumerate(samples):
-                    if s == args.normal_sample:
-                        normal_idx = i
-                    if s == args.rna_sample:
-                        rna_idx = i
+                normal_idx = find_sample_index(samples, args.normal_sample, allow_lane_suffix=False)
+                rna_idx = find_sample_index(samples, args.rna_sample, allow_lane_suffix=True)
+                if rna_idx is None:
+                    # try tumor/tumour alternative for convenience
+                    for alt in tumor_spellings(args.rna_sample):
+                        rna_idx = find_sample_index(samples, alt, allow_lane_suffix=True)
+                        if rna_idx is not None:
+                            break
                 if normal_idx is None or rna_idx is None:
                     raise SystemExit(
                         f"ERROR: Could not find required samples. "
-                        f"normal='{args.normal_sample}' rna='{args.rna_sample}'"
+                        f"normal='{args.normal_sample}' rna='{args.rna_sample}'. "
+                        f"Header samples: {samples}"
                     )
                 fout.write(line)
                 continue

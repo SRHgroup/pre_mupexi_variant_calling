@@ -128,6 +128,21 @@ def find_sample_index_by_suffix(samples: List[str], suffixes: List[str]) -> Opti
     return None
 
 
+def find_sample_index_flexible(samples: List[str], sample_or_suffix: str) -> Optional[int]:
+    """Find sample by exact name or suffix match (case-insensitive)."""
+    target = sample_or_suffix.strip()
+    target_up = target.upper()
+    for i, sample in enumerate(samples):
+        s = sample.strip()
+        if s == target:
+            return i
+    for i, sample in enumerate(samples):
+        s_up = sample.strip().upper()
+        if s_up == target_up or s_up.endswith("_" + target_up):
+            return i
+    return None
+
+
 def find_rna_indices(samples: List[str], rna_suffixes: List[str]) -> List[int]:
     """Match RNA samples by suffix, allowing optional .0001 lane suffix (case-insensitive)."""
     idxs: List[int] = []
@@ -195,14 +210,13 @@ def main() -> None:
                     samples = cols[9:]
 
                     # locate DNA normal
-                    if args.normal_sample:
-                        try:
-                            normal_idx = samples.index(args.normal_sample)
-                        except ValueError:
-                            raise SystemExit(
-                                f"ERROR: Could not find normal sample named '{args.normal_sample}' in header."
-                            )
-                    else:
+                if args.normal_sample:
+                    normal_idx = find_sample_index_flexible(samples, args.normal_sample)
+                    if normal_idx is None:
+                        raise SystemExit(
+                            f"ERROR: Could not find normal sample named/suffixed '{args.normal_sample}' in header."
+                        )
+                else:
                         normal_idx = find_sample_index_by_suffix(samples, normal_label_opts)
                         if normal_idx is None:
                             raise SystemExit(
@@ -210,16 +224,16 @@ def main() -> None:
                             )
 
                     # locate RNA samples
-                    if args.rna_sample:
-                        # if exact sample provided, collapse just that sample
-                        if args.rna_sample in samples:
-                            rna_indices = [samples.index(args.rna_sample)]
-                        else:
-                            # treat as prefix (strip optional .0001): collapse all that start with it
-                            prefix = args.rna_sample.split(".")[0]
-                            rna_indices = [i for i, s in enumerate(samples) if s.split(".")[0] == prefix]
-                    else:
-                        rna_indices = find_rna_indices(samples, rna_label_opts)
+                if args.rna_sample:
+                    # If a specific sample/prefix/suffix is provided, detect flexibly.
+                    rna_opts = tumor_spellings(args.rna_sample)
+                    rna_indices = find_rna_indices(samples, rna_opts)
+                    if not rna_indices:
+                        # treat as prefix (strip optional .0001): collapse all that share base prefix
+                        prefix = args.rna_sample.split(".")[0]
+                        rna_indices = [i for i, s in enumerate(samples) if s.split(".")[0] == prefix]
+                else:
+                    rna_indices = find_rna_indices(samples, rna_label_opts)
 
                     # remove normal from RNA indices if it somehow matched
                     rna_indices = [i for i in rna_indices if i != normal_idx]
