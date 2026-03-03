@@ -103,6 +103,7 @@ while IFS= read -r line; do
   run_log="${phased_vcf%.vcf.gz}.genotype_and_phase.log.txt"
 
   if [ "$force" -eq 0 ] && [ -f "$phased_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $phased_vcf (use -f to overwrite)"
     continue
   fi
 

@@ -87,6 +87,7 @@ while IFS= read -r line; do
   counts_file="${filtered_vcf%.vcf.gz}.counts.txt"
 
   if [ "$force" -eq 0 ] && [ -f "$filtered_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $filtered_vcf (use -f to overwrite)"
     continue
   fi
 

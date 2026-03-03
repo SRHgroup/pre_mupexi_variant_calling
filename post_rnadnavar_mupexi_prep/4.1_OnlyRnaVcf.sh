@@ -105,6 +105,7 @@ while IFS= read -r line; do
   rna_only_log="${rna_only_vcf%.vcf.gz}.log.txt"
 
   if [ "$force" -eq 0 ] && [ -f "$rna_only_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $rna_only_vcf (use -f to overwrite)"
     continue
   fi
 

@@ -94,6 +94,7 @@ while IFS= read -r line; do
   fi
 
   if [ "$force" -eq 0 ] && [ -f "$germ_out" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $germ_out (use -f to overwrite)"
     continue
   fi
 

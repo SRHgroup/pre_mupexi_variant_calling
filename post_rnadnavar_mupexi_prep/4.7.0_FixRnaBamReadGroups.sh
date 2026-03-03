@@ -82,6 +82,7 @@ while IFS= read -r line; do
   check_txt="${outbam}.sm_check.txt"
 
   if [ "$force" -eq 0 ] && [ -f "$outbam" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $outbam (use -f to overwrite)"
     continue
   fi
 

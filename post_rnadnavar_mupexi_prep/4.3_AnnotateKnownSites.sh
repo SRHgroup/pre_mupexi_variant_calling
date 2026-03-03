@@ -84,6 +84,7 @@ while IFS= read -r line; do
   annot_log="${annot_vcf%.vcf.gz}.counts.tsv"
 
   if [ "$force" -eq 0 ] && [ -f "$annot_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $annot_vcf (use -f to overwrite)"
     continue
   fi
 

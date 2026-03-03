@@ -80,6 +80,7 @@ while IFS= read -r line; do
   filteredvcf="${germline_dir}/${name}_${output_extension_201}"
 
   if [ "$force" -eq 0 ] && [ -f "$filteredvcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $filteredvcf (use -f to overwrite)"
     continue
   fi
 

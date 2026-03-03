@@ -92,6 +92,7 @@ while IFS= read -r line; do
   merge_log="${merged_vcf%.vcf.gz}.merge.log.txt"
 
   if [ "$force" -eq 0 ] && [ -f "$merged_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $merged_vcf (use -f to overwrite)"
     continue
   fi
 

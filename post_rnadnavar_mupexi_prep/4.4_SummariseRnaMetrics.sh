@@ -84,6 +84,7 @@ while IFS= read -r line; do
   stats_file="${out_vcf%.vcf.gz}.samples_and_counts.tsv"
 
   if [ "$force" -eq 0 ] && [ -f "$out_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $out_vcf (use -f to overwrite)"
     continue
   fi
 

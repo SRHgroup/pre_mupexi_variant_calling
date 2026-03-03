@@ -98,6 +98,7 @@ while IFS= read -r line; do
   outvcf="${germline_dir}/${name}_${output_extension_20}"
 
   if [ "$force" -eq 0 ] && [ -f "$outvcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $outvcf (use -f to overwrite)"
     continue
   fi
 
