@@ -116,22 +116,35 @@ def tumor_spellings(label: str) -> List[str]:
 
 
 def find_sample_index_by_suffix(samples: List[str], suffixes: List[str]) -> Optional[int]:
-    """Find first sample that equals a suffix or ends with _suffix."""
-    for i, s in enumerate(samples):
-        for suf in suffixes:
-            if s == suf or s.endswith("_" + suf):
+    """Find first sample that equals suffix or ends with _suffix (case-insensitive)."""
+    for i, sample in enumerate(samples):
+        s = sample.strip()
+        s_up = s.upper()
+        for suffix in suffixes:
+            suf = suffix.strip()
+            suf_up = suf.upper()
+            if s_up == suf_up or s_up.endswith("_" + suf_up):
                 return i
     return None
 
 
 def find_rna_indices(samples: List[str], rna_suffixes: List[str]) -> List[int]:
-    """Match RNA samples by suffix, allowing optional .0001 lane suffix."""
+    """Match RNA samples by suffix, allowing optional .0001 lane suffix (case-insensitive)."""
     idxs: List[int] = []
     # match: <anything>_<RNA_TUMOR> or <RNA_TUMOR> optionally followed by .dddd
-    pats = [re.compile(rf"(?:^|_){re.escape(suf)}(?:\\.\\d+)?$") for suf in rna_suffixes]
-    for i, s in enumerate(samples):
+    pats = [re.compile(rf"(?:^|_){re.escape(suf.strip())}(?:\.\d+)?$", re.IGNORECASE) for suf in rna_suffixes]
+    for i, sample in enumerate(samples):
+        s = sample.strip()
+        s_up = s.upper()
         if any(p.search(s) for p in pats):
             idxs.append(i)
+            continue
+        # Fallback: strict suffix matching without underscore anchor.
+        for suffix in rna_suffixes:
+            suf_up = suffix.strip().upper()
+            if s_up.endswith(suf_up) or re.search(rf"{re.escape(suf_up)}(?:\.\d+)?$", s_up):
+                idxs.append(i)
+                break
     return idxs
 
 
@@ -211,10 +224,12 @@ def main() -> None:
                     # remove normal from RNA indices if it somehow matched
                     rna_indices = [i for i in rna_indices if i != normal_idx]
 
-                    if not rna_indices:
-                        raise SystemExit(
-                            f"ERROR: No RNA samples detected using rna-label(s) {rna_label_opts} (or --rna-sample)."
-                        )
+                if not rna_indices:
+                    raise SystemExit(
+                        "ERROR: No RNA samples detected using "
+                        f"rna-label(s) {rna_label_opts} (or --rna-sample). "
+                        f"Header samples: {samples}"
+                    )
 
                     fout.write("\t".join(fixed + [args.out_normal_name, args.out_rna_name]) + "\n")
                     wrote_header = True
