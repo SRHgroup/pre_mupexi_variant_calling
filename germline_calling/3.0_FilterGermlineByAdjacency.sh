@@ -80,8 +80,9 @@ while IFS= read -r line; do
   [[ -n "${seen_patients[$name]:-}" ]] && continue
   seen_patients["$name"]=1
 
-  germ_in="${vcfdir}/${name}_${output_extension_202}"
-  germ_out="${vcfdir}/${name}_${output_extension_30}"
+  germline_dir="${vcfdir}/${name}_${out_normal_label}"
+  germ_in="${germline_dir}/${name}_${output_extension_202}"
+  germ_out="${germline_dir}/${name}_${output_extension_30}"
 
   dna_dir="${vcfdir}/${name}_${out_dna_label}_vs_${name}_${out_normal_label}"
   somatic_vcf="${dna_dir}/${name}_${out_dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
@@ -105,6 +106,7 @@ module load tools ngs anaconda3/2025.06-1
 SCRIPT
     printf 'germ_in=%q\n' "$germ_in"
     printf 'germ_out=%q\n' "$germ_out"
+    printf 'germline_dir=%q\n' "$germline_dir"
     printf 'somatic_vcf=%q\n' "$somatic_vcf"
     printf 'rna_vcf=%q\n' "$rna_vcf"
     printf 'distance=%q\n' "$distance"

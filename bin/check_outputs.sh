@@ -69,12 +69,13 @@ while IFS= read -r line; do
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   outdir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
+  germline_dir="${vcfdir}/${name}_${out_normal_label}"
 
   expected=(
-    "${vcfdir}/${name}_${output_extension_20}"
-    "${vcfdir}/${name}_${output_extension_201}"
-    "${vcfdir}/${name}_${output_extension_202}"
-    "${vcfdir}/${name}_${output_extension_30}"
+    "${germline_dir}/${name}_${output_extension_20}"
+    "${germline_dir}/${name}_${output_extension_201}"
+    "${germline_dir}/${name}_${output_extension_202}"
+    "${germline_dir}/${name}_${output_extension_30}"
     "${outdir}/${name}_${rna_only_vcf_extension}"
     "${outdir}/${name}_${filtered_edit_labeled_vcf_extension}"
     "${outdir}/${name}_${annot_vcf_extension}"

@@ -30,10 +30,11 @@ source "$config"
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${rnae_scripts:?CONFIG must define rnae_scripts}"
-: "${nvcf_dir:?CONFIG must define nvcf_dir}"
-: "${ndna_vcf:?CONFIG must define ndna_vcf}"
 : "${rna_vcf_knownsites_extension:?CONFIG must define rna_vcf_knownsites_extension}"
 : "${merged_vcf_extension:?CONFIG must define merged_vcf_extension}"
+
+# Germline VCF suffix to merge. Defaults to 3.0 output if not set.
+ndna_vcf="${ndna_vcf:-${output_extension_30:-3.0.Filtered.vcf}}"
 
 sample_base_name() {
   local value="$1"
@@ -66,8 +67,6 @@ logdir="${scriptdir}/logs"
 repdir="${scriptdir}/reports"
 mkdir -p "$logdir" "$repdir"
 
-nvcf_dir_clean=${nvcf_dir%/}
-
 declare -A seen_patients=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
@@ -82,9 +81,10 @@ while IFS= read -r line; do
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
+  germline_dir="${vcfdir}/${name}_${out_normal_label}"
 
   outdir_only="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
-  germ_in="${nvcf_dir_clean}/${name}_${ndna_vcf}"
+  germ_in="${germline_dir}/${name}_${ndna_vcf}"
   dna_tumour_vcf="${outdir_only}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
   rna_vcf="${outdir_only}/${name}_${rna_vcf_knownsites_extension}"
 
@@ -103,6 +103,7 @@ set -euo pipefail
 module load ngs tools htslib/1.23 bcftools/1.23 anaconda3/2025.06-1
 SCRIPT
     printf 'outdir_only=%q\n' "$outdir_only"
+    printf 'germline_dir=%q\n' "$germline_dir"
     printf 'name=%q\n' "$name"
     printf 'ndna_vcf=%q\n' "$ndna_vcf"
     printf 'germ_in=%q\n' "$germ_in"
@@ -129,7 +130,7 @@ if [ -f "$germ_in.gz" ]; then
 elif echo "$germ_in" | grep -q '\.vcf\.gz$'; then
   germ_vcf="$germ_in"
 elif [ -f "$germ_in" ]; then
-  germ_vcf="$outdir_only/${name}_${ndna_vcf}.gz"
+  germ_vcf="$germline_dir/${name}_${ndna_vcf}.gz"
   bgzip -c "$germ_in" > "$germ_vcf"
 else
   echo "ERROR: missing germline VCF: $germ_in (or $germ_in.gz)" >&2

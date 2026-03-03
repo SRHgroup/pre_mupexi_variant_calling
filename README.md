@@ -57,11 +57,11 @@ cp examples/SAMPLES.example /path/to/your/project/SAMPLES
 - `samples`
 - `vcfdir`
 - `bamdir`
-- `nvcf_dir`
 - `knownsites`
 - `FASTA`
 - `DICT`
 - `rnae_scripts` (point to this repo clone: `<clone>/post_rnadnavar_mupexi_prep/rnae_script`)
+- `ndna_vcf` (germline suffix used by merge step 4.6)
 
 3. Label controls:
 
@@ -131,6 +131,7 @@ bash run_all_end_to_end.sh -c /path/to/CONFIG
 ## Output and logs
 
 - Per-patient output pattern:
+  - Germline outputs: `${vcfdir}/${patient}_DNA_NORMAL/`
   - `${vcfdir}/${patient}_RNA_TUMOR_vs_${patient}_DNA_NORMAL/`
   - (label strings reflect your CONFIG output labels)
 - PBS runscripts/log dirs per step:

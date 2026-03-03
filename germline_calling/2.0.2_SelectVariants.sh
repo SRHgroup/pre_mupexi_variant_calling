@@ -33,6 +33,7 @@ source "$config"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${output_extension_201:?CONFIG must define output_extension_201}"
 : "${output_extension_202:?CONFIG must define output_extension_202}"
+out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 
 sample_base_name() {
   local value="$1"
@@ -71,8 +72,9 @@ while IFS= read -r line; do
   [[ -n "${seen_patients[$name]:-}" ]] && continue
   seen_patients["$name"]=1
 
-  filteredvcf="${vcfdir}/${name}_${output_extension_201}"
-  selectedvcf="${vcfdir}/${name}_${output_extension_202}"
+  germline_dir="${vcfdir}/${name}_${out_normal_label}"
+  filteredvcf="${germline_dir}/${name}_${output_extension_201}"
+  selectedvcf="${germline_dir}/${name}_${output_extension_202}"
 
   if [ "$force" -eq 0 ] && [ -f "$selectedvcf" ]; then
     continue
@@ -87,6 +89,7 @@ module load tools ngs java/17-openjdk gatk/4.4.0.0
 SCRIPT
     printf 'filteredvcf=%q\n' "$filteredvcf"
     printf 'selectedvcf=%q\n' "$selectedvcf"
+    printf 'germline_dir=%q\n' "$germline_dir"
     cat <<'SCRIPT'
 if [ ! -f "$filteredvcf" ]; then
   echo "ERROR: missing filtered germline VCF from 2.0.1: $filteredvcf" >&2

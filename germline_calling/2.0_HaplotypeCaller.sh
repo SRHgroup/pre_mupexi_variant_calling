@@ -48,6 +48,7 @@ source "$config"
 
 dna_normal_label="${dna_normal_label:-DNA_NORMAL}"
 dna_bam_suffix="${dna_bam_suffix:-md.bam}"
+out_normal_label="${out_dna_normal_label:-${dna_normal_label}}"
 
 sample_base_name() {
   local value="$1"
@@ -93,7 +94,8 @@ while IFS= read -r line; do
   seen_patients["$name"]=1
 
   normal_bam="${bamdir}/${name}_${dna_normal_label}/${name}_${dna_normal_label}.${dna_bam_suffix}"
-  outvcf="${vcfdir}/${name}_${output_extension_20}"
+  germline_dir="${vcfdir}/${name}_${out_normal_label}"
+  outvcf="${germline_dir}/${name}_${output_extension_20}"
 
   if [ "$force" -eq 0 ] && [ -f "$outvcf" ]; then
     continue
@@ -107,6 +109,7 @@ set -euo pipefail
 module load tools ngs java/17-openjdk gatk/4.4.0.0
 SCRIPT
     printf 'normal_bam=%q\n' "$normal_bam"
+    printf 'germline_dir=%q\n' "$germline_dir"
     printf 'outvcf=%q\n' "$outvcf"
     printf 'FASTA=%q\n' "$FASTA"
     cat <<'SCRIPT'
@@ -115,7 +118,7 @@ if [ ! -f "$normal_bam" ]; then
   exit 1
 fi
 
-mkdir -p "$(dirname "$outvcf")"
+mkdir -p "$germline_dir"
 
 gatk HaplotypeCaller \
   -I "$normal_bam" \

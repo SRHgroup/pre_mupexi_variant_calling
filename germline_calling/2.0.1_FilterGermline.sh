@@ -36,6 +36,7 @@ source "$config"
 
 min_dp="${germline_min_dp:-10}"
 min_qd="${germline_min_qd:-2.0}"
+out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 
 sample_base_name() {
   local value="$1"
@@ -74,8 +75,9 @@ while IFS= read -r line; do
   [[ -n "${seen_patients[$name]:-}" ]] && continue
   seen_patients["$name"]=1
 
-  germvcf="${vcfdir}/${name}_${output_extension_20}"
-  filteredvcf="${vcfdir}/${name}_${output_extension_201}"
+  germline_dir="${vcfdir}/${name}_${out_normal_label}"
+  germvcf="${germline_dir}/${name}_${output_extension_20}"
+  filteredvcf="${germline_dir}/${name}_${output_extension_201}"
 
   if [ "$force" -eq 0 ] && [ -f "$filteredvcf" ]; then
     continue
@@ -92,6 +94,7 @@ SCRIPT
     printf 'filteredvcf=%q\n' "$filteredvcf"
     printf 'min_dp=%q\n' "$min_dp"
     printf 'min_qd=%q\n' "$min_qd"
+    printf 'germline_dir=%q\n' "$germline_dir"
     cat <<'SCRIPT'
 if [ ! -f "$germvcf" ]; then
   echo "ERROR: missing germline VCF from 2.0: $germvcf" >&2

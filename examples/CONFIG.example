@@ -19,11 +19,10 @@ dna_bam_suffix="md.bam"
 # Helper scripts directory (inside this repo). Keep absolute to run from any folder.
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"
 
-# DNA-normal germline VCF location: expected files <PATIENT>_<ndna_vcf>
-nvcf_dir="/path/to/germline_vcfs"
-ndna_vcf="2.0.2.Filtered.Selected.HaplotypeCaller.vcf"
-# If you produce and want to use 3.0 proximity-filtered germline output in merge, set:
-# ndna_vcf="${output_extension_30}"
+# Germline VCF suffix to use at merge step 4.6.
+# File is expected at:
+#   ${vcfdir}/${PATIENT}_${out_dna_normal_label}/${PATIENT}_${ndna_vcf}
+ndna_vcf="3.0.Filtered.vcf"
 
 # Optional PBS defaults
 qsub_group="srhgroup"
