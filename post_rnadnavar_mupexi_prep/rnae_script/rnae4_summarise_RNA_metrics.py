@@ -101,8 +101,8 @@ def build_sample_string(keys: List[str], values: Dict[str, str]) -> str:
 
 
 def normalize_header_line(line: str) -> str:
-    """Remove BOM/leading spaces for robust header detection."""
-    return line.lstrip("\ufeff").lstrip()
+    """Remove BOM/control/leading whitespace for robust header detection."""
+    return line.lstrip("\ufeff\0 \t\r\n")
 
 
 def tumor_spellings(label: str) -> List[str]:
@@ -176,6 +176,12 @@ def split_vcf_header_columns(line: str) -> List[str]:
     return cols
 
 
+def is_chrom_header_line(line: str) -> bool:
+    clean = normalize_header_line(line)
+    # Accept canonical #CHROM and tolerant variants with extra spacing/control chars.
+    return bool(re.match(r"^#CHROM(?:\s+|$)", clean))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--input", required=True, help="Input multi-sample VCF (.vcf or .vcf.gz)")
@@ -205,6 +211,7 @@ def main() -> None:
     wrote_header = False
     normal_idx: Optional[int] = None
     rna_indices: List[int] = []
+    first_non_meta: Optional[str] = None
 
     n_in = 0
     n_out = 0
@@ -218,7 +225,10 @@ def main() -> None:
                     fout.write(line)
                     continue
 
-                if clean.startswith("#CHROM"):
+                if first_non_meta is None:
+                    first_non_meta = line.rstrip("\n")
+
+                if is_chrom_header_line(line):
                     cols = split_vcf_header_columns(clean)
                     if len(cols) < 10:
                         raise SystemExit(f"ERROR: malformed #CHROM header line in input VCF: {args.input}")
@@ -370,7 +380,11 @@ def main() -> None:
                 n_out += 1
 
         if not wrote_header:
-            raise SystemExit(f"ERROR: Input VCF header is missing #CHROM line: {args.input}")
+            debug_line = repr(first_non_meta[:200]) if first_non_meta is not None else "None"
+            raise SystemExit(
+                "ERROR: Input VCF header is missing #CHROM line: "
+                f"{args.input}\nDEBUG first non-meta line={debug_line}"
+            )
 
         os.replace(tmp_output, args.output)
     except Exception:
