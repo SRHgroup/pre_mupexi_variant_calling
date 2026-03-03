@@ -6,6 +6,7 @@ This repository packages the `post_rnadnavar_mupexi_prep/` bash pipeline (steps 
 
 - `post_rnadnavar_mupexi_prep/`: step scripts and `run_all.sh`
 - `post_rnadnavar_mupexi_prep/rnae_script/`: helper scripts called by steps
+- `germline_calling/`: germline calling/filtering scripts and helper python
 - `examples/CONFIG.example`: template config
 - `examples/SAMPLES.example`: template sample list
 - `bin/check_outputs.sh`: expected-output checker
@@ -21,6 +22,13 @@ This repository packages the `post_rnadnavar_mupexi_prep/` bash pipeline (steps 
 6. `4.6_MergeDnaRnaVcfs.sh`: merge DNA normal germline + DNA tumour somatic + RNA editing VCFs.
 7. `4.7.0_FixRnaBamReadGroups.sh` (optional): rewrite RNA BAM SM tags.
 8. `4.7.1_GenotypeAndPhaseMergedVcf.sh`: genotype union alleles and phase (whatshap).
+
+## Germline steps
+
+1. `2.0_HaplotypeCaller.sh`: call germline variants from DNA normal BAM.
+2. `2.0.1_FilterGermline.sh`: QC filter (DP/QD and clustered sites).
+3. `2.0.2_SelectVariants.sh`: keep non-filtered calls.
+4. `3.0_FilterGermlineByAdjacency.sh`: optional proximity filter to DNA somatic sites (and optionally RNA sites).
 
 ## Requirements
 
@@ -108,8 +116,16 @@ Convenience commands:
 
 ```bash
 make run4.1 CONFIG=/path/to/CONFIG
+make run_all_rna CONFIG=/path/to/CONFIG
+make run_all_germline CONFIG=/path/to/CONFIG
 make run_all CONFIG=/path/to/CONFIG
 make check_outputs CONFIG=/path/to/CONFIG
+```
+
+Full end-to-end wrapper:
+
+```bash
+bash run_all_end_to_end.sh -c /path/to/CONFIG
 ```
 
 ## Output and logs
@@ -158,3 +174,9 @@ git checkout v0.1.0    # or a newer tag/branch
 5. Test updates on one dataset/single sample before full reruns (use `-s` and optionally `-f`).
 
 This gives reproducible versions (`git checkout <tag>`) while allowing per-dataset parameter changes in external CONFIG files.
+
+## Notes
+
+- All numbered scripts in both pipelines use the same `CONFIG` and `SAMPLES`.
+- `SAMPLES` can contain multiple rows per patient (DNA normal, DNA tumor, RNA tumor); scripts process unique patient IDs by suffix stripping.
+- Legacy reformat scripts from the older germline workflow are preserved under `germline_calling/legacy/` but are not required for the current whatshap-based path.

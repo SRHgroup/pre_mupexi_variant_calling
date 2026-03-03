@@ -14,6 +14,7 @@ samples="/path/to/SAMPLES"
 # Working directories
 vcfdir="/path/to/project/variant_calling/mutect2"
 bamdir="/path/to/project/preprocessing/markduplicates"
+dna_bam_suffix="md.bam"
 
 # Helper scripts directory (inside this repo). Keep absolute to run from any folder.
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"
@@ -21,6 +22,8 @@ rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"
 # DNA-normal germline VCF location: expected files <PATIENT>_<ndna_vcf>
 nvcf_dir="/path/to/germline_vcfs"
 ndna_vcf="2.0.2.Filtered.Selected.HaplotypeCaller.vcf"
+# If you produce and want to use 3.0 proximity-filtered germline output in merge, set:
+# ndna_vcf="${output_extension_30}"
 
 # Optional PBS defaults
 qsub_group="srhgroup"
@@ -55,6 +58,10 @@ output_extension_202="2.0.2.Filtered.Selected.HaplotypeCaller.vcf"
 output_extension_30="3.0.Filtered.vcf"
 output_extension_31="3.1.Filtered.AF.vcf"
 output_extension_32="3.2.Filtered.som.AF.vcf" 
+germline_min_dp=10
+germline_min_qd=2.0
+germline_proximity_distance=33
+germline_include_rna_proximity=0
 
 # RNA EDIT PREP
 # Output naming extensions

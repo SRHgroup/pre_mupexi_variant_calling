@@ -71,6 +71,10 @@ while IFS= read -r line; do
   outdir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
 
   expected=(
+    "${vcfdir}/${name}_${output_extension_20}"
+    "${vcfdir}/${name}_${output_extension_201}"
+    "${vcfdir}/${name}_${output_extension_202}"
+    "${vcfdir}/${name}_${output_extension_30}"
     "${outdir}/${name}_${rna_only_vcf_extension}"
     "${outdir}/${name}_${filtered_edit_labeled_vcf_extension}"
     "${outdir}/${name}_${annot_vcf_extension}"

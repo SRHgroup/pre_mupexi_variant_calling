@@ -31,8 +31,26 @@ run4.6: check-config
 run4.7: check-config
 	cd post_rnadnavar_mupexi_prep && bash 4.7.1_GenotypeAndPhaseMergedVcf.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run_all: check-config
+run2.0: check-config
+	cd germline_calling && bash 2.0_HaplotypeCaller.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
+run2.0.1: check-config
+	cd germline_calling && bash 2.0.1_FilterGermline.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
+run2.0.2: check-config
+	cd germline_calling && bash 2.0.2_SelectVariants.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
+run3.0: check-config
+	cd germline_calling && bash 3.0_FilterGermlineByAdjacency.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
+run_all_rna: check-config
 	cd post_rnadnavar_mupexi_prep && bash run_all.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
+run_all_germline: check-config
+	cd germline_calling && bash run_all.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
+run_all: check-config
+	bash run_all_end_to_end.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
 check_outputs: check-config
 	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG)

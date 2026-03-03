@@ -6,7 +6,23 @@ This project follows a simple Keep-a-Changelog style and semantic version tags (
 
 ## [Unreleased]
 
-- Record all pending changes before the next tag.
+### Added
+
+- New `germline_calling/` module with:
+  - `2.0_HaplotypeCaller.sh`
+  - `2.0.1_FilterGermline.sh`
+  - `2.0.2_SelectVariants.sh`
+  - `3.0_FilterGermlineByAdjacency.sh`
+  - `scripts/filter_germline_by_proximity.py`
+  - `run_all.sh`
+- End-to-end wrapper `run_all_end_to_end.sh`.
+- Legacy germline reformat scripts kept in `germline_calling/legacy/`.
+
+### Changed
+
+- Unified both pipelines on patient-centric `SAMPLES` parsing with configurable labels (`DNA_NORMAL`, `DNA_TUMOR`, `RNA_TUMOR` by default).
+- Updated examples and docs for shared CONFIG/SAMPLES and full germline+RNA workflow.
+- Extended `Makefile` with germline and end-to-end targets.
 
 ## [0.1.0] - 2026-03-03
 
