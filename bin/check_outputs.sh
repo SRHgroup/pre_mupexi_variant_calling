@@ -3,7 +3,8 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: bash bin/check_outputs.sh -c CONFIG [-s SAMPLE]
+Usage: bash bin/check_outputs.sh -c CONFIG [-s SAMPLE] [-m MODE]
+MODE: all (default), rna, germline
 USAGE
 }
 
@@ -19,6 +20,11 @@ while :; do
       selected_sample=$2
       shift
       ;;
+    -m|--mode)
+      [ -n "${2:-}" ] || { echo "ERROR: -m requires a mode: all|rna|germline" >&2; exit 1; }
+      mode=$2
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -30,6 +36,11 @@ done
 
 [ -n "${config:-}" ] || { usage; exit 1; }
 [ -f "$config" ] || { echo "ERROR: config not found: $config" >&2; exit 1; }
+mode="${mode:-all}"
+case "$mode" in
+  all|rna|germline) ;;
+  *) echo "ERROR: invalid mode '$mode' (use all|rna|germline)" >&2; exit 1 ;;
+esac
 source "$config"
 
 sample_base_name() {
@@ -71,19 +82,26 @@ while IFS= read -r line; do
   outdir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
   germline_dir="${vcfdir}/${name}_${out_normal_label}"
 
-  expected=(
-    "${germline_dir}/${name}_${output_extension_20}"
-    "${germline_dir}/${name}_${output_extension_201}"
-    "${germline_dir}/${name}_${output_extension_202}"
-    "${germline_dir}/${name}_${output_extension_30}"
-    "${outdir}/${name}_${rna_only_vcf_extension}"
-    "${outdir}/${name}_${filtered_edit_labeled_vcf_extension}"
-    "${outdir}/${name}_${annot_vcf_extension}"
-    "${outdir}/${name}_${rna_summarised_vcf_extension}"
-    "${outdir}/${name}_${rna_vcf_knownsites_extension}"
-    "${outdir}/${name}_${merged_vcf_extension}"
-    "${outdir}/${name}_${phased_vcf_extension}"
-  )
+  expected=()
+  if [ "$mode" = "all" ] || [ "$mode" = "germline" ]; then
+    expected+=(
+      "${germline_dir}/${name}_${output_extension_20}"
+      "${germline_dir}/${name}_${output_extension_201}"
+      "${germline_dir}/${name}_${output_extension_202}"
+      "${germline_dir}/${name}_${output_extension_30}"
+    )
+  fi
+  if [ "$mode" = "all" ] || [ "$mode" = "rna" ]; then
+    expected+=(
+      "${outdir}/${name}_${rna_only_vcf_extension}"
+      "${outdir}/${name}_${filtered_edit_labeled_vcf_extension}"
+      "${outdir}/${name}_${annot_vcf_extension}"
+      "${outdir}/${name}_${rna_summarised_vcf_extension}"
+      "${outdir}/${name}_${rna_vcf_knownsites_extension}"
+      "${outdir}/${name}_${merged_vcf_extension}"
+      "${outdir}/${name}_${phased_vcf_extension}"
+    )
+  fi
 
   for out in "${expected[@]}"; do
     if [ ! -f "$out" ]; then

@@ -119,7 +119,9 @@ make run4.1 CONFIG=/path/to/CONFIG
 make run_all_rna CONFIG=/path/to/CONFIG
 make run_all_germline CONFIG=/path/to/CONFIG
 make run_all CONFIG=/path/to/CONFIG
-make check_outputs CONFIG=/path/to/CONFIG
+make check_outputs CONFIG=/path/to/CONFIG MODE=all
+make check_outputs CONFIG=/path/to/CONFIG MODE=rna
+make check_outputs CONFIG=/path/to/CONFIG MODE=germline
 ```
 
 Full end-to-end wrapper:

@@ -3,6 +3,7 @@ SHELL := /usr/bin/bash
 CONFIG ?=
 SAMPLE ?=
 FORCE ?=
+MODE ?= all
 
 SAMPLE_FLAG := $(if $(SAMPLE),-s $(SAMPLE),)
 FORCE_FLAG := $(if $(filter 1 true yes,$(FORCE)),-f,)
@@ -53,4 +54,4 @@ run_all: check-config
 	bash run_all_end_to_end.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
 check_outputs: check-config
-	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG)
+	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) -m "$(MODE)"
