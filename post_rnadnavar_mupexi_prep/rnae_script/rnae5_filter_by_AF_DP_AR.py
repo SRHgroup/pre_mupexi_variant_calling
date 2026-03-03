@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, gzip, sys
+import argparse, gzip, os, sys
 import re
 from typing import Dict, List, Optional, TextIO, Tuple
 
@@ -114,69 +114,85 @@ def main() -> None:
     drop_missing = 0
     drop_normal = 0
     drop_rna = 0
+    wrote_header = False
 
-    with open_in(args.input) as fin, open_out(args.output) as fout:
-        for line in fin:
-            if line.startswith("##"):
+    tmp_output = f"{args.output}.tmp.{os.getpid()}"
+
+    try:
+        with open_in(args.input) as fin, open_out(tmp_output) as fout:
+            for line in fin:
+                if line.startswith("##"):
+                    fout.write(line)
+                    continue
+
+                if line.startswith("#CHROM"):
+                    cols = line.rstrip("\n").split("\t")
+                    samples = cols[9:]
+                    normal_idx = find_sample_index(samples, args.normal_sample, allow_lane_suffix=False)
+                    rna_idx = find_sample_index(samples, args.rna_sample, allow_lane_suffix=True)
+                    if rna_idx is None:
+                        # try tumor/tumour alternative for convenience
+                        for alt in tumor_spellings(args.rna_sample):
+                            rna_idx = find_sample_index(samples, alt, allow_lane_suffix=True)
+                            if rna_idx is not None:
+                                break
+                    if normal_idx is None or rna_idx is None:
+                        raise SystemExit(
+                            f"ERROR: Could not find required samples. "
+                            f"normal='{args.normal_sample}' rna='{args.rna_sample}'. "
+                            f"Header samples: {samples}"
+                        )
+                    fout.write(line)
+                    wrote_header = True
+                    continue
+
+                if not line or line[0] == "#":
+                    fout.write(line)
+                    continue
+
+                toks = line.rstrip("\n").split("\t")
+                if len(toks) < 10:
+                    continue
+
+                n_total += 1
+
+                fmt_keys = toks[8].split(":")
+                sample_fields = toks[9:]
+
+                normal = parse_sample(fmt_keys, sample_fields[normal_idx])
+                rna = parse_sample(fmt_keys, sample_fields[rna_idx])
+
+                n_dp, n_alt, n_vaf = dp_alt_vaf(normal)
+                r_dp, r_alt, r_vaf = dp_alt_vaf(rna)
+
+                # Require AD-derived alt/vaf in both, and dp present/computable
+                if n_dp is None or r_dp is None or n_alt is None or r_alt is None or n_vaf is None or r_vaf is None:
+                    drop_missing += 1
+                    continue
+
+                # Normal criteria
+                if not (n_dp >= args.normal_min_dp and n_alt <= args.normal_max_alt and n_vaf < args.normal_max_vaf):
+                    drop_normal += 1
+                    continue
+
+                # RNA criteria
+                if not (r_dp >= args.rna_min_dp and r_alt >= args.rna_min_alt and r_vaf >= args.rna_min_vaf):
+                    drop_rna += 1
+                    continue
+
                 fout.write(line)
-                continue
+                n_kept += 1
 
-            if line.startswith("#CHROM"):
-                cols = line.rstrip("\n").split("\t")
-                samples = cols[9:]
-                normal_idx = find_sample_index(samples, args.normal_sample, allow_lane_suffix=False)
-                rna_idx = find_sample_index(samples, args.rna_sample, allow_lane_suffix=True)
-                if rna_idx is None:
-                    # try tumor/tumour alternative for convenience
-                    for alt in tumor_spellings(args.rna_sample):
-                        rna_idx = find_sample_index(samples, alt, allow_lane_suffix=True)
-                        if rna_idx is not None:
-                            break
-                if normal_idx is None or rna_idx is None:
-                    raise SystemExit(
-                        f"ERROR: Could not find required samples. "
-                        f"normal='{args.normal_sample}' rna='{args.rna_sample}'. "
-                        f"Header samples: {samples}"
-                    )
-                fout.write(line)
-                continue
-
-            if not line or line[0] == "#":
-                fout.write(line)
-                continue
-
-            toks = line.rstrip("\n").split("\t")
-            if len(toks) < 10:
-                continue
-
-            n_total += 1
-
-            fmt_keys = toks[8].split(":")
-            sample_fields = toks[9:]
-
-            normal = parse_sample(fmt_keys, sample_fields[normal_idx])
-            rna = parse_sample(fmt_keys, sample_fields[rna_idx])
-
-            n_dp, n_alt, n_vaf = dp_alt_vaf(normal)
-            r_dp, r_alt, r_vaf = dp_alt_vaf(rna)
-
-            # Require AD-derived alt/vaf in both, and dp present/computable
-            if n_dp is None or r_dp is None or n_alt is None or r_alt is None or n_vaf is None or r_vaf is None:
-                drop_missing += 1
-                continue
-
-            # Normal criteria
-            if not (n_dp >= args.normal_min_dp and n_alt <= args.normal_max_alt and n_vaf < args.normal_max_vaf):
-                drop_normal += 1
-                continue
-
-            # RNA criteria
-            if not (r_dp >= args.rna_min_dp and r_alt >= args.rna_min_alt and r_vaf >= args.rna_min_vaf):
-                drop_rna += 1
-                continue
-
-            fout.write(line)
-            n_kept += 1
+        if not wrote_header:
+            raise SystemExit(f"ERROR: Input VCF header is missing #CHROM line: {args.input}")
+        os.replace(tmp_output, args.output)
+    except Exception:
+        try:
+            if os.path.exists(tmp_output):
+                os.remove(tmp_output)
+        except OSError:
+            pass
+        raise
 
     if args.stats:
         print("filter_stats", file=sys.stderr)

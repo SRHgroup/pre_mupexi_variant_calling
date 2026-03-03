@@ -141,6 +141,16 @@ python3 "$rnae_scripts/rnae5_filter_by_AF_DP_AR.py" \
   --normal-sample "$normal_sample" --rna-sample "$rna_sample" \
   --stats 2> "$stats_file"
 
+if [ ! -s "$out_vcf" ]; then
+  echo "ERROR: 4.5 produced empty output file: $out_vcf" >&2
+  exit 1
+fi
+if ! bcftools view -h "$out_vcf" | grep -q '^#CHROM'; then
+  echo "ERROR: 4.5 produced malformed VCF (missing #CHROM): $out_vcf" >&2
+  rm -f "$out_vcf" "$out_vcf.tbi"
+  exit 1
+fi
+
 bcftools index -t "$out_vcf"
 
 {
