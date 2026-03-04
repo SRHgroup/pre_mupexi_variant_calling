@@ -90,7 +90,7 @@ pick_first_existing() {
   return 1
 }
 
-precheck_vcfgz() {
+precheck_vcf_or_vcfgz() {
   local file="$1"
   local tag="$2"
   if [ ! -f "$file" ]; then
@@ -103,10 +103,12 @@ precheck_vcfgz() {
     echo "[skip] ${tag}: empty input" >&2
     return 1
   fi
-  if ! gzip -t "$file" >/dev/null 2>&1; then
-    echo "ERROR: corrupted/non-gzip input: $file" >&2
-    echo "[skip] ${tag}: invalid input" >&2
-    return 1
+  if [[ "$file" = *.gz ]]; then
+    if ! gzip -t "$file" >/dev/null 2>&1; then
+      echo "ERROR: corrupted/non-gzip input: $file" >&2
+      echo "[skip] ${tag}: invalid input" >&2
+      return 1
+    fi
   fi
   return 0
 }
@@ -198,10 +200,10 @@ while IFS= read -r line; do
     continue
   fi
 
-  if ! precheck_vcfgz "$germ_vcf" "${prefix}.${name}"; then
+  if ! precheck_vcf_or_vcfgz "$germ_vcf" "${prefix}.${name}"; then
     continue
   fi
-  if ! precheck_vcfgz "$dna_vcf" "${prefix}.${name}"; then
+  if ! precheck_vcf_or_vcfgz "$dna_vcf" "${prefix}.${name}"; then
     continue
   fi
   if [ ! -f "$dna_bam" ]; then
