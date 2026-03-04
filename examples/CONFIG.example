@@ -60,7 +60,16 @@ output_extension_32="3.2.Filtered.som.AF.vcf"
 germline_min_dp=10
 germline_min_qd=2.0
 germline_proximity_distance=33
-germline_include_rna_proximity=0
+# RNA proximity source for germline step 3.0:
+# auto (recommended): include RNA proximity when an RNA VCF is found
+# 1: attempt RNA proximity and warn if RNA VCF is missing
+# 0: DNA-only proximity
+germline_include_rna_proximity="auto"
+# Optional explicit override (supports {patient} placeholder):
+# germline_rna_proximity_vcf="/path/to/{patient}_4.5_filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
+# Optional extension override under:
+#   ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/
+# germline_rna_proximity_vcf_extension="4.5_filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
 
 # RNA EDIT PREP
 # Output naming extensions

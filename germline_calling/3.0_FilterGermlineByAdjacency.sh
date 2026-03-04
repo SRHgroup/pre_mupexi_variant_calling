@@ -35,7 +35,11 @@ source "$config"
 : "${output_extension_30:?CONFIG must define output_extension_30}"
 
 distance="${germline_proximity_distance:-33}"
-include_rna="${germline_include_rna_proximity:-0}"
+# RNA proximity behavior:
+#   auto (default): include RNA proximity if an RNA VCF is found
+#   1/true/yes/on: require attempt, include when found, warn when missing
+#   0/false/no/off: disable RNA proximity
+include_rna_mode="${germline_include_rna_proximity:-auto}"
 
 sample_base_name() {
   local value="$1"
@@ -68,6 +72,65 @@ out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 out_dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
 
+detect_rna_vcf_for_patient() {
+  local patient="$1"
+  local rna_dir="${vcfdir}/${patient}_${out_rna_label}_vs_${patient}_${out_normal_label}"
+  local path=""
+
+  # Optional explicit absolute/relative path template:
+  #   germline_rna_proximity_vcf="/path/to/.../{patient}_4.5....vcf.gz"
+  if [ -n "${germline_rna_proximity_vcf:-}" ]; then
+    path="${germline_rna_proximity_vcf//\{patient\}/$patient}"
+    if [ -f "$path" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  fi
+
+  # Optional extension override for files inside the patient RNA_vs_normal folder.
+  if [ -n "${germline_rna_proximity_vcf_extension:-}" ]; then
+    path="${rna_dir}/${patient}_${germline_rna_proximity_vcf_extension}"
+    if [ -f "$path" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  fi
+
+  # Default candidate order: prefer filtered RNA-editing sets, then source mutect2 RNA callset.
+  for ext in \
+    "${rna_vcf_knownsites_extension:-}" \
+    "${rna_summarised_vcf_extension:-}" \
+    "${annot_vcf_extension:-}" \
+    "${filtered_edit_labeled_vcf_extension:-}" \
+    "${rna_only_vcf_extension:-}" \
+    "${out_rna_label}_vs_${out_normal_label}.mutect2.filtered.vcf.gz"; do
+    [ -n "$ext" ] || continue
+    if [[ "$ext" = *.vcf.gz || "$ext" = *.vcf ]]; then
+      path="${rna_dir}/${patient}_${ext}"
+    else
+      path="${rna_dir}/${patient}_${ext}.vcf.gz"
+    fi
+    if [ -f "$path" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  done
+
+  printf '\n'
+  return 0
+}
+
+rna_mode_enabled() {
+  case "${include_rna_mode,,}" in
+    1|true|yes|on|auto) return 0 ;;
+    0|false|no|off) return 1 ;;
+    *)
+      echo "ERROR: invalid germline_include_rna_proximity='${include_rna_mode}' (use auto|1|0)" >&2
+      exit 1
+      ;;
+  esac
+}
+
 declare -A seen_patients=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
@@ -88,9 +151,17 @@ while IFS= read -r line; do
   somatic_vcf="${dna_dir}/${name}_${out_dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
 
   rna_vcf=""
-  if [ "$include_rna" = "1" ]; then
-    rna_dir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
-    rna_vcf="${rna_dir}/${name}_${rna_vcf_knownsites_extension}"
+  if rna_mode_enabled; then
+    rna_vcf="$(detect_rna_vcf_for_patient "$name")"
+    if [ -n "$rna_vcf" ]; then
+      echo "[info] ${prefix}.${name}: RNA proximity enabled with $rna_vcf"
+    elif [[ "${include_rna_mode,,}" = "auto" ]]; then
+      echo "[info] ${prefix}.${name}: RNA proximity auto-mode found no RNA VCF; using DNA-only proximity"
+    else
+      echo "[warn] ${prefix}.${name}: RNA proximity requested but no RNA VCF found; using DNA-only proximity"
+    fi
+  else
+    echo "[info] ${prefix}.${name}: RNA proximity disabled by config"
   fi
 
   if [ "$force" -eq 0 ] && [ -f "$germ_out" ]; then

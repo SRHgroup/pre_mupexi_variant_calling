@@ -28,7 +28,7 @@ This repository packages the `post_rnadnavar_mupexi_prep/` bash pipeline (steps 
 1. `2.0_HaplotypeCaller.sh`: call germline variants from DNA normal BAM.
 2. `2.0.1_FilterGermline.sh`: QC filter (DP/QD and clustered sites).
 3. `2.0.2_SelectVariants.sh`: keep non-filtered calls.
-4. `3.0_FilterGermlineByAdjacency.sh`: optional proximity filter to DNA somatic sites (and optionally RNA sites).
+4. `3.0_FilterGermlineByAdjacency.sh`: proximity filter to DNA somatic sites, with optional RNA-site proximity input.
 
 ## Requirements
 
@@ -76,6 +76,15 @@ out_rna_tumor_label="RNA_TUMOUR"
 ```
 
 Detection is suffix-based (not hardcoded exact full sample IDs), including optional RNA suffixes like `.0001`.
+
+Germline step `3.0` RNA proximity controls:
+
+- `germline_include_rna_proximity="auto"` (recommended): auto-detect RNA VCF and include it when found.
+- `germline_include_rna_proximity=1`: request RNA proximity; warns and falls back to DNA-only if missing.
+- `germline_include_rna_proximity=0`: disable RNA proximity.
+- Optional overrides:
+  - `germline_rna_proximity_vcf` (supports `{patient}` placeholder)
+  - `germline_rna_proximity_vcf_extension` (file suffix inside patient RNA-vs-normal folder)
 
 4. `SAMPLES` structure:
 
