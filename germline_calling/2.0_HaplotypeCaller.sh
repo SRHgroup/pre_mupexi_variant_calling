@@ -74,6 +74,10 @@ scriptdir="${vcfdir}/${prefix}.logs_and_reports"
 logdir="${scriptdir}/logs"
 repdir="${scriptdir}/reports"
 mkdir -p "$logdir" "$repdir"
+qsub_depend_arg=()
+if [ -n "${QSUB_DEPEND:-}" ]; then
+  qsub_depend_arg=(-W "depend=${QSUB_DEPEND}")
+fi
 
 if [ -z "${sample:-}" ]; then
   echo "Running 2.0 for all patients in $samples"
@@ -100,6 +104,21 @@ while IFS= read -r line; do
   if [ "$force" -eq 0 ] && [ -f "$outvcf" ]; then
     echo "[skip] ${prefix}.${name}: output already exists: $outvcf (use -f to overwrite)"
     continue
+  fi
+  if [ ! -f "$normal_bam" ]; then
+    echo "[precheck] ${prefix}.${name}: missing DNA normal BAM: $normal_bam" >&2
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+
+  job_name="${prefix}.${name}"
+  submit_marker="${logdir}/submitted.${job_name}.jobid"
+  if [ -f "$submit_marker" ]; then
+    prev_jobid="$(head -n1 "$submit_marker" 2>/dev/null || true)"
+    if [ -n "$prev_jobid" ] && command -v qstat >/dev/null 2>&1 && qstat "$prev_jobid" >/dev/null 2>&1; then
+      echo "[skip] ${job_name}: job already queued/running: ${prev_jobid}"
+      continue
+    fi
   fi
 
   runscript="${logdir}/run.${name}.${prefix}.sh"
@@ -130,8 +149,12 @@ SCRIPT
   } > "$runscript"
   chmod +x "$runscript"
 
-  qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
-    -l nodes=1:ppn=8,mem=24gb,walltime="00:12:00:00" -r y -N "${prefix}.${name}" -o "$repdir" -e "$repdir" "$runscript"
+  qsub_output="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
+    "${qsub_depend_arg[@]}" \
+    -l nodes=1:ppn=8,mem=24gb,walltime="00:12:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
+  echo "$qsub_output"
+  printf '%s\n' "$qsub_output" > "$submit_marker"
+  echo "[submit] ${job_name}: jobid=${qsub_output}"
 
   echo ".. logs and reports saved in $scriptdir"
   sleep 0.5

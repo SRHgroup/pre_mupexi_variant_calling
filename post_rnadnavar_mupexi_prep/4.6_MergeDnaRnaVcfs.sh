@@ -55,6 +55,42 @@ sample_is_requested() {
   [ -z "$requested" ] || [ "$sample_id" = "$requested" ] || [ "$patient_id" = "$requested" ]
 }
 
+precheck_vcfgz() {
+  local path="$1"
+  local tag="$2"
+  local hint="$3"
+  if [ ! -f "$path" ]; then
+    echo "[precheck] ${tag}: missing input VCF: $path (${hint})" >&2
+    return 1
+  fi
+  if ! gzip -t "$path" 2>/dev/null; then
+    echo "[precheck] ${tag}: invalid gzip VCF: $path" >&2
+    return 1
+  fi
+  if ! zgrep -m1 '^#CHROM' "$path" >/dev/null 2>&1; then
+    echo "[precheck] ${tag}: malformed VCF header (missing #CHROM): $path" >&2
+    return 1
+  fi
+}
+
+precheck_vcf_or_vcfgz() {
+  local path="$1"
+  local tag="$2"
+  local hint="$3"
+  if [ ! -f "$path" ]; then
+    echo "[precheck] ${tag}: missing input VCF: $path (${hint})" >&2
+    return 1
+  fi
+  if [[ "$path" = *.gz ]]; then
+    precheck_vcfgz "$path" "$tag" "$hint"
+    return $?
+  fi
+  if ! grep -m1 '^#CHROM' "$path" >/dev/null 2>&1; then
+    echo "[precheck] ${tag}: malformed VCF header (missing #CHROM): $path" >&2
+    return 1
+  fi
+}
+
 if [ -z "${sample:-}" ]; then
   echo "Running 4.6 for all samples in $samples"
 else
@@ -66,6 +102,10 @@ scriptdir="${vcfdir}/${prefix}.logs_and_reports"
 logdir="${scriptdir}/logs"
 repdir="${scriptdir}/reports"
 mkdir -p "$logdir" "$repdir"
+qsub_depend_arg=()
+if [ -n "${QSUB_DEPEND:-}" ]; then
+  qsub_depend_arg=(-W "depend=${QSUB_DEPEND}")
+fi
 
 declare -A seen_patients=()
 while IFS= read -r line; do
@@ -95,6 +135,35 @@ while IFS= read -r line; do
   if [ "$force" -eq 0 ] && [ -f "$merged_vcf" ]; then
     echo "[skip] ${prefix}.${name}: output already exists: $merged_vcf (use -f to overwrite)"
     continue
+  fi
+  if ! precheck_vcfgz "$dna_tumour_vcf" "${prefix}.${name}" "DNA tumour mutect2 output"; then
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+  if ! precheck_vcfgz "$rna_vcf" "${prefix}.${name}" "run 4.5 first"; then
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+  if [ -f "$germ_in.gz" ]; then
+    if ! precheck_vcfgz "$germ_in.gz" "${prefix}.${name}" "germline output from 2.0/3.0"; then
+      echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+      continue
+    fi
+  else
+    if ! precheck_vcf_or_vcfgz "$germ_in" "${prefix}.${name}" "germline output from 2.0/3.0"; then
+      echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+      continue
+    fi
+  fi
+
+  job_name="${prefix}.${name}"
+  submit_marker="${logdir}/submitted.${job_name}.jobid"
+  if [ -f "$submit_marker" ]; then
+    prev_jobid="$(head -n1 "$submit_marker" 2>/dev/null || true)"
+    if [ -n "$prev_jobid" ] && command -v qstat >/dev/null 2>&1 && qstat "$prev_jobid" >/dev/null 2>&1; then
+      echo "[skip] ${job_name}: job already queued/running: ${prev_jobid}"
+      continue
+    fi
   fi
 
   runscript="${logdir}/run.${name}.${prefix}.sh"
@@ -153,8 +222,12 @@ SCRIPT
   } > "$runscript"
   chmod +x "$runscript"
 
-  qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
-    -l nodes=1:ppn=4,mem=24gb,walltime="00:16:00:00" -r y -N "${prefix}.${name}" -o "$repdir" -e "$repdir" "$runscript"
+  qsub_output="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
+    "${qsub_depend_arg[@]}" \
+    -l nodes=1:ppn=4,mem=24gb,walltime="00:16:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
+  echo "$qsub_output"
+  printf '%s\n' "$qsub_output" > "$submit_marker"
+  echo "[submit] ${job_name}: jobid=${qsub_output}"
 
   echo ".. logs and reports saved in $scriptdir"
   sleep 0.5

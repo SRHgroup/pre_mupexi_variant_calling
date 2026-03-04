@@ -65,6 +65,10 @@ scriptdir="${vcfdir}/${prefix}.logs_and_reports"
 logdir="${scriptdir}/logs"
 repdir="${scriptdir}/reports"
 mkdir -p "$logdir" "$repdir"
+qsub_depend_arg=()
+if [ -n "${QSUB_DEPEND:-}" ]; then
+  qsub_depend_arg=(-W "depend=${QSUB_DEPEND}")
+fi
 
 helpers_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts"
 
@@ -168,6 +172,26 @@ while IFS= read -r line; do
     echo "[skip] ${prefix}.${name}: output already exists: $germ_out (use -f to overwrite)"
     continue
   fi
+  if [ ! -s "$germ_in" ]; then
+    echo "[precheck] ${prefix}.${name}: missing/empty germline input from 2.0.2: $germ_in" >&2
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+  if [ ! -s "$somatic_vcf" ]; then
+    echo "[precheck] ${prefix}.${name}: missing/empty DNA somatic VCF: $somatic_vcf" >&2
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+
+  job_name="${prefix}.${name}"
+  submit_marker="${logdir}/submitted.${job_name}.jobid"
+  if [ -f "$submit_marker" ]; then
+    prev_jobid="$(head -n1 "$submit_marker" 2>/dev/null || true)"
+    if [ -n "$prev_jobid" ] && command -v qstat >/dev/null 2>&1 && qstat "$prev_jobid" >/dev/null 2>&1; then
+      echo "[skip] ${job_name}: job already queued/running: ${prev_jobid}"
+      continue
+    fi
+  fi
 
   runscript="${logdir}/run.${name}.${prefix}.sh"
   {
@@ -202,8 +226,12 @@ SCRIPT
   } > "$runscript"
   chmod +x "$runscript"
 
-  qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
-    -l nodes=1:ppn=4,mem=8gb,walltime="00:04:00:00" -r y -N "${prefix}.${name}" -o "$repdir" -e "$repdir" "$runscript"
+  qsub_output="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
+    "${qsub_depend_arg[@]}" \
+    -l nodes=1:ppn=4,mem=8gb,walltime="00:04:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
+  echo "$qsub_output"
+  printf '%s\n' "$qsub_output" > "$submit_marker"
+  echo "[submit] ${job_name}: jobid=${qsub_output}"
 
   echo ".. logs and reports saved in $scriptdir"
   sleep 0.5

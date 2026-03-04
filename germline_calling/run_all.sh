@@ -36,13 +36,42 @@ done
 
 [ -n "${config:-}" ] || { usage; exit 1; }
 
+current_depend="${QSUB_DEPEND:-}"
+
+run_step_collect() {
+  local step="$1"
+  local tmp step_path
+  step_path="$(dirname "${BASH_SOURCE[0]}")/$step"
+  tmp="$(mktemp)"
+
+  echo "[germline run_all] launching $step"
+  if [ -n "$current_depend" ]; then
+    echo "[germline run_all] dependency: $current_depend"
+  fi
+
+  # shellcheck disable=SC2086
+  if ! QSUB_DEPEND="$current_depend" bash "$step_path" -c "$config" $sample_flag $force_flag 2>&1 | tee "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  mapfile -t step_jobids < <(awk -F'jobid=' '/^\[submit\] /{print $2}' "$tmp" | awk '{print $1}' | sed '/^$/d')
+  rm -f "$tmp"
+
+  if [ "${#step_jobids[@]}" -gt 0 ]; then
+    current_depend="afterok:$(IFS=:; echo "${step_jobids[*]}")"
+    echo "[germline run_all] collected ${#step_jobids[@]} job(s) from $step"
+  else
+    current_depend=""
+    echo "[germline run_all] no new jobs submitted by $step"
+  fi
+}
+
 for step in \
   2.0_HaplotypeCaller.sh \
   2.0.1_FilterGermline.sh \
   2.0.2_SelectVariants.sh \
   3.0_FilterGermlineByAdjacency.sh
   do
-  echo "[germline run_all] launching $step"
-  # shellcheck disable=SC2086
-  bash "$(dirname "${BASH_SOURCE[0]}")/$step" -c "$config" $sample_flag $force_flag
+  run_step_collect "$step"
   done
