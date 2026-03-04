@@ -66,6 +66,13 @@ sample_base_name() {
   printf '%s\n' "$value"
 }
 
+resolve_patient_placeholder() {
+  local template="$1"
+  local patient="$2"
+  local token='{patient}'
+  printf '%s\n' "${template//"$token"/$patient}"
+}
+
 if [ -z "${sample:-}" ]; then
   echo "Running rna1 for all samples in $samples"
 else
@@ -100,8 +107,8 @@ while IFS= read -r line; do
   dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
   source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension:-${out_rna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
   source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension:-${dna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
-  source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension//\{patient\}/$name}"
-  source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension//\{patient\}/$name}"
+  source_rna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_rna_mutect2_vcf_extension" "$name")"
+  source_dna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_dna_mutect2_vcf_extension" "$name")"
 
   rna_vcf_dir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
   dna_vcf_dir="${vcfdir}/${name}_${dna_label}_vs_${name}_${out_normal_label}"
