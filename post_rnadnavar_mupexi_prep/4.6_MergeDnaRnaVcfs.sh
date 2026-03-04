@@ -84,8 +84,9 @@ while IFS= read -r line; do
   germline_dir="${vcfdir}/${name}_${out_normal_label}"
 
   outdir_only="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
+  dna_dir="${vcfdir}/${name}_${dna_label}_vs_${name}_${out_normal_label}"
   germ_in="${germline_dir}/${name}_${ndna_vcf}"
-  dna_tumour_vcf="${outdir_only}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
+  dna_tumour_vcf="${dna_dir}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
   rna_vcf="${outdir_only}/${name}_${rna_vcf_knownsites_extension}"
 
   merged_vcf="${outdir_only}/${name}_${merged_vcf_extension}"
@@ -104,6 +105,7 @@ set -euo pipefail
 module load ngs tools htslib/1.23 bcftools/1.23 anaconda3/2025.06-1
 SCRIPT
     printf 'outdir_only=%q\n' "$outdir_only"
+    printf 'dna_dir=%q\n' "$dna_dir"
     printf 'germline_dir=%q\n' "$germline_dir"
     printf 'name=%q\n' "$name"
     printf 'ndna_vcf=%q\n' "$ndna_vcf"
