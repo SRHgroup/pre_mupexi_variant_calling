@@ -205,10 +205,12 @@ bcftools view -Oz -o "$germ_named" "$germ_rehead"
 bcftools index -f -t "$germ_named"
 
 germ_proc="${tmpdir}/germ.proc.vcf.gz"
-bcftools view -Ou "$germ_named" \
+germ_text="${tmpdir}/germ.proc.vcf"
+bcftools view -Ov "$germ_named" \
   | python3 "$add_info_flag_py" GERMLINE "Germline call" \
   | python3 "$add_info_list_py" SOURCE_SET GERMLINE "Which callset(s) this record originated from (GERMLINE,SOMATIC)" \
-  | bcftools view -Oz -o "$germ_proc"
+  > "$germ_text"
+bgzip -f -c "$germ_text" > "$germ_proc"
 bcftools index -f -t "$germ_proc"
 
 dna_noas="${tmpdir}/dna.noas.vcf.gz"
@@ -226,10 +228,12 @@ bcftools view -Oz -o "$dna_named" "$dna_rehead"
 bcftools index -f -t "$dna_named"
 
 dna_proc="${tmpdir}/dna.proc.vcf.gz"
-bcftools view -Ou "$dna_named" \
+dna_text="${tmpdir}/dna.proc.vcf"
+bcftools view -Ov "$dna_named" \
   | python3 "$add_info_flag_py" SOMATIC "Somatic DNA call" \
   | python3 "$add_info_list_py" SOURCE_SET SOMATIC "Which callset(s) this record originated from (GERMLINE,SOMATIC)" \
-  | bcftools view -Oz -o "$dna_proc"
+  > "$dna_text"
+bgzip -f -c "$dna_text" > "$dna_proc"
 bcftools index -f -t "$dna_proc"
 
 mkdir -p "$(dirname "$out_vcf")"
