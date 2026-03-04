@@ -65,8 +65,16 @@ germline_include_rna_proximity="auto"
 
 # RNA output suffixes
 # Expected under: ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/
-rna1_vcf_extension="rna1.RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.vcf.gz"
-rna2_split_vcf_extension="rna2.RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.split.vcf.gz"
+# Upstream mutect2 VCF suffixes produced by rnadnavar (inputs to rna1):
+# Full source path pattern used by rna1:
+#   RNA source: ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/${patient}_${source_rna_mutect2_vcf_extension}
+#   DNA source: ${vcfdir}/${patient}_${out_dna_tumor_label}_vs_${patient}_${out_dna_normal_label}/${patient}_${source_dna_mutect2_vcf_extension}
+source_rna_mutect2_vcf_extension="${out_rna_tumor_label}_vs_${out_dna_normal_label}.mutect2.filtered.vcf.gz"
+source_dna_mutect2_vcf_extension="${out_dna_tumor_label}_vs_${out_dna_normal_label}.mutect2.filtered.vcf.gz"
+
+# RNA pipeline outputs
+rna1_vcf_extension="rna1.filtered_minus_dna_positions.vcf.gz"
+rna2_split_vcf_extension="rna2.filtered_minus_dna_positions.split.vcf.gz"
 rna2_labeled_vcf_extension="rna2.filtered_edit_labeled.vcf.gz"
 rna3_knownsites_vcf_extension="rna3.filtered_edit_labeled.knownsites.vcf.gz"
 rna4_summarised_vcf_extension="rna4.filtered_edit_labeled.knownsites_summarised.vcf.gz"

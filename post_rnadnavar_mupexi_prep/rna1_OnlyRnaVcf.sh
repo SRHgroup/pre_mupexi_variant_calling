@@ -98,12 +98,14 @@ while IFS= read -r line; do
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
+  source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension:-${out_rna_label}_vs_${out_normal_label}.mutect2.filtered.vcf.gz}"
+  source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension:-${dna_label}_vs_${out_normal_label}.mutect2.filtered.vcf.gz}"
 
   rna_vcf_dir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
   dna_vcf_dir="${vcfdir}/${name}_${dna_label}_vs_${name}_${out_normal_label}"
 
-  sdna_vcf="${dna_vcf_dir}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
-  srna_vcf="${rna_vcf_dir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
+  sdna_vcf="${dna_vcf_dir}/${name}_${source_dna_mutect2_vcf_extension}"
+  srna_vcf="${rna_vcf_dir}/${name}_${source_rna_mutect2_vcf_extension}"
 
   rna_only_vcf="${rna_vcf_dir}/${name}_${rna1_vcf_extension}"
   rna_only_log="${rna_only_vcf%.vcf.gz}.log.txt"
