@@ -52,6 +52,24 @@ sample_is_requested() {
   [ -z "$requested" ] || [ "$sample_id" = "$requested" ] || [ "$patient_id" = "$requested" ]
 }
 
+precheck_input_vcf() {
+  local path="$1"
+  local tag="$2"
+  if [ ! -f "$path" ]; then
+    echo "[precheck] ${tag}: missing input VCF (run 4.4 first): $path" >&2
+    return 1
+  fi
+  if ! gzip -t "$path" 2>/dev/null; then
+    echo "[precheck] ${tag}: input VCF is not valid gzip: $path" >&2
+    return 1
+  fi
+  if ! zgrep -m1 '^#CHROM' "$path" >/dev/null 2>&1; then
+    echo "[precheck] ${tag}: input VCF header missing #CHROM (corrupt/malformed): $path" >&2
+    return 1
+  fi
+  return 0
+}
+
 if [ -z "${sample:-}" ]; then
   echo "Running 4.5 for all samples in $samples"
 else
@@ -86,6 +104,10 @@ while IFS= read -r line; do
 
   if [ "$force" -eq 0 ] && [ -f "$out_vcf" ]; then
     echo "[skip] ${prefix}.${name}: output already exists: $out_vcf (use -f to overwrite)"
+    continue
+  fi
+  if ! precheck_input_vcf "$in_vcf" "${prefix}.${name}"; then
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi
 
