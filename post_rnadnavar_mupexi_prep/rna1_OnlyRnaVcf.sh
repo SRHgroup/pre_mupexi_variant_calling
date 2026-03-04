@@ -73,6 +73,18 @@ resolve_patient_placeholder() {
   printf '%s\n' "${template//"$token"/$patient}"
 }
 
+pick_first_existing() {
+  local path
+  for path in "$@"; do
+    [ -n "$path" ] || continue
+    if [ -f "$path" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  done
+  return 1
+}
+
 if [ -z "${sample:-}" ]; then
   echo "Running rna1 for all samples in $samples"
 else
@@ -110,11 +122,31 @@ while IFS= read -r line; do
   source_rna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_rna_mutect2_vcf_extension" "$name")"
   source_dna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_dna_mutect2_vcf_extension" "$name")"
 
+  # Strip any accidental trailing braces from misconfigured templates.
+  source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension%\}}"
+  source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension%\}}"
+
   rna_vcf_dir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
   dna_vcf_dir="${vcfdir}/${name}_${dna_label}_vs_${name}_${out_normal_label}"
 
-  sdna_vcf="${dna_vcf_dir}/${name}_${source_dna_mutect2_vcf_extension}"
-  srna_vcf="${rna_vcf_dir}/${name}_${source_rna_mutect2_vcf_extension}"
+  srna_vcf_pref="${rna_vcf_dir}/${name}_${source_rna_mutect2_vcf_extension}"
+  sdna_vcf_pref="${dna_vcf_dir}/${name}_${source_dna_mutect2_vcf_extension}"
+
+  srna_vcf="$(pick_first_existing \
+    "$srna_vcf_pref" \
+    "${rna_vcf_dir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${rna_vcf_dir}/${name}_${rna_tumor_label:-RNA_TUMOR}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${rna_vcf_dir}/${name}_RNA_TUMOR_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${rna_vcf_dir}/${name}_RNA_TUMOUR_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+  )" || srna_vcf="$srna_vcf_pref"
+
+  sdna_vcf="$(pick_first_existing \
+    "$sdna_vcf_pref" \
+    "${dna_vcf_dir}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${dna_vcf_dir}/${name}_${dna_tumor_label:-DNA_TUMOR}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${dna_vcf_dir}/${name}_DNA_TUMOR_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${dna_vcf_dir}/${name}_DNA_TUMOUR_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+  )" || sdna_vcf="$sdna_vcf_pref"
 
   rna_only_vcf="${rna_vcf_dir}/${name}_${rna1_vcf_extension}"
   rna_only_log="${rna_only_vcf%.vcf.gz}.log.txt"
