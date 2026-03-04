@@ -30,6 +30,13 @@ USAGE
 
 die(){ echo "[error] $*" >&2; exit 1; }
 
+normalize_to_bgzip() {
+  local in_vcf="$1"
+  local out_vcfgz="$2"
+  bcftools view -Oz -o "$out_vcfgz" "$in_vcf"
+  bcftools index -f -t "$out_vcfgz"
+}
+
 resolve_sample_name () {
   local requested="$1"
   shift
@@ -57,14 +64,9 @@ strip_as_info() {
 
   if [[ -n "${as_tags}" ]]; then
     bcftools annotate --threads "${threads}" -x "${as_tags}" -Oz -o "${out_vcf}" "${in_vcf}"
-    bcftools index -t "${out_vcf}"
+    bcftools index -f -t "${out_vcf}"
   else
-    cp -f "${in_vcf}" "${out_vcf}"
-    if [[ -f "${in_vcf}.tbi" ]]; then
-      cp -f "${in_vcf}.tbi" "${out_vcf}.tbi"
-    else
-      bcftools index -t "${out_vcf}" >/dev/null 2>&1 || true
-    fi
+    normalize_to_bgzip "${in_vcf}" "${out_vcf}"
   fi
 }
 
@@ -88,11 +90,13 @@ done
 [[ -f "$germ_vcf" ]] || die "Missing germline VCF: $germ_vcf"
 [[ -f "$dna_vcf" ]] || die "Missing DNA somatic VCF: $dna_vcf"
 
-bcftools index -f -t "$germ_vcf" >/dev/null 2>&1 || true
-bcftools index -f -t "$dna_vcf" >/dev/null 2>&1 || true
-
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
+
+germ_bgz="${tmpdir}/germ.input.vcf.gz"
+dna_bgz="${tmpdir}/dna.input.vcf.gz"
+normalize_to_bgzip "$germ_vcf" "$germ_bgz"
+normalize_to_bgzip "$dna_vcf" "$dna_bgz"
 
 add_info_flag_py="${tmpdir}/add_info_flag.py"
 cat > "$add_info_flag_py" <<'PY'
@@ -175,11 +179,11 @@ for line in sys.stdin:
 PY
 chmod +x "$add_info_list_py"
 
-mapfile -t gsamples < <(bcftools query -l "$germ_vcf")
+mapfile -t gsamples < <(bcftools query -l "$germ_bgz")
 [[ ${#gsamples[@]} -ge 1 ]] || die "No samples found in germline VCF"
 germ_in="${gsamples[0]}"
 
-mapfile -t dsamples < <(bcftools query -l "$dna_vcf")
+mapfile -t dsamples < <(bcftools query -l "$dna_bgz")
 [[ ${#dsamples[@]} -ge 1 ]] || die "No samples found in DNA somatic VCF"
 dna_in="$(resolve_sample_name "$out_dna" "${dsamples[@]}")" || {
   # fallback: pick first non-normal-like sample
@@ -195,7 +199,8 @@ dna_in="$(resolve_sample_name "$out_dna" "${dsamples[@]}")" || {
 
 germ_named="${tmpdir}/germ.named.vcf.gz"
 echo -e "${germ_in}\t${out_normal}" > "${tmpdir}/germ.map"
-bcftools reheader -s "${tmpdir}/germ.map" -o "$germ_named" "$germ_vcf"
+bcftools reheader -s "${tmpdir}/germ.map" "$germ_bgz" \
+  | bcftools view -Oz -o "$germ_named"
 bcftools index -f -t "$germ_named"
 
 germ_proc="${tmpdir}/germ.proc.vcf.gz"
@@ -206,7 +211,7 @@ bcftools view -Ou "$germ_named" \
 bcftools index -f -t "$germ_proc"
 
 dna_noas="${tmpdir}/dna.noas.vcf.gz"
-strip_as_info "$dna_vcf" "$dna_noas"
+strip_as_info "$dna_bgz" "$dna_noas"
 
 dna_one="${tmpdir}/dna.one.vcf.gz"
 bcftools view -s "$dna_in" -Oz -o "$dna_one" "$dna_noas"
@@ -214,7 +219,8 @@ bcftools index -f -t "$dna_one"
 
 echo -e "${dna_in}\t${out_dna}" > "${tmpdir}/dna.map"
 dna_named="${tmpdir}/dna.named.vcf.gz"
-bcftools reheader -s "${tmpdir}/dna.map" -o "$dna_named" "$dna_one"
+bcftools reheader -s "${tmpdir}/dna.map" "$dna_one" \
+  | bcftools view -Oz -o "$dna_named"
 bcftools index -f -t "$dna_named"
 
 dna_proc="${tmpdir}/dna.proc.vcf.gz"
