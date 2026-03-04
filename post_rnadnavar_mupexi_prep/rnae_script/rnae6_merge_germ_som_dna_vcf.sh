@@ -199,8 +199,9 @@ dna_in="$(resolve_sample_name "$out_dna" "${dsamples[@]}")" || {
 
 germ_named="${tmpdir}/germ.named.vcf.gz"
 echo -e "${germ_in}\t${out_normal}" > "${tmpdir}/germ.map"
-bcftools reheader -s "${tmpdir}/germ.map" "$germ_bgz" \
-  | bcftools view -Oz -o "$germ_named"
+germ_rehead="${tmpdir}/germ.reheader.vcf"
+bcftools reheader -s "${tmpdir}/germ.map" -o "$germ_rehead" "$germ_bgz"
+bcftools view -Oz -o "$germ_named" "$germ_rehead"
 bcftools index -f -t "$germ_named"
 
 germ_proc="${tmpdir}/germ.proc.vcf.gz"
@@ -219,8 +220,9 @@ bcftools index -f -t "$dna_one"
 
 echo -e "${dna_in}\t${out_dna}" > "${tmpdir}/dna.map"
 dna_named="${tmpdir}/dna.named.vcf.gz"
-bcftools reheader -s "${tmpdir}/dna.map" "$dna_one" \
-  | bcftools view -Oz -o "$dna_named"
+dna_rehead="${tmpdir}/dna.reheader.vcf"
+bcftools reheader -s "${tmpdir}/dna.map" -o "$dna_rehead" "$dna_one"
+bcftools view -Oz -o "$dna_named" "$dna_rehead"
 bcftools index -f -t "$dna_named"
 
 dna_proc="${tmpdir}/dna.proc.vcf.gz"

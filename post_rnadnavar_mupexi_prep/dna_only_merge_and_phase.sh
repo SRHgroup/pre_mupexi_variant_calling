@@ -212,7 +212,8 @@ while IFS= read -r line; do
   merged_vcf="${outdir}/${name}_${dna_only_merged_vcf_extension}"
   genotyped_vcf="${outdir}/${name}_${dna_only_genotyped_vcf_extension}"
   phased_vcf="${outdir}/${name}_${dna_only_phased_vcf_extension}"
-  run_log="${phased_vcf%.vcf.gz}.dna_only.log.txt"
+  merge_log="${merged_vcf%.vcf.gz}.merge.log.txt"
+  phase_log="${phased_vcf%.vcf.gz}.genotype_and_phase.log.txt"
 
   if [ "$allow_with_rna" -eq 0 ] && [ -n "$rna_vcf" ]; then
     echo "[skip] ${prefix}.${name}: RNA source VCF exists, run RNA pipeline instead: $rna_vcf"
@@ -236,17 +237,19 @@ while IFS= read -r line; do
     continue
   fi
 
-  job_name="${prefix}.${name}"
-  submit_marker="${logdir}/submitted.${job_name}.jobid"
+  merge_job_name="${prefix}.merge.${name}"
+  phase_job_name="${prefix}.phase.${name}"
+  submit_marker="${logdir}/submitted.${phase_job_name}.jobid"
   if [ -f "$submit_marker" ]; then
     prev_jobid="$(head -n1 "$submit_marker" 2>/dev/null || true)"
     if [ -n "$prev_jobid" ] && command -v qstat >/dev/null 2>&1 && qstat "$prev_jobid" >/dev/null 2>&1; then
-      echo "[skip] ${job_name}: job already queued/running: ${prev_jobid}"
+      echo "[skip] ${phase_job_name}: job already queued/running: ${prev_jobid}"
       continue
     fi
   fi
 
-  runscript="${logdir}/run.${name}.${prefix}.sh"
+  merge_runscript="${logdir}/run.${name}.${prefix}.merge.sh"
+  phase_runscript="${logdir}/run.${name}.${prefix}.phase.sh"
   {
     cat <<'SCRIPT'
 #!/usr/bin/bash
@@ -259,31 +262,68 @@ SCRIPT
     printf 'FASTA=%q\n' "$FASTA"
     printf 'DICT=%q\n' "$DICT"
     printf 'merged_vcf=%q\n' "$merged_vcf"
-    printf 'genotyped_vcf=%q\n' "$genotyped_vcf"
-    printf 'phased_vcf=%q\n' "$phased_vcf"
     printf 'out_normal=%q\n' "$out_normal_label"
     printf 'out_dna=%q\n' "$dna_label"
-    printf 'run_log=%q\n' "$run_log"
+    printf 'merge_log=%q\n' "$merge_log"
     cat <<'SCRIPT'
 mkdir -p "$(dirname "$merged_vcf")"
 
 bash "$rnae_scripts/rnae6_merge_germ_som_dna_vcf.sh" \
-  -g "$germ_vcf" -d "$dna_vcf" -o "$merged_vcf" --out-normal "$out_normal" --out-dna "$out_dna" 2>&1 | tee "$run_log"
+  -g "$germ_vcf" -d "$dna_vcf" -o "$merged_vcf" --out-normal "$out_normal" --out-dna "$out_dna" 2>&1 | tee "$merge_log"
+SCRIPT
+  } > "$merge_runscript"
+  chmod +x "$merge_runscript"
+
+  {
+    cat <<'SCRIPT'
+#!/usr/bin/bash
+set -euo pipefail
+SCRIPT
+    printf 'rnae_scripts=%q\n' "$rnae_scripts"
+    printf 'dna_bam=%q\n' "$dna_bam"
+    printf 'FASTA=%q\n' "$FASTA"
+    printf 'DICT=%q\n' "$DICT"
+    printf 'merged_vcf=%q\n' "$merged_vcf"
+    printf 'genotyped_vcf=%q\n' "$genotyped_vcf"
+    printf 'phased_vcf=%q\n' "$phased_vcf"
+    printf 'out_normal=%q\n' "$out_normal_label"
+    printf 'out_dna=%q\n' "$dna_label"
+    printf 'phase_log=%q\n' "$phase_log"
+    cat <<'SCRIPT'
+if [ ! -f "$merged_vcf" ]; then
+  echo "ERROR: missing DNA-only merged VCF (merge step failed?): $merged_vcf" >&2
+  exit 1
+fi
 
 bash "$rnae_scripts/rnae7_genotype_and_phase_dna_merged_vcf.sh" \
   --merged "$merged_vcf" --dna-bam "$dna_bam" --fasta "$FASTA" --dict "$DICT" \
   --out-genotyped "$genotyped_vcf" --out-phased "$phased_vcf" \
-  --normal-name "$out_normal" --dna-name "$out_dna" 2>&1 | tee -a "$run_log"
+  --normal-name "$out_normal" --dna-name "$out_dna" 2>&1 | tee "$phase_log"
 SCRIPT
-  } > "$runscript"
-  chmod +x "$runscript"
+  } > "$phase_runscript"
+  chmod +x "$phase_runscript"
 
-  qsub_output="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
-    "${qsub_depend_arg[@]}" \
-    -l nodes=1:ppn=8,mem=48gb,walltime="01:00:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
-  echo "$qsub_output"
-  printf '%s\n' "$qsub_output" > "$submit_marker"
-  echo "[submit] ${job_name}: jobid=${qsub_output}"
+  merge_jobid=""
+  if [ "$force" -eq 1 ] || [ ! -f "$merged_vcf" ]; then
+    merge_jobid="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
+      "${qsub_depend_arg[@]}" \
+      -l nodes=1:ppn=4,mem=16gb,walltime="00:06:00:00" -r y -N "$merge_job_name" -o "$repdir" -e "$repdir" "$merge_runscript")"
+    echo "$merge_jobid"
+    echo "[submit] ${merge_job_name}: jobid=${merge_jobid}"
+  else
+    echo "[skip] ${merge_job_name}: merged output already exists: $merged_vcf"
+  fi
+
+  phase_depend_arg=()
+  if [ -n "$merge_jobid" ]; then
+    phase_depend_arg=(-W "depend=afterok:${merge_jobid}")
+  fi
+  phase_jobid="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
+    "${phase_depend_arg[@]}" \
+    -l nodes=1:ppn=8,mem=48gb,walltime="01:00:00:00" -r y -N "$phase_job_name" -o "$repdir" -e "$repdir" "$phase_runscript")"
+  echo "$phase_jobid"
+  printf '%s\n' "$phase_jobid" > "$submit_marker"
+  echo "[submit] ${phase_job_name}: jobid=${phase_jobid}"
   echo ".. logs and reports saved in $scriptdir"
   sleep 0.3
 done < "$samples"
