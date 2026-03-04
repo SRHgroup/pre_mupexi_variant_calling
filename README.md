@@ -26,10 +26,8 @@ RNA:
 4. `rna4_SummariseRnaMetrics.sh`
 5. `rna5_FilterByAfDpAr.sh`
 6. `rna6_MergeDnaRnaVcfs.sh`
-7. `rna7_GenotypeAndPhaseMergedVcf.sh`
-
-Optional RNA BAM prep:
-- `rna7.0_FixRnaBamReadGroups.sh`
+7. `rna7.0_FixRnaBamReadGroups.sh` (required before `rna7`)
+8. `rna7_GenotypeAndPhaseMergedVcf.sh`
 
 gDNA:
 1. `gdna1_HaplotypeCaller.sh`
@@ -40,11 +38,11 @@ gDNA:
 ## Dependency model
 
 - `rna1..rna5` are independent from `gdna1..gdna4`.
-- `rna6` and `rna7` require both branches to be done.
+- `rna6`, `rna7.0`, and `rna7` require both branches to be done.
 - `run_all_end_to_end.sh` submits exactly that topology:
   - chain A: `gdna1 -> gdna2 -> gdna3 -> gdna4`
   - chain B: `rna1 -> rna2 -> rna3 -> rna4 -> rna5`
-  - chain C: `rna6 -> rna7`, dependent on A and B completion.
+  - chain C: `rna6 -> rna7.0 -> rna7`, dependent on A and B completion.
 
 ## Requirements
 
@@ -121,4 +119,5 @@ If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can chec
 
 - Scripts precheck inputs before `qsub`; broken/missing inputs are reported immediately.
 - Duplicate submission guard is enabled per step/sample using stored job IDs + `qstat`.
+- `rna7` requires the SM-fixed RNA BAM from `rna7.0` and will fail/skip if that file is missing.
 - Dataset-specific `CONFIG` files should stay outside git-tracked repo content.

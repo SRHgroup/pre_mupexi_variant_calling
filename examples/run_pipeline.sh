@@ -14,9 +14,9 @@ Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
   $0 all [PATIENT] [-f]
-  $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
+  $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
+  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
   $0 sync
   $0 show-config
 
@@ -28,6 +28,8 @@ Examples:
   $0 germline 01-CH-L
   $0 all 01-CH-L
   $0 step rna4 01-CH-L -f
+  $0 step rna7.0 01-CH-L -f
+  $0 step rna7 01-CH-L -f
   $0 step gdna2 01-CH-L
   $0 check
   $0 check 01-CH-L rna
@@ -64,6 +66,7 @@ load_config() {
   source "$CONFIG"
   : "${samples:?CONFIG must define samples}"
   : "${vcfdir:?CONFIG must define vcfdir}"
+  : "${bamdir:?CONFIG must define bamdir}"
 }
 
 sample_base_name() {
@@ -103,6 +106,10 @@ step_expected_output() {
     rna4) printf '%s\n' "${outdir}/${patient}_${rna4_summarised_vcf_extension}" ;;
     rna5) printf '%s\n' "${outdir}/${patient}_${rna5_qced_vcf_extension}" ;;
     rna6) printf '%s\n' "${outdir}/${patient}_${rna6_merged_vcf_extension}" ;;
+    rna7.0)
+      rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
+      printf '%s\n' "${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna7_smfixed_bam_suffix}"
+      ;;
     rna7) printf '%s\n' "${outdir}/${patient}_${rna7_phased_vcf_extension}" ;;
     *) return 1 ;;
   esac
@@ -112,7 +119,7 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
@@ -127,6 +134,7 @@ check_step_outputs() {
   : "${rna4_summarised_vcf_extension:?CONFIG must define rna4_summarised_vcf_extension}"
   : "${rna5_qced_vcf_extension:?CONFIG must define rna5_qced_vcf_extension}"
   : "${rna6_merged_vcf_extension:?CONFIG must define rna6_merged_vcf_extension}"
+  : "${rna7_smfixed_bam_suffix:?CONFIG must define rna7_smfixed_bam_suffix}"
   : "${rna7_phased_vcf_extension:?CONFIG must define rna7_phased_vcf_extension}"
 
   local failed=0
@@ -166,7 +174,7 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     case "$step_name" in
-      rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4)
+      rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4)
         run_make "run${step_name}" "$sample"
         ;;
       *)

@@ -20,6 +20,9 @@ This project follows a simple Keep-a-Changelog style and semantic version tags (
 
 ### Changed
 
+- Made RNA read-group fix mandatory in orchestration:
+  - `rna7.0` is now included before `rna7` in RNA and end-to-end chains.
+  - `rna7` now requires SM-fixed BAM from `rna7.0` (no fallback BAM).
 - Renamed step scripts to semantic names:
   - RNA: `rna1`..`rna7`
   - gDNA: `gdna1`..`gdna4`

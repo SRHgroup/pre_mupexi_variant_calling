@@ -8,7 +8,7 @@ Usage: bash run_all_end_to_end.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [-f]
 Behavior:
 - Submits `gdna1..gdna4` as one dependent chain.
 - Submits `rna1..rna5` as an independent dependent chain.
-- Submits `rna6..rna7` only after BOTH chains complete successfully.
+- Submits `rna6 -> rna7.0 -> rna7` only after BOTH chains complete successfully.
 USAGE
 }
 
@@ -120,6 +120,7 @@ fi
 LAST_DEP=""
 submit_chain "rna" "$combined_depend" \
   rna6_MergeDnaRnaVcfs.sh \
+  rna7.0_FixRnaBamReadGroups.sh \
   rna7_GenotypeAndPhaseMergedVcf.sh
 
 echo "[end_to_end] submission complete"

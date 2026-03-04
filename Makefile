@@ -29,6 +29,9 @@ runrna5: check-config
 runrna6: check-config
 	cd post_rnadnavar_mupexi_prep && bash rna6_MergeDnaRnaVcfs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
+runrna7.0: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna7.0_FixRnaBamReadGroups.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
 runrna7: check-config
 	cd post_rnadnavar_mupexi_prep && bash rna7_GenotypeAndPhaseMergedVcf.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
@@ -63,6 +66,7 @@ run4.3: runrna3
 run4.4: runrna4
 run4.5: runrna5
 run4.6: runrna6
+run4.7.0: runrna7.0
 run4.7: runrna7
 run2.0: rungdna1
 run2.0.1: rungdna2

@@ -75,5 +75,5 @@ rna6_merged_vcf_extension="rna6.DNAt_DNAn_RNAt_merged.vcf.gz"
 rna7_genotyped_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_genotyped.vcf.gz"
 rna7_phased_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_phased.vcf.gz"
 
-# Optional rna7.0 output suffix
+# Required rna7.0 output suffix (rna7 consumes this BAM)
 rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"

@@ -114,13 +114,7 @@ while IFS= read -r line; do
   rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
 
   dna_bam="${bamdir}/${name}_${dna_dir_label}/${name}_${dna_dir_label}.md.bam"
-  rna_bam_fixed="${bamdir}/${name}_${rna_dir_label}/${name}_${rna7_smfixed_bam_suffix}"
-  rna_bam_default="${bamdir}/${name}_${rna_dir_label}/${name}_${rna_dir_label}.md.bam"
-  if [ -f "$rna_bam_fixed" ]; then
-    rna_bam="$rna_bam_fixed"
-  else
-    rna_bam="$rna_bam_default"
-  fi
+  rna_bam="${bamdir}/${name}_${rna_dir_label}/${name}_${rna7_smfixed_bam_suffix}"
 
   run_log="${phased_vcf%.vcf.gz}.genotype_and_phase.log.txt"
 
@@ -132,8 +126,13 @@ while IFS= read -r line; do
     echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi
-  if [ ! -f "$dna_bam" ] || [ ! -f "$rna_bam" ]; then
-    echo "[precheck] ${prefix}.${name}: missing BAM input dna='$dna_bam' rna='$rna_bam'" >&2
+  if [ ! -f "$dna_bam" ]; then
+    echo "[precheck] ${prefix}.${name}: missing DNA BAM: $dna_bam" >&2
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+  if [ ! -f "$rna_bam" ]; then
+    echo "[precheck] ${prefix}.${name}: missing SM-fixed RNA BAM (run rna7.0 first): $rna_bam" >&2
     echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi

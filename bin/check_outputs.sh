@@ -45,6 +45,7 @@ source "$config"
 
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
+: "${bamdir:?CONFIG must define bamdir}"
 : "${gdna1_vcf_extension:?CONFIG must define gdna1_vcf_extension}"
 : "${gdna2_vcf_extension:?CONFIG must define gdna2_vcf_extension}"
 : "${gdna3_vcf_extension:?CONFIG must define gdna3_vcf_extension}"
@@ -55,6 +56,7 @@ source "$config"
 : "${rna4_summarised_vcf_extension:?CONFIG must define rna4_summarised_vcf_extension}"
 : "${rna5_qced_vcf_extension:?CONFIG must define rna5_qced_vcf_extension}"
 : "${rna6_merged_vcf_extension:?CONFIG must define rna6_merged_vcf_extension}"
+: "${rna7_smfixed_bam_suffix:?CONFIG must define rna7_smfixed_bam_suffix}"
 : "${rna7_phased_vcf_extension:?CONFIG must define rna7_phased_vcf_extension}"
 
 sample_base_name() {
@@ -106,6 +108,7 @@ while IFS= read -r line; do
     )
   fi
   if [ "$mode" = "all" ] || [ "$mode" = "rna" ]; then
+    rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
     expected+=(
       "${outdir}/${name}_${rna1_vcf_extension}"
       "${outdir}/${name}_${rna2_labeled_vcf_extension}"
@@ -113,6 +116,7 @@ while IFS= read -r line; do
       "${outdir}/${name}_${rna4_summarised_vcf_extension}"
       "${outdir}/${name}_${rna5_qced_vcf_extension}"
       "${outdir}/${name}_${rna6_merged_vcf_extension}"
+      "${bamdir}/${name}_${rna_dir_label}/${name}_${rna7_smfixed_bam_suffix}"
       "${outdir}/${name}_${rna7_phased_vcf_extension}"
     )
   fi
