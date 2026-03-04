@@ -13,6 +13,7 @@ if [ "$cmd" = "-h" ] || [ "$cmd" = "--help" ] || [ "$cmd" = "help" ]; then
 Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
+  $0 dna-only [PATIENT] [-f]
   $0 all [PATIENT] [-f]
   $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
@@ -27,6 +28,7 @@ Examples:
   $0 rna
   $0 rna 01-CH-L
   $0 germline 01-CH-L
+  $0 dna-only 01-CH-L
   $0 all 01-CH-L
   $0 step rna4 01-CH-L -f
   $0 step rna7.0 01-CH-L -f
@@ -466,6 +468,7 @@ check_step_outputs() {
 case "$cmd" in
   rna)       run_make run_all_rna "${1:-}" ;;
   germline)  run_make run_all_germline "${1:-}" ;;
+  dna-only)  run_make run_dna_only "${1:-}" ;;
   all)       run_make run_all "${1:-}" ;;
   step)
     step_name="${1:-}"

@@ -86,3 +86,10 @@ rna7_phased_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_phased.vcf.gz"
 
 # Required rna7.0 output suffix (rna7 consumes this BAM)
 rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"
+
+# DNA-only path (no RNA): merge germline + DNA somatic, then genotype/phase DNA tumor
+# If unset, defaults are used by dna_only_merge_and_phase.sh.
+# germline_for_merge_extension defaults to gdna4_vcf_extension (or output_extension_30 in legacy config).
+dna_only_merged_vcf_extension="dna_only6.DNAt_DNAn_merged.vcf.gz"
+dna_only_genotyped_vcf_extension="dna_only7.DNAt_DNAn_merged_genotyped.vcf.gz"
+dna_only_phased_vcf_extension="dna_only7.DNAt_DNAn_merged_phased.vcf.gz"

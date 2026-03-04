@@ -56,6 +56,9 @@ run_all_germline: check-config
 run_all: check-config
 	bash run_all_end_to_end.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
+run_dna_only: check-config
+	cd post_rnadnavar_mupexi_prep && bash dna_only_merge_and_phase.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
 check_outputs: check-config
 	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) -m "$(MODE)"
 

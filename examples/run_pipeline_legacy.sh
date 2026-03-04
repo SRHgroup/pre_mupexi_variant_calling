@@ -14,6 +14,7 @@ if [ "$cmd" = "-h" ] || [ "$cmd" = "--help" ] || [ "$cmd" = "help" ]; then
 Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
+  $0 dna-only [PATIENT] [-f]
   $0 all [PATIENT] [-f]
   $0 step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
@@ -435,6 +436,7 @@ watch_step_outputs() {
 case "$cmd" in
   rna)       run_make run_all_rna "${1:-}" ;;
   germline)  run_make run_all_germline "${1:-}" ;;
+  dna-only)  run_make run_dna_only "${1:-}" ;;
   all)       run_make run_all "${1:-}" ;;
   step)
     step_name="${1:-}"
