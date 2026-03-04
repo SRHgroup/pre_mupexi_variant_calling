@@ -69,8 +69,9 @@ germline_include_rna_proximity="auto"
 # Full source path pattern used by rna1:
 #   RNA source: ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/${patient}_${source_rna_mutect2_vcf_extension}
 #   DNA source: ${vcfdir}/${patient}_${out_dna_tumor_label}_vs_${patient}_${out_dna_normal_label}/${patient}_${source_dna_mutect2_vcf_extension}
-source_rna_mutect2_vcf_extension="${out_rna_tumor_label}_vs_${out_dna_normal_label}.mutect2.filtered.vcf.gz"
-source_dna_mutect2_vcf_extension="${out_dna_tumor_label}_vs_${out_dna_normal_label}.mutect2.filtered.vcf.gz"
+# You can use "{patient}" placeholder in these suffixes.
+source_rna_mutect2_vcf_extension="${out_rna_tumor_label}_vs_{patient}_${out_dna_normal_label}.mutect2.filtered.vcf.gz"
+source_dna_mutect2_vcf_extension="${out_dna_tumor_label}_vs_{patient}_${out_dna_normal_label}.mutect2.filtered.vcf.gz"
 
 # RNA pipeline outputs
 rna1_vcf_extension="rna1.filtered_minus_dna_positions.vcf.gz"

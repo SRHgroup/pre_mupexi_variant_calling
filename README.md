@@ -64,6 +64,7 @@ cp examples/SAMPLES.example /path/to/project/SAMPLES.tsv
 Edit `CONFIG` and set at minimum:
 - `samples`, `vcfdir`, `bamdir`, `knownsites`, `FASTA`, `DICT`, `rnae_scripts`
 - `source_rna_mutect2_vcf_extension`, `source_dna_mutect2_vcf_extension` if your upstream rnadnavar VCF names differ from defaults
+  - `{patient}` placeholder is supported in these suffixes
 
 Labels:
 - default: `DNA_TUMOR`, `RNA_TUMOR`
