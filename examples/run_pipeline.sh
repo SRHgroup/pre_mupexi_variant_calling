@@ -8,6 +8,35 @@ CONFIG="/home/projects/SRHgroup/projects/PemBOv_trial/bin/rnadnavar/CONFIG"
 cmd="${1:-help}"
 shift || true
 
+if [ "$cmd" = "-h" ] || [ "$cmd" = "--help" ] || [ "$cmd" = "help" ]; then
+  cat <<USAGE
+Usage:
+  $0 rna [PATIENT] [-f]
+  $0 germline [PATIENT] [-f]
+  $0 all [PATIENT] [-f]
+  $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
+  $0 check [PATIENT] [all|rna|germline]
+  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
+  $0 sync
+  $0 show-config
+
+Examples:
+  $0 show-config
+  $0 sync
+  $0 rna
+  $0 rna 01-CH-L
+  $0 germline 01-CH-L
+  $0 all 01-CH-L
+  $0 step rna4 01-CH-L -f
+  $0 step gdna2 01-CH-L
+  $0 check
+  $0 check 01-CH-L rna
+  $0 check-step rna5
+  $0 check-step gdna4 01-CH-L
+USAGE
+  exit 0
+fi
+
 force=0
 if [[ " ${*:-} " == *" -f "* ]] || [[ " ${*:-} " == *" --force "* ]]; then
   force=1
@@ -168,16 +197,8 @@ case "$cmd" in
     echo "CONFIG=$CONFIG"
     ;;
   *)
-    cat <<USAGE
-Usage:
-  $0 rna [PATIENT] [-f]
-  $0 germline [PATIENT] [-f]
-  $0 all [PATIENT] [-f]
-  $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
-  $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
-  $0 sync
-  $0 show-config
-USAGE
+    echo "Unknown command: $cmd" >&2
+    echo "Use: $0 --help" >&2
+    exit 1
     ;;
 esac
