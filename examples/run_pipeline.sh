@@ -90,6 +90,25 @@ sample_base_name() {
   printf '%s\n' "$value"
 }
 
+resolve_patient_placeholder() {
+  local template="$1"
+  local patient="$2"
+  local token='{patient}'
+  printf '%s\n' "${template//"$token"/$patient}"
+}
+
+pick_first_existing() {
+  local path
+  for path in "$@"; do
+    [ -n "$path" ] || continue
+    if [ -f "$path" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  done
+  return 1
+}
+
 step_expected_output() {
   local patient="$1"
   local step="$2"
@@ -115,6 +134,149 @@ step_expected_output() {
       ;;
     rna7) printf '%s\n' "${outdir}/${patient}_${rna7_phased_vcf_extension}" ;;
     *) return 1 ;;
+  esac
+}
+
+step_input_status() {
+  local patient="$1"
+  local step="$2"
+  local out_normal out_rna dna_label rna_dir_label outdir germdir
+  local rna_vcf_dir dna_vcf_dir srna_pref sdna_pref srna sdna
+  out_normal="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
+  out_rna="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
+  dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
+  rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
+  outdir="${vcfdir}/${patient}_${out_rna}_vs_${patient}_${out_normal}"
+  germdir="${vcfdir}/${patient}_${out_normal}"
+
+  case "$step" in
+    gdna1)
+      local dna_bam="${bamdir}/${patient}_${out_normal}/${patient}_${dna_bam_suffix:-md.bam}"
+      if [ -f "$dna_bam" ] && [ -s "$dna_bam" ]; then
+        printf 'INPUT_OK\t%s\n' "$dna_bam"
+      else
+        printf 'NO_INPUT\t%s\n' "$dna_bam"
+      fi
+      ;;
+    gdna2)
+      local in_gdna2="${germdir}/${patient}_${gdna1_vcf_extension}"
+      if [ -f "$in_gdna2" ] && [ -s "$in_gdna2" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_gdna2"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_gdna2"
+      fi
+      ;;
+    gdna3)
+      local in_gdna3="${germdir}/${patient}_${gdna2_vcf_extension}"
+      if [ -f "$in_gdna3" ] && [ -s "$in_gdna3" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_gdna3"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_gdna3"
+      fi
+      ;;
+    gdna4)
+      local in_gdna4="${germdir}/${patient}_${gdna3_vcf_extension}"
+      if [ -f "$in_gdna4" ] && [ -s "$in_gdna4" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_gdna4"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_gdna4"
+      fi
+      ;;
+    rna1)
+      source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension:-${out_rna}_vs_{patient}_${out_normal}.mutect2.filtered.vcf.gz}"
+      source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension:-${dna_label}_vs_{patient}_${out_normal}.mutect2.filtered.vcf.gz}"
+      source_rna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_rna_mutect2_vcf_extension" "$patient")"
+      source_dna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_dna_mutect2_vcf_extension" "$patient")"
+      source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension%\}}"
+      source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension%\}}"
+      rna_vcf_dir="${vcfdir}/${patient}_${out_rna}_vs_${patient}_${out_normal}"
+      dna_vcf_dir="${vcfdir}/${patient}_${dna_label}_vs_${patient}_${out_normal}"
+      srna_pref="${rna_vcf_dir}/${patient}_${source_rna_mutect2_vcf_extension}"
+      sdna_pref="${dna_vcf_dir}/${patient}_${source_dna_mutect2_vcf_extension}"
+      srna="$(pick_first_existing \
+        "$srna_pref" \
+        "${rna_vcf_dir}/${patient}_${out_rna}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${rna_vcf_dir}/${patient}_${rna_tumor_label:-RNA_TUMOR}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${rna_vcf_dir}/${patient}_RNA_TUMOR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${rna_vcf_dir}/${patient}_RNA_TUMOUR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+      )" || srna=""
+      sdna="$(pick_first_existing \
+        "$sdna_pref" \
+        "${dna_vcf_dir}/${patient}_${dna_label}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${dna_vcf_dir}/${patient}_${dna_tumor_label:-DNA_TUMOR}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${dna_vcf_dir}/${patient}_DNA_TUMOR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${dna_vcf_dir}/${patient}_DNA_TUMOUR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+      )" || sdna=""
+      if [ -z "$srna" ]; then
+        printf 'NO_INPUT\tRNA:%s\n' "$srna_pref"
+      elif [ -z "$sdna" ]; then
+        printf 'NO_INPUT\tDNA:%s\n' "$sdna_pref"
+      else
+        printf 'INPUT_OK\tRNA:%s ; DNA:%s\n' "$srna" "$sdna"
+      fi
+      ;;
+    rna2)
+      local in_rna2="${outdir}/${patient}_${rna1_vcf_extension}"
+      if [ -f "$in_rna2" ] && [ -s "$in_rna2" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_rna2"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_rna2"
+      fi
+      ;;
+    rna3)
+      local in_rna3="${outdir}/${patient}_${rna2_labeled_vcf_extension}"
+      if [ -f "$in_rna3" ] && [ -s "$in_rna3" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_rna3"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_rna3"
+      fi
+      ;;
+    rna4)
+      local in_rna4="${outdir}/${patient}_${rna3_knownsites_vcf_extension}"
+      if [ -f "$in_rna4" ] && [ -s "$in_rna4" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_rna4"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_rna4"
+      fi
+      ;;
+    rna5)
+      local in_rna5="${outdir}/${patient}_${rna4_summarised_vcf_extension}"
+      if [ -f "$in_rna5" ] && [ -s "$in_rna5" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_rna5"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_rna5"
+      fi
+      ;;
+    rna6)
+      local in_rna6="${outdir}/${patient}_${rna5_qced_vcf_extension}"
+      if [ -f "$in_rna6" ] && [ -s "$in_rna6" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_rna6"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_rna6"
+      fi
+      ;;
+    rna7.0)
+      local in_rna70="${bamdir}/${patient}_${rna_dir_label}/${patient}_${dna_bam_suffix:-md.bam}"
+      if [ -f "$in_rna70" ] && [ -s "$in_rna70" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_rna70"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_rna70"
+      fi
+      ;;
+    rna7)
+      local in_rna7_1="${outdir}/${patient}_${rna6_merged_vcf_extension}"
+      local in_rna7_2="${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna7_smfixed_bam_suffix}"
+      if [ -f "$in_rna7_1" ] && [ -s "$in_rna7_1" ] && [ -f "$in_rna7_2" ] && [ -s "$in_rna7_2" ]; then
+        printf 'INPUT_OK\tVCF:%s ; BAM:%s\n' "$in_rna7_1" "$in_rna7_2"
+      elif [ ! -f "$in_rna7_1" ] || [ ! -s "$in_rna7_1" ]; then
+        printf 'NO_INPUT\tVCF:%s\n' "$in_rna7_1"
+      else
+        printf 'NO_INPUT\tBAM:%s\n' "$in_rna7_2"
+      fi
+      ;;
+    *)
+      printf 'NO_INPUT\tunknown-step\n'
+      ;;
   esac
 }
 
@@ -286,7 +448,14 @@ check_step_outputs() {
       printf "%s\tNO\tEMPTY\t%s\n" "$patient" "$out"
       failed=1
     else
-      printf "%s\tNO\tMISSING\t%s\n" "$patient" "$out"
+      input_info="$(step_input_status "$patient" "$step")"
+      input_state="$(printf '%s\n' "$input_info" | awk -F'\t' 'NR==1{print $1}')"
+      input_path="$(printf '%s\n' "$input_info" | awk -F'\t' 'NR==1{print $2}')"
+      if [ "$input_state" = "INPUT_OK" ]; then
+        printf "%s\tNO\tMISSING_OUTPUT\t%s\tINPUT_OK\t%s\n" "$patient" "$out" "$input_path"
+      else
+        printf "%s\tNO\tMISSING_OUTPUT\t%s\tNO_INPUT\t%s\n" "$patient" "$out" "$input_path"
+      fi
       failed=1
     fi
   done < "$samples"
