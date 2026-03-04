@@ -17,6 +17,7 @@ Usage:
   $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
   $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
+  $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
 
@@ -35,6 +36,8 @@ Examples:
   $0 check 01-CH-L rna
   $0 check-step rna5
   $0 check-step gdna4 01-CH-L
+  $0 watch-step rna7
+  $0 watch-step gdna3 01-CH-L 10
 USAGE
   exit 0
 fi
@@ -113,6 +116,131 @@ step_expected_output() {
     rna7) printf '%s\n' "${outdir}/${patient}_${rna7_phased_vcf_extension}" ;;
     *) return 1 ;;
   esac
+}
+
+step_prefix() {
+  case "$1" in
+    rna1) printf '%s\n' "rna1_OnlyRnaVcf" ;;
+    rna2) printf '%s\n' "rna2_FilterEditSignature" ;;
+    rna3) printf '%s\n' "rna3_AnnotateKnownSites" ;;
+    rna4) printf '%s\n' "rna4_SummariseRnaMetrics" ;;
+    rna5) printf '%s\n' "rna5_FilterByAfDpAr" ;;
+    rna6) printf '%s\n' "rna6_MergeDnaRnaVcfs" ;;
+    rna7.0) printf '%s\n' "rna7.0_FixRnaBamReadGroups" ;;
+    rna7) printf '%s\n' "rna7_GenotypeAndPhaseMergedVcf" ;;
+    gdna1) printf '%s\n' "gdna1_HaplotypeCaller" ;;
+    gdna2) printf '%s\n' "gdna2_FilterGermline" ;;
+    gdna3) printf '%s\n' "gdna3_SelectVariants" ;;
+    gdna4) printf '%s\n' "gdna4_FilterGermlineByAdjacency" ;;
+    *) return 1 ;;
+  esac
+}
+
+pbs_state_for_jobid() {
+  local jobid="$1"
+  local state
+  state="$(qstat -f "$jobid" 2>/dev/null | awk '/job_state =/{print $3; exit}')"
+  case "$state" in
+    R|E) printf '%s\n' "RUNNING" ;;
+    Q|H|W|T|S) printf '%s\n' "QUEUED" ;;
+    C) printf '%s\n' "COMPLETED" ;;
+    *) printf '%s\n' "" ;;
+  esac
+}
+
+watch_step_outputs() {
+  local step="$1"
+  local selected="${2:-}"
+  local interval="${3:-5}"
+  case "$step" in
+    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
+  esac
+  [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
+  [ "$interval" -gt 0 ] || { echo "INTERVAL_SEC must be > 0" >&2; exit 1; }
+
+  load_config
+  local prefix logdir spinner_idx=0
+  prefix="$(step_prefix "$step")"
+  logdir="${vcfdir}/${prefix}.logs_and_reports/logs"
+  sp='|/-\'
+
+  while :; do
+    spinner_char="${sp:$spinner_idx:1}"
+    spinner_idx=$(( (spinner_idx + 1) % 4 ))
+
+    total=0; done_ok=0; running=0; queued=0; failed=0; not_submitted=0
+    rows=()
+    declare -A seen=()
+
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      case "$line" in [[:space:]]*'#'*) continue ;; esac
+      sample_id=$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')
+      patient=$(sample_base_name "$sample_id")
+      [ -n "$patient" ] || continue
+      [ -n "${seen[$patient]:-}" ] && continue
+      seen["$patient"]=1
+      if [ -n "$selected" ] && [ "$selected" != "$patient" ] && [ "$selected" != "$sample_id" ]; then
+        continue
+      fi
+      total=$((total + 1))
+
+      out="$(step_expected_output "$patient" "$step")"
+      marker="${logdir}/submitted.${prefix}.${patient}.jobid"
+      status=""
+      detail=""
+
+      if [ -f "$out" ] && [ -s "$out" ]; then
+        status="DONE"
+        detail="$out"
+        done_ok=$((done_ok + 1))
+      else
+        if [ -f "$marker" ]; then
+          jobid="$(head -n1 "$marker" 2>/dev/null || true)"
+          if [ -n "$jobid" ]; then
+            pbs_state="$(pbs_state_for_jobid "$jobid")"
+            if [ "$pbs_state" = "RUNNING" ]; then
+              status="RUNNING"
+              detail="$jobid"
+              running=$((running + 1))
+            elif [ "$pbs_state" = "QUEUED" ]; then
+              status="QUEUED"
+              detail="$jobid"
+              queued=$((queued + 1))
+            else
+              status="FAILED_OR_MISSING"
+              detail="$out"
+              failed=$((failed + 1))
+            fi
+          else
+            status="NOT_SUBMITTED"
+            detail="$out"
+            not_submitted=$((not_submitted + 1))
+          fi
+        else
+          status="NOT_SUBMITTED"
+          detail="$out"
+          not_submitted=$((not_submitted + 1))
+        fi
+      fi
+
+      rows+=("$(printf '%-14s %-18s %s' "$patient" "$status" "$detail")")
+    done < "$samples"
+
+    clear
+    echo "[$spinner_char] watch-step $step   interval=${interval}s   time=$(date '+%F %T')"
+    echo "Totals: total=${total} done=${done_ok} running=${running} queued=${queued} failed=${failed} not_submitted=${not_submitted}"
+    echo
+    printf '%-14s %-18s %s\n' "PATIENT" "STATUS" "DETAIL"
+    printf '%-14s %-18s %s\n' "-------" "------" "------"
+    for r in "${rows[@]}"; do
+      printf '%s\n' "$r"
+    done
+    echo
+    echo "Ctrl+C to stop."
+    sleep "$interval"
+  done
 }
 
 check_step_outputs() {
@@ -196,6 +324,12 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     check_step_outputs "$step_name" "$sample"
+    ;;
+  watch-step)
+    step_name="${1:-}"
+    sample="${2:-}"
+    interval="${3:-5}"
+    watch_step_outputs "$step_name" "$sample" "$interval"
     ;;
   sync)
     git -C "$REPO" pull --ff-only origin main
