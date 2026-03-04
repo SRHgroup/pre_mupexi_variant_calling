@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# 4.7.0 Optional: fix RNA BAM read group SM tags.
+# rna7.0 (optional): fix RNA BAM read group SM tags.
 
 usage() {
   cat <<'USAGE'
-Usage: bash 4.7.0_FixRnaBamReadGroups.sh -c CONFIG [-s SAMPLE] [-f]
+Usage: bash rna7.0_FixRnaBamReadGroups.sh -c CONFIG [-s SAMPLE] [-f]
 USAGE
 }
 
@@ -29,7 +29,7 @@ source "$config"
 
 : "${samples:?CONFIG must define samples}"
 : "${bamdir:?CONFIG must define bamdir}"
-: "${rna_bam_smfixed_suffix:?CONFIG must define rna_bam_smfixed_suffix}"
+: "${rna7_smfixed_bam_suffix:?CONFIG must define rna7_smfixed_bam_suffix}"
 
 sample_base_name() {
   local value="$1"
@@ -51,9 +51,9 @@ sample_is_requested() {
 }
 
 if [ -z "${sample:-}" ]; then
-  echo "Running 4.7.0 for all samples in $samples"
+  echo "Running rna7.0 for all samples in $samples"
 else
-  echo "Running 4.7.0 only for $sample"
+  echo "Running rna7.0 only for $sample"
 fi
 
 prefix=$(basename "${BASH_SOURCE[0]}" .sh)
@@ -77,7 +77,7 @@ while IFS= read -r line; do
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 
   inbam="${bamdir}/${name}_${rna_dir_label}/${name}_${rna_dir_label}.md.bam"
-  outbam="${bamdir}/${name}_${rna_dir_label}/${name}_${rna_bam_smfixed_suffix}"
+  outbam="${bamdir}/${name}_${rna_dir_label}/${name}_${rna7_smfixed_bam_suffix}"
   header_sam="${outbam}.header.sam"
   check_txt="${outbam}.sm_check.txt"
 

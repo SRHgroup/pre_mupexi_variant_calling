@@ -68,10 +68,10 @@ run_step_collect() {
 }
 
 for step in \
-  2.0_HaplotypeCaller.sh \
-  2.0.1_FilterGermline.sh \
-  2.0.2_SelectVariants.sh \
-  3.0_FilterGermlineByAdjacency.sh
+  gdna1_HaplotypeCaller.sh \
+  gdna2_FilterGermline.sh \
+  gdna3_SelectVariants.sh \
+  gdna4_FilterGermlineByAdjacency.sh
   do
   run_step_collect "$step"
   done

@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# 4.3 Annotate filtered RNA VCF with known RNA-editing sites database (INFO/KNOWN_RNAEDIT_DB).
+# rna3: annotate filtered RNA VCF with known RNA-editing sites database (INFO/KNOWN_RNAEDIT_DB).
 
 usage() {
   cat <<'USAGE'
-Usage: bash 4.3_AnnotateKnownSites.sh -c CONFIG [-s SAMPLE] [-f]
+Usage: bash rna3_AnnotateKnownSites.sh -c CONFIG [-s SAMPLE] [-f]
 USAGE
 }
 
@@ -30,8 +30,8 @@ source "$config"
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${knownsites:?CONFIG must define knownsites}"
-: "${filtered_edit_labeled_vcf_extension:?CONFIG must define filtered_edit_labeled_vcf_extension}"
-: "${annot_vcf_extension:?CONFIG must define annot_vcf_extension}"
+: "${rna2_labeled_vcf_extension:?CONFIG must define rna2_labeled_vcf_extension}"
+: "${rna3_knownsites_vcf_extension:?CONFIG must define rna3_knownsites_vcf_extension}"
 
 sample_base_name() {
   local value="$1"
@@ -71,9 +71,9 @@ precheck_vcfgz() {
 }
 
 if [ -z "${sample:-}" ]; then
-  echo "Running 4.3 for all samples in $samples"
+  echo "Running rna3 for all samples in $samples"
 else
-  echo "Running 4.3 only for $sample"
+  echo "Running rna3 only for $sample"
 fi
 
 prefix=$(basename "${BASH_SOURCE[0]}" .sh)
@@ -101,15 +101,15 @@ while IFS= read -r line; do
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   outdir_only="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
 
-  in_vcf="${outdir_only}/${name}_${filtered_edit_labeled_vcf_extension}"
-  annot_vcf="${outdir_only}/${name}_${annot_vcf_extension}"
+  in_vcf="${outdir_only}/${name}_${rna2_labeled_vcf_extension}"
+  annot_vcf="${outdir_only}/${name}_${rna3_knownsites_vcf_extension}"
   annot_log="${annot_vcf%.vcf.gz}.counts.tsv"
 
   if [ "$force" -eq 0 ] && [ -f "$annot_vcf" ]; then
     echo "[skip] ${prefix}.${name}: output already exists: $annot_vcf (use -f to overwrite)"
     continue
   fi
-  if ! precheck_vcfgz "$in_vcf" "${prefix}.${name}" "run 4.2 first"; then
+  if ! precheck_vcfgz "$in_vcf" "${prefix}.${name}" "run rna2 first"; then
     echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi
@@ -145,7 +145,7 @@ SCRIPT
 mkdir -p "$outdir_only"
 
 if [ ! -f "$in_vcf" ]; then
-  echo "ERROR: missing input (run 4.2 first): $in_vcf" >&2
+  echo "ERROR: missing input (run rna2 first): $in_vcf" >&2
   exit 1
 fi
 if [ ! -f "$knownsites" ]; then

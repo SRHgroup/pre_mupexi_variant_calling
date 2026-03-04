@@ -43,6 +43,20 @@ case "$mode" in
 esac
 source "$config"
 
+: "${samples:?CONFIG must define samples}"
+: "${vcfdir:?CONFIG must define vcfdir}"
+: "${gdna1_vcf_extension:?CONFIG must define gdna1_vcf_extension}"
+: "${gdna2_vcf_extension:?CONFIG must define gdna2_vcf_extension}"
+: "${gdna3_vcf_extension:?CONFIG must define gdna3_vcf_extension}"
+: "${gdna4_vcf_extension:?CONFIG must define gdna4_vcf_extension}"
+: "${rna1_vcf_extension:?CONFIG must define rna1_vcf_extension}"
+: "${rna2_labeled_vcf_extension:?CONFIG must define rna2_labeled_vcf_extension}"
+: "${rna3_knownsites_vcf_extension:?CONFIG must define rna3_knownsites_vcf_extension}"
+: "${rna4_summarised_vcf_extension:?CONFIG must define rna4_summarised_vcf_extension}"
+: "${rna5_qced_vcf_extension:?CONFIG must define rna5_qced_vcf_extension}"
+: "${rna6_merged_vcf_extension:?CONFIG must define rna6_merged_vcf_extension}"
+: "${rna7_phased_vcf_extension:?CONFIG must define rna7_phased_vcf_extension}"
+
 sample_base_name() {
   local value="$1"
   local labels=(
@@ -85,21 +99,21 @@ while IFS= read -r line; do
   expected=()
   if [ "$mode" = "all" ] || [ "$mode" = "germline" ]; then
     expected+=(
-      "${germline_dir}/${name}_${output_extension_20}"
-      "${germline_dir}/${name}_${output_extension_201}"
-      "${germline_dir}/${name}_${output_extension_202}"
-      "${germline_dir}/${name}_${output_extension_30}"
+      "${germline_dir}/${name}_${gdna1_vcf_extension}"
+      "${germline_dir}/${name}_${gdna2_vcf_extension}"
+      "${germline_dir}/${name}_${gdna3_vcf_extension}"
+      "${germline_dir}/${name}_${gdna4_vcf_extension}"
     )
   fi
   if [ "$mode" = "all" ] || [ "$mode" = "rna" ]; then
     expected+=(
-      "${outdir}/${name}_${rna_only_vcf_extension}"
-      "${outdir}/${name}_${filtered_edit_labeled_vcf_extension}"
-      "${outdir}/${name}_${annot_vcf_extension}"
-      "${outdir}/${name}_${rna_summarised_vcf_extension}"
-      "${outdir}/${name}_${rna_vcf_knownsites_extension}"
-      "${outdir}/${name}_${merged_vcf_extension}"
-      "${outdir}/${name}_${phased_vcf_extension}"
+      "${outdir}/${name}_${rna1_vcf_extension}"
+      "${outdir}/${name}_${rna2_labeled_vcf_extension}"
+      "${outdir}/${name}_${rna3_knownsites_vcf_extension}"
+      "${outdir}/${name}_${rna4_summarised_vcf_extension}"
+      "${outdir}/${name}_${rna5_qced_vcf_extension}"
+      "${outdir}/${name}_${rna6_merged_vcf_extension}"
+      "${outdir}/${name}_${rna7_phased_vcf_extension}"
     )
   fi
 

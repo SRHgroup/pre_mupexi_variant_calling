@@ -11,38 +11,38 @@ FORCE_FLAG := $(if $(filter 1 true yes,$(FORCE)),-f,)
 check-config:
 	@if [[ -z "$(CONFIG)" ]]; then echo "Set CONFIG=/path/to/CONFIG"; exit 1; fi
 
-run4.1: check-config
-	cd post_rnadnavar_mupexi_prep && bash 4.1_OnlyRnaVcf.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+runrna1: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna1_OnlyRnaVcf.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run4.2: check-config
-	cd post_rnadnavar_mupexi_prep && bash 4.2_FilterEditSignature.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+runrna2: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna2_FilterEditSignature.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run4.3: check-config
-	cd post_rnadnavar_mupexi_prep && bash 4.3_AnnotateKnownSites.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+runrna3: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna3_AnnotateKnownSites.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run4.4: check-config
-	cd post_rnadnavar_mupexi_prep && bash 4.4_SummariseRnaMetrics.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+runrna4: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna4_SummariseRnaMetrics.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run4.5: check-config
-	cd post_rnadnavar_mupexi_prep && bash 4.5_FilterByAfDpAr.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+runrna5: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna5_FilterByAfDpAr.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run4.6: check-config
-	cd post_rnadnavar_mupexi_prep && bash 4.6_MergeDnaRnaVcfs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+runrna6: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna6_MergeDnaRnaVcfs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run4.7: check-config
-	cd post_rnadnavar_mupexi_prep && bash 4.7.1_GenotypeAndPhaseMergedVcf.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+runrna7: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna7_GenotypeAndPhaseMergedVcf.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run2.0: check-config
-	cd germline_calling && bash 2.0_HaplotypeCaller.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+rungdna1: check-config
+	cd germline_calling && bash gdna1_HaplotypeCaller.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run2.0.1: check-config
-	cd germline_calling && bash 2.0.1_FilterGermline.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+rungdna2: check-config
+	cd germline_calling && bash gdna2_FilterGermline.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run2.0.2: check-config
-	cd germline_calling && bash 2.0.2_SelectVariants.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+rungdna3: check-config
+	cd germline_calling && bash gdna3_SelectVariants.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
-run3.0: check-config
-	cd germline_calling && bash 3.0_FilterGermlineByAdjacency.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+rungdna4: check-config
+	cd germline_calling && bash gdna4_FilterGermlineByAdjacency.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
 run_all_rna: check-config
 	cd post_rnadnavar_mupexi_prep && bash run_all.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
@@ -55,3 +55,16 @@ run_all: check-config
 
 check_outputs: check-config
 	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) -m "$(MODE)"
+
+# Backward-compatible target aliases
+run4.1: runrna1
+run4.2: runrna2
+run4.3: runrna3
+run4.4: runrna4
+run4.5: runrna5
+run4.6: runrna6
+run4.7: runrna7
+run2.0: rungdna1
+run2.0.1: rungdna2
+run2.0.2: rungdna3
+run3.0: rungdna4

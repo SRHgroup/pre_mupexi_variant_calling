@@ -9,10 +9,10 @@ This project follows a simple Keep-a-Changelog style and semantic version tags (
 ### Added
 
 - New `germline_calling/` module with:
-  - `2.0_HaplotypeCaller.sh`
-  - `2.0.1_FilterGermline.sh`
-  - `2.0.2_SelectVariants.sh`
-  - `3.0_FilterGermlineByAdjacency.sh`
+  - `gdna1_HaplotypeCaller.sh`
+  - `gdna2_FilterGermline.sh`
+  - `gdna3_SelectVariants.sh`
+  - `gdna4_FilterGermlineByAdjacency.sh`
   - `scripts/filter_germline_by_proximity.py`
   - `run_all.sh`
 - End-to-end wrapper `run_all_end_to_end.sh`.
@@ -20,6 +20,12 @@ This project follows a simple Keep-a-Changelog style and semantic version tags (
 
 ### Changed
 
+- Renamed step scripts to semantic names:
+  - RNA: `rna1`..`rna7`
+  - gDNA: `gdna1`..`gdna4`
+- Renamed CONFIG suffix variables to match step names (for example `rna5_qced_vcf_extension`, `gdna4_vcf_extension`).
+- Updated `Makefile` targets to `runrna*` / `rungdna*` (legacy numeric target aliases retained).
+- Updated end-to-end submission flow so `rna1..rna5` and `gdna1..gdna4` submit independently, while `rna6..rna7` wait for both branches.
 - Unified both pipelines on patient-centric `SAMPLES` parsing with configurable labels (`DNA_NORMAL`, `DNA_TUMOR`, `RNA_TUMOR` by default).
 - Updated examples and docs for shared CONFIG/SAMPLES and full germline+RNA workflow.
 - Extended `Makefile` with germline and end-to-end targets.

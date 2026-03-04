@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# 3.0 Filter selected germline calls by adjacency to somatic variants (optional RNA variants).
+# gdna4: filter selected germline calls by adjacency to somatic variants (optional RNA variants).
 
 usage() {
   cat <<'USAGE'
-Usage: bash 3.0_FilterGermlineByAdjacency.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [-f]
+Usage: bash gdna4_FilterGermlineByAdjacency.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [-f]
 USAGE
 }
 
@@ -31,8 +31,8 @@ source "$config"
 
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
-: "${output_extension_202:?CONFIG must define output_extension_202}"
-: "${output_extension_30:?CONFIG must define output_extension_30}"
+: "${gdna3_vcf_extension:?CONFIG must define gdna3_vcf_extension}"
+: "${gdna4_vcf_extension:?CONFIG must define gdna4_vcf_extension}"
 
 distance="${germline_proximity_distance:-33}"
 # RNA proximity behavior:
@@ -102,11 +102,11 @@ detect_rna_vcf_for_patient() {
 
   # Default candidate order: prefer filtered RNA-editing sets, then source mutect2 RNA callset.
   for ext in \
-    "${rna_vcf_knownsites_extension:-}" \
-    "${rna_summarised_vcf_extension:-}" \
-    "${annot_vcf_extension:-}" \
-    "${filtered_edit_labeled_vcf_extension:-}" \
-    "${rna_only_vcf_extension:-}" \
+    "${rna5_qced_vcf_extension:-}" \
+    "${rna4_summarised_vcf_extension:-}" \
+    "${rna3_knownsites_vcf_extension:-}" \
+    "${rna2_labeled_vcf_extension:-}" \
+    "${rna1_vcf_extension:-}" \
     "${out_rna_label}_vs_${out_normal_label}.mutect2.filtered.vcf.gz"; do
     [ -n "$ext" ] || continue
     if [[ "$ext" = *.vcf.gz || "$ext" = *.vcf ]]; then
@@ -148,8 +148,8 @@ while IFS= read -r line; do
   seen_patients["$name"]=1
 
   germline_dir="${vcfdir}/${name}_${out_normal_label}"
-  germ_in="${germline_dir}/${name}_${output_extension_202}"
-  germ_out="${germline_dir}/${name}_${output_extension_30}"
+  germ_in="${germline_dir}/${name}_${gdna3_vcf_extension}"
+  germ_out="${germline_dir}/${name}_${gdna4_vcf_extension}"
 
   dna_dir="${vcfdir}/${name}_${out_dna_label}_vs_${name}_${out_normal_label}"
   somatic_vcf="${dna_dir}/${name}_${out_dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
@@ -173,7 +173,7 @@ while IFS= read -r line; do
     continue
   fi
   if [ ! -s "$germ_in" ]; then
-    echo "[precheck] ${prefix}.${name}: missing/empty germline input from 2.0.2: $germ_in" >&2
+    echo "[precheck] ${prefix}.${name}: missing/empty germline input from gdna3: $germ_in" >&2
     echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi
@@ -209,7 +209,7 @@ SCRIPT
     printf 'helpers_dir=%q\n' "$helpers_dir"
     cat <<'SCRIPT'
 if [ ! -f "$germ_in" ]; then
-  echo "ERROR: missing germline VCF from 2.0.2: $germ_in" >&2
+  echo "ERROR: missing germline VCF from gdna3: $germ_in" >&2
   exit 1
 fi
 if [ ! -f "$somatic_vcf" ]; then

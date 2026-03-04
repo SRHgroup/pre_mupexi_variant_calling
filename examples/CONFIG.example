@@ -1,28 +1,23 @@
 #!/usr/bin/bash
 
-# Example CONFIG for RNA-DNA variant analysis extension pipeline (steps 4.1-4.7).
-# Copy this file to your dataset/work folder and edit paths.
+# Example CONFIG for post_rnadnavar_mupexi_prep.
+# Workflow names:
+# - RNA steps:  rna1 .. rna7
+# - gDNA steps: gdna1 .. gdna4
 
-# SAMPLES file: first column is sample ID with a suffix label, e.g.
+# SAMPLES file: first column is sample ID with suffix label, e.g.
 #   Pat1_DNA_NORMAL
 #   Pat1_DNA_TUMOR
 #   Pat1_RNA_TUMOR
-# The pipeline derives patient ID (Pat1) by stripping configurable labels.
-# Additional columns are ignored by 4.x scripts.
-samples="/path/to/SAMPLES"
+samples="/path/to/SAMPLES.tsv"
 
 # Working directories
 vcfdir="/path/to/project/variant_calling/mutect2"
 bamdir="/path/to/project/preprocessing/markduplicates"
 dna_bam_suffix="md.bam"
 
-# Helper scripts directory (inside this repo). Keep absolute to run from any folder.
+# Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"
-
-# Germline VCF suffix to use at merge step 4.6.
-# File is expected at:
-#   ${vcfdir}/${PATIENT}_${out_dna_normal_label}/${PATIENT}_${ndna_vcf}
-ndna_vcf="3.0.Filtered.vcf"
 
 # Optional PBS defaults
 qsub_group="srhgroup"
@@ -34,54 +29,51 @@ FASTA="/path/to/reference.fa.gz"
 DICT="/path/to/reference.dict"
 
 # Label variables used for matching sample suffixes in SAMPLES/VCF/BAM headers.
-# Default uses US spelling. To switch to UK spelling, set DNA_TUMOUR / RNA_TUMOUR.
 dna_normal_label="DNA_NORMAL"
 dna_tumor_label="DNA_TUMOR"
 rna_tumor_label="RNA_TUMOR"
 
-# Standardized output names (used in downstream steps).
+# Standardized output names for merged outputs.
 out_dna_normal_label="DNA_NORMAL"
 out_dna_tumor_label="${dna_tumor_label}"
 out_rna_tumor_label="${rna_tumor_label}"
 
-# GERMLINE PREP
-# 3.0_FilterGermlineVariants.sh
-# 2.0_HaplotypeCaller.sh
-output_extension_20="2.0.HaplotypeCaller.vcf"
-# 2.0.1_FilterGermline.sh
-output_extension_201="2.0.1.Filtered.HaplotypeCaller.vcf"
-# 2.0.2_SelectVariants.sh
-output_extension_202="2.0.2.Filtered.Selected.HaplotypeCaller.vcf"
+# gDNA output suffixes
+# Expected under: ${vcfdir}/${patient}_${out_dna_normal_label}/
+gdna1_vcf_extension="gdna1.HaplotypeCaller.vcf"
+gdna2_vcf_extension="gdna2.Filtered.HaplotypeCaller.vcf"
+gdna3_vcf_extension="gdna3.Filtered.Selected.HaplotypeCaller.vcf"
+gdna4_vcf_extension="gdna4.Filtered.vcf"
 
-# 3.0_FilterGermlineVariants.sh
-output_extension_30="3.0.Filtered.vcf"
-output_extension_31="3.1.Filtered.AF.vcf"
-output_extension_32="3.2.Filtered.som.AF.vcf" 
+# Which gDNA VCF suffix rna6 should merge (defaults to gdna4_vcf_extension).
+ndna_vcf="${gdna4_vcf_extension}"
+
+# gDNA filtering knobs
 germline_min_dp=10
 germline_min_qd=2.0
 germline_proximity_distance=33
-# RNA proximity source for germline step 3.0:
-# auto (recommended): include RNA proximity when an RNA VCF is found
-# 1: attempt RNA proximity and warn if RNA VCF is missing
-# 0: DNA-only proximity
+
+# gdna4 RNA-proximity source control:
+# - auto (recommended): include RNA proximity when RNA VCF is found
+# - 1: require attempt, warn+fallback to DNA-only if RNA VCF missing
+# - 0: DNA-only
 germline_include_rna_proximity="auto"
 # Optional explicit override (supports {patient} placeholder):
-# germline_rna_proximity_vcf="/path/to/{patient}_4.5_filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
-# Optional extension override under:
-#   ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/
-# germline_rna_proximity_vcf_extension="4.5_filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
+# germline_rna_proximity_vcf="/path/to/{patient}_rna5.knownsites_summarised_qced.vcf.gz"
+# Optional extension override in patient RNA-vs-normal folder:
+# germline_rna_proximity_vcf_extension="rna5.knownsites_summarised_qced.vcf.gz"
 
-# RNA EDIT PREP
-# Output naming extensions
-rna_only_vcf_extension="4.1_RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.vcf.gz"
-split_vcf_extension="4.2_RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.split.vcf.gz"
-filtered_edit_labeled_vcf_extension="4.2_filtered_edit_labeled.vcf.gz"
-annot_vcf_extension="4.3_filtered_edit_labeled.knownsites.vcf.gz"
-rna_summarised_vcf_extension="4.4_filtered_edit_labeled.knownsites_summarised.vcf.gz"
-rna_vcf_knownsites_extension="4.5_filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
-merged_vcf_extension="4.6_DNAt_DNAn_RNAt_merged.vcf.gz"
-genotyped_vcf_extension="4.6.1_DNAt_DNAn_RNAt_merged_genotyped.vcf.gz"
-phased_vcf_extension="4.7_DNAt_DNAn_RNAt_merged_phased.vcf.gz"
+# RNA output suffixes
+# Expected under: ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/
+rna1_vcf_extension="rna1.RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.vcf.gz"
+rna2_split_vcf_extension="rna2.RNA_TUMOUR_vs_DNA_NORMAL_DNA_TUMOR.mutect2.split.vcf.gz"
+rna2_labeled_vcf_extension="rna2.filtered_edit_labeled.vcf.gz"
+rna3_knownsites_vcf_extension="rna3.filtered_edit_labeled.knownsites.vcf.gz"
+rna4_summarised_vcf_extension="rna4.filtered_edit_labeled.knownsites_summarised.vcf.gz"
+rna5_qced_vcf_extension="rna5.filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
+rna6_merged_vcf_extension="rna6.DNAt_DNAn_RNAt_merged.vcf.gz"
+rna7_genotyped_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_genotyped.vcf.gz"
+rna7_phased_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_phased.vcf.gz"
 
-# Optional step 4.7.0 output
-rna_bam_smfixed_suffix="RNA_TUMOUR.md.SMfixed.bam"
+# Optional rna7.0 output suffix
+rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"

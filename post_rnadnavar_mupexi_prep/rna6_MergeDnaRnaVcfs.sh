@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# 4.7.1 Genotype union alleles back into BAMs and phase merged VCF.
+# rna6: merge DNA normal germline + DNA tumour somatic + RNA editing VCFs.
 
 usage() {
   cat <<'USAGE'
-Usage: bash 4.7.1_GenotypeAndPhaseMergedVcf.sh -c CONFIG [-s SAMPLE] [-f]
+Usage: bash rna6_MergeDnaRnaVcfs.sh -c CONFIG [-s SAMPLE] [-f]
 USAGE
 }
 
@@ -29,14 +29,12 @@ source "$config"
 
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
-: "${bamdir:?CONFIG must define bamdir}"
 : "${rnae_scripts:?CONFIG must define rnae_scripts}"
-: "${FASTA:?CONFIG must define FASTA}"
-: "${DICT:?CONFIG must define DICT}"
-: "${merged_vcf_extension:?CONFIG must define merged_vcf_extension}"
-: "${genotyped_vcf_extension:?CONFIG must define genotyped_vcf_extension}"
-: "${phased_vcf_extension:?CONFIG must define phased_vcf_extension}"
-: "${rna_bam_smfixed_suffix:?CONFIG must define rna_bam_smfixed_suffix}"
+: "${rna5_qced_vcf_extension:?CONFIG must define rna5_qced_vcf_extension}"
+: "${rna6_merged_vcf_extension:?CONFIG must define rna6_merged_vcf_extension}"
+
+# Germline VCF suffix to merge. Defaults to gdna4 output if not set.
+ndna_vcf="${ndna_vcf:-${gdna4_vcf_extension:-gdna4.Filtered.vcf}}"
 
 sample_base_name() {
   local value="$1"
@@ -75,10 +73,28 @@ precheck_vcfgz() {
   fi
 }
 
+precheck_vcf_or_vcfgz() {
+  local path="$1"
+  local tag="$2"
+  local hint="$3"
+  if [ ! -f "$path" ]; then
+    echo "[precheck] ${tag}: missing input VCF: $path (${hint})" >&2
+    return 1
+  fi
+  if [[ "$path" = *.gz ]]; then
+    precheck_vcfgz "$path" "$tag" "$hint"
+    return $?
+  fi
+  if ! grep -m1 '^#CHROM' "$path" >/dev/null 2>&1; then
+    echo "[precheck] ${tag}: malformed VCF header (missing #CHROM): $path" >&2
+    return 1
+  fi
+}
+
 if [ -z "${sample:-}" ]; then
-  echo "Running 4.7.1 for all samples in $samples"
+  echo "Running rna6 for all samples in $samples"
 else
-  echo "Running 4.7.1 only for $sample"
+  echo "Running rna6 only for $sample"
 fi
 
 prefix=$(basename "${BASH_SOURCE[0]}" .sh)
@@ -104,38 +120,40 @@ while IFS= read -r line; do
   seen_patients["$name"]=1
   out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
+  dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
+  germline_dir="${vcfdir}/${name}_${out_normal_label}"
+
   outdir_only="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
+  dna_dir="${vcfdir}/${name}_${dna_label}_vs_${name}_${out_normal_label}"
+  germ_in="${germline_dir}/${name}_${ndna_vcf}"
+  dna_tumour_vcf="${dna_dir}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
+  rna_vcf="${outdir_only}/${name}_${rna5_qced_vcf_extension}"
 
-  merged_vcf="${outdir_only}/${name}_${merged_vcf_extension}"
-  genotyped_vcf="${outdir_only}/${name}_${genotyped_vcf_extension}"
-  phased_vcf="${outdir_only}/${name}_${phased_vcf_extension}"
+  merged_vcf="${outdir_only}/${name}_${rna6_merged_vcf_extension}"
+  merge_log="${merged_vcf%.vcf.gz}.merge.log.txt"
 
-  dna_dir_label="${dna_tumor_label:-DNA_TUMOR}"
-  rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
-
-  dna_bam="${bamdir}/${name}_${dna_dir_label}/${name}_${dna_dir_label}.md.bam"
-  rna_bam_fixed="${bamdir}/${name}_${rna_dir_label}/${name}_${rna_bam_smfixed_suffix}"
-  rna_bam_default="${bamdir}/${name}_${rna_dir_label}/${name}_${rna_dir_label}.md.bam"
-  if [ -f "$rna_bam_fixed" ]; then
-    rna_bam="$rna_bam_fixed"
+  if [ "$force" -eq 0 ] && [ -f "$merged_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $merged_vcf (use -f to overwrite)"
+    continue
+  fi
+  if ! precheck_vcfgz "$dna_tumour_vcf" "${prefix}.${name}" "DNA tumour mutect2 output"; then
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+  if ! precheck_vcfgz "$rna_vcf" "${prefix}.${name}" "run rna5 first"; then
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+  if [ -f "$germ_in.gz" ]; then
+    if ! precheck_vcfgz "$germ_in.gz" "${prefix}.${name}" "germline output from gdna3/gdna4"; then
+      echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+      continue
+    fi
   else
-    rna_bam="$rna_bam_default"
-  fi
-
-  run_log="${phased_vcf%.vcf.gz}.genotype_and_phase.log.txt"
-
-  if [ "$force" -eq 0 ] && [ -f "$phased_vcf" ]; then
-    echo "[skip] ${prefix}.${name}: output already exists: $phased_vcf (use -f to overwrite)"
-    continue
-  fi
-  if ! precheck_vcfgz "$merged_vcf" "${prefix}.${name}" "run 4.6 first"; then
-    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
-    continue
-  fi
-  if [ ! -f "$dna_bam" ] || [ ! -f "$rna_bam" ]; then
-    echo "[precheck] ${prefix}.${name}: missing BAM input dna='$dna_bam' rna='$rna_bam'" >&2
-    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
-    continue
+    if ! precheck_vcf_or_vcfgz "$germ_in" "${prefix}.${name}" "germline output from gdna3/gdna4"; then
+      echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+      continue
+    fi
   fi
 
   job_name="${prefix}.${name}"
@@ -153,53 +171,60 @@ while IFS= read -r line; do
     cat <<'SCRIPT'
 #!/usr/bin/bash
 set -euo pipefail
-module load ngs tools htslib/1.23 bcftools/1.23 java/17-openjdk gatk/4.4.0.0 anaconda3/2025.06-1
+module load ngs tools htslib/1.23 bcftools/1.23 anaconda3/2025.06-1
 SCRIPT
+    printf 'outdir_only=%q\n' "$outdir_only"
+    printf 'dna_dir=%q\n' "$dna_dir"
+    printf 'germline_dir=%q\n' "$germline_dir"
+    printf 'name=%q\n' "$name"
+    printf 'ndna_vcf=%q\n' "$ndna_vcf"
+    printf 'germ_in=%q\n' "$germ_in"
+    printf 'dna_tumour_vcf=%q\n' "$dna_tumour_vcf"
+    printf 'rna_vcf=%q\n' "$rna_vcf"
     printf 'merged_vcf=%q\n' "$merged_vcf"
-    printf 'dna_bam=%q\n' "$dna_bam"
-    printf 'rna_bam=%q\n' "$rna_bam"
-    printf 'fasta=%q\n' "$FASTA"
-    printf 'dict=%q\n' "$DICT"
-    printf 'genotyped_vcf=%q\n' "$genotyped_vcf"
-    printf 'phased_vcf=%q\n' "$phased_vcf"
-    printf 'run_log=%q\n' "$run_log"
+    printf 'merge_log=%q\n' "$merge_log"
     printf 'rnae_scripts=%q\n' "$rnae_scripts"
     printf 'out_dna_normal_label=%q\n' "${out_dna_normal_label:-DNA_NORMAL}"
     printf 'out_dna_tumor_label=%q\n' "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
     printf 'out_rna_tumor_label=%q\n' "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
     cat <<'SCRIPT'
-if [ ! -f "$merged_vcf" ]; then
-  echo "ERROR: missing merged VCF (run 4.6 first): $merged_vcf" >&2
+if [ ! -f "$dna_tumour_vcf" ]; then
+  echo "ERROR: missing DNA tumour VCF: $dna_tumour_vcf" >&2
   exit 1
 fi
-if [ ! -f "$dna_bam" ]; then
-  echo "ERROR: missing DNA tumour BAM: $dna_bam" >&2
-  exit 1
-fi
-if [ ! -f "$rna_bam" ]; then
-  echo "ERROR: missing RNA tumour BAM: $rna_bam" >&2
+if [ ! -f "$rna_vcf" ]; then
+  echo "ERROR: missing RNA VCF (run rna5 first): $rna_vcf" >&2
   exit 1
 fi
 
-bash "$rnae_scripts/rnae7_genotype_and_phase_merged_vcf.sh" \
-  --merged "$merged_vcf" \
-  --dna-bam "$dna_bam" \
-  --rna-bam "$rna_bam" \
-  --fasta "$fasta" \
-  --dict "$dict" \
-  --out-genotyped "$genotyped_vcf" \
-  --out-phased "$phased_vcf" \
-  --threads 8 \
-  --normal-name "$out_dna_normal_label" \
-  --dna-name "$out_dna_tumor_label" \
-  --rna-name "$out_rna_tumor_label" 2>&1 | tee "$run_log"
+if [ -f "$germ_in.gz" ]; then
+  germ_vcf="$germ_in.gz"
+elif echo "$germ_in" | grep -q '\.vcf\.gz$'; then
+  germ_vcf="$germ_in"
+elif [ -f "$germ_in" ]; then
+  germ_vcf="$germline_dir/${name}_${ndna_vcf}.gz"
+  bgzip -c "$germ_in" > "$germ_vcf"
+else
+  echo "ERROR: missing germline VCF: $germ_in (or $germ_in.gz)" >&2
+  exit 1
+fi
+
+bcftools index -f -t "$dna_tumour_vcf" || true
+bcftools index -f -t "$rna_vcf" || true
+bcftools index -f -t "$germ_vcf" || true
+
+bash "$rnae_scripts/rnae6_merge_germ_som_rna_vcf.sh" \
+  -g "$germ_vcf" -d "$dna_tumour_vcf" -r "$rna_vcf" -o "$merged_vcf" --rna-keep-all \
+  --out-normal "$out_dna_normal_label" --out-dna "$out_dna_tumor_label" --out-rna "$out_rna_tumor_label" 2>&1 | tee "$merge_log"
+
+bcftools index -t "$merged_vcf"
 SCRIPT
   } > "$runscript"
   chmod +x "$runscript"
 
   qsub_output="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
     "${qsub_depend_arg[@]}" \
-    -l nodes=1:ppn=8,mem=48gb,walltime="01:00:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
+    -l nodes=1:ppn=4,mem=24gb,walltime="00:16:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
   echo "$qsub_output"
   printf '%s\n' "$qsub_output" > "$submit_marker"
   echo "[submit] ${job_name}: jobid=${qsub_output}"

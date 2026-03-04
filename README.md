@@ -1,194 +1,117 @@
-# post_rnadnavar_mupexi_prep (PBS/qsub RNA-DNA extension pipeline)
+# post_rnadnavar_mupexi_prep (PBS/qsub pipeline)
 
-This repository packages the `post_rnadnavar_mupexi_prep/` bash pipeline (steps `4.1` to `4.7.1`) as a versioned, reusable Git project.
+This repository contains two coordinated modules:
 
-## Repository layout
+- RNA-editing post-processing: `rna1..rna7`
+- Germline calling/filtering: `gdna1..gdna4`
 
-- `post_rnadnavar_mupexi_prep/`: step scripts and `run_all.sh`
-- `post_rnadnavar_mupexi_prep/rnae_script/`: helper scripts called by steps
-- `germline_calling/`: germline calling/filtering scripts and helper python
-- `examples/CONFIG.example`: template config
-- `examples/SAMPLES.example`: template sample list
-- `bin/check_outputs.sh`: expected-output checker
-- `Makefile`: convenience targets
+## Layout
 
-## Pipeline steps
+- `post_rnadnavar_mupexi_prep/`: RNA step scripts + `run_all.sh`
+- `post_rnadnavar_mupexi_prep/rnae_script/`: RNA helper scripts (`rnae1..rnae7`)
+- `germline_calling/`: gDNA step scripts + `run_all.sh`
+- `germline_calling/scripts/`: helper python
+- `examples/CONFIG.example`
+- `examples/SAMPLES.example`
+- `bin/check_outputs.sh`
+- `run_all_end_to_end.sh`
+- `Makefile`
 
-1. `4.1_OnlyRnaVcf.sh`: remove RNA variants where CHROM+POS exists in DNA tumour VCF.
-2. `4.2_FilterEditSignature.sh`: split multi-allelic records and keep ADAR/APOBEC3 signatures.
-3. `4.3_AnnotateKnownSites.sh`: annotate INFO field with known RNA-editing DB hits.
-4. `4.4_SummariseRnaMetrics.sh`: collapse multiple RNA tumour samples into one standardized RNA sample.
-5. `4.5_FilterByAfDpAr.sh`: apply DP/AF/ALT-read thresholds.
-6. `4.6_MergeDnaRnaVcfs.sh`: merge DNA normal germline + DNA tumour somatic + RNA editing VCFs.
-7. `4.7.0_FixRnaBamReadGroups.sh` (optional): rewrite RNA BAM SM tags.
-8. `4.7.1_GenotypeAndPhaseMergedVcf.sh`: genotype union alleles and phase (whatshap).
+## Step names
 
-## Germline steps
+RNA:
+1. `rna1_OnlyRnaVcf.sh`
+2. `rna2_FilterEditSignature.sh`
+3. `rna3_AnnotateKnownSites.sh`
+4. `rna4_SummariseRnaMetrics.sh`
+5. `rna5_FilterByAfDpAr.sh`
+6. `rna6_MergeDnaRnaVcfs.sh`
+7. `rna7_GenotypeAndPhaseMergedVcf.sh`
 
-1. `2.0_HaplotypeCaller.sh`: call germline variants from DNA normal BAM.
-2. `2.0.1_FilterGermline.sh`: QC filter (DP/QD and clustered sites).
-3. `2.0.2_SelectVariants.sh`: keep non-filtered calls.
-4. `3.0_FilterGermlineByAdjacency.sh`: proximity filter to DNA somatic sites, with optional RNA-site proximity input.
+Optional RNA BAM prep:
+- `rna7.0_FixRnaBamReadGroups.sh`
+
+gDNA:
+1. `gdna1_HaplotypeCaller.sh`
+2. `gdna2_FilterGermline.sh`
+3. `gdna3_SelectVariants.sh`
+4. `gdna4_FilterGermlineByAdjacency.sh`
+
+## Dependency model
+
+- `rna1..rna5` are independent from `gdna1..gdna4`.
+- `rna6` and `rna7` require both branches to be done.
+- `run_all_end_to_end.sh` submits exactly that topology:
+  - chain A: `gdna1 -> gdna2 -> gdna3 -> gdna4`
+  - chain B: `rna1 -> rna2 -> rna3 -> rna4 -> rna5`
+  - chain C: `rna6 -> rna7`, dependent on A and B completion.
 
 ## Requirements
 
-Cluster environment with PBS `qsub` and typical modules/tools:
-
+- PBS `qsub` / `qstat`
 - `bcftools` / `htslib`
-- `gatk` (HaplotypeCaller)
+- `gatk`
 - `python3`
 - `whatshap`
 - `samtools`
 - `bgzip`
 
-Scripts load modules inside each generated runscript; adjust `module load ...` lines for your HPC stack.
-
 ## Configure
 
-1. Create your project config:
-
 ```bash
-cp examples/CONFIG.example /path/to/your/project/CONFIG
-cp examples/SAMPLES.example /path/to/your/project/SAMPLES
+cp examples/CONFIG.example /path/to/project/CONFIG
+cp examples/SAMPLES.example /path/to/project/SAMPLES.tsv
 ```
 
-2. Edit `CONFIG` and set at minimum:
+Edit `CONFIG` and set at minimum:
+- `samples`, `vcfdir`, `bamdir`, `knownsites`, `FASTA`, `DICT`, `rnae_scripts`
 
-- `samples`
-- `vcfdir`
-- `bamdir`
-- `knownsites`
-- `FASTA`
-- `DICT`
-- `rnae_scripts` (point to this repo clone: `<clone>/post_rnadnavar_mupexi_prep/rnae_script`)
-- `ndna_vcf` (germline suffix used by merge step 4.6)
-
-3. Label controls:
-
-- Default is US spelling (`DNA_TUMOR`, `RNA_TUMOR`).
-- To switch to UK spelling, set:
-
-```bash
-dna_tumor_label="DNA_TUMOUR"
-rna_tumor_label="RNA_TUMOUR"
-out_dna_tumor_label="DNA_TUMOUR"
-out_rna_tumor_label="RNA_TUMOUR"
-```
-
-Detection is suffix-based (not hardcoded exact full sample IDs), including optional RNA suffixes like `.0001`.
-
-Germline step `3.0` RNA proximity controls:
-
-- `germline_include_rna_proximity="auto"` (recommended): auto-detect RNA VCF and include it when found.
-- `germline_include_rna_proximity=1`: request RNA proximity; warns and falls back to DNA-only if missing.
-- `germline_include_rna_proximity=0`: disable RNA proximity.
-- Optional overrides:
-  - `germline_rna_proximity_vcf` (supports `{patient}` placeholder)
-  - `germline_rna_proximity_vcf_extension` (file suffix inside patient RNA-vs-normal folder)
-
-4. `SAMPLES` structure:
-
-- One row per biological sample (for example DNA normal, DNA tumor, RNA tumor).
-- First column must include patient ID + sample-type suffix, e.g. `Pat1_DNA_NORMAL`, `Pat1_DNA_TUMOR`, `Pat1_RNA_TUMOR`.
-- The pipeline derives unique patient IDs by stripping configured labels, so each patient is processed once even with 3 rows.
-- Columns after the first are currently ignored by the step scripts (you can still keep FASTQ paths and sample_type columns for compatibility with other pipelines).
+Labels:
+- default: `DNA_TUMOR`, `RNA_TUMOR`
+- UK spelling supported via label vars in `CONFIG`
 
 ## Run
 
-From repository `post_rnadnavar_mupexi_prep/` directory:
-
+Single RNA step:
 ```bash
-bash 4.1_OnlyRnaVcf.sh -c /path/to/CONFIG
-bash 4.2_FilterEditSignature.sh -c /path/to/CONFIG
-bash 4.3_AnnotateKnownSites.sh -c /path/to/CONFIG
-bash 4.4_SummariseRnaMetrics.sh -c /path/to/CONFIG
-bash 4.5_FilterByAfDpAr.sh -c /path/to/CONFIG
-bash 4.6_MergeDnaRnaVcfs.sh -c /path/to/CONFIG
-bash 4.7.1_GenotypeAndPhaseMergedVcf.sh -c /path/to/CONFIG
+bash post_rnadnavar_mupexi_prep/rna4_SummariseRnaMetrics.sh -c /path/to/CONFIG -s Pat11
 ```
 
-Single-sample run:
-
+Single gDNA step:
 ```bash
-bash 4.4_SummariseRnaMetrics.sh -c /path/to/CONFIG -s Pat11
+bash germline_calling/gdna2_FilterGermline.sh -c /path/to/CONFIG -s Pat11
 ```
 
-`-s` accepts either full sample ID (for example `Pat11_RNA_TUMOR`) or patient ID (`Pat11`).
-
-Force recompute:
-
+RNA chain:
 ```bash
-bash 4.4_SummariseRnaMetrics.sh -c /path/to/CONFIG -s Pat11 -f
-```
-
-Convenience commands:
-
-```bash
-make run4.1 CONFIG=/path/to/CONFIG
 make run_all_rna CONFIG=/path/to/CONFIG
-make run_all_germline CONFIG=/path/to/CONFIG
-make run_all CONFIG=/path/to/CONFIG
-make check_outputs CONFIG=/path/to/CONFIG MODE=all
-make check_outputs CONFIG=/path/to/CONFIG MODE=rna
-make check_outputs CONFIG=/path/to/CONFIG MODE=germline
 ```
 
-Full end-to-end wrapper:
+gDNA chain:
+```bash
+make run_all_germline CONFIG=/path/to/CONFIG
+```
 
+End-to-end (branching dependencies):
 ```bash
 bash run_all_end_to_end.sh -c /path/to/CONFIG
 ```
 
-## Output and logs
-
-- Per-patient output pattern:
-  - Germline outputs: `${vcfdir}/${patient}_DNA_NORMAL/`
-  - `${vcfdir}/${patient}_RNA_TUMOR_vs_${patient}_DNA_NORMAL/`
-  - (label strings reflect your CONFIG output labels)
-- PBS runscripts/log dirs per step:
-  - `${vcfdir}/4.X_*.logs_and_reports/logs`
-  - `${vcfdir}/4.X_*.logs_and_reports/reports`
-
-## Validation quick checks
-
-List missing expected outputs:
-
+Force recompute for a step:
 ```bash
-bash bin/check_outputs.sh -c /path/to/CONFIG
+make runrna5 CONFIG=/path/to/CONFIG SAMPLE=Pat11 FORCE=1
 ```
 
-Count phased outputs produced:
+## Check outputs
 
 ```bash
-find "$(awk -F'=' '/^vcfdir=/{gsub(/"/,"",$2); print $2}' /path/to/CONFIG)" -name '*.4.7_DNAt_DNAn_RNAt_merged_phased.vcf.gz' | wc -l
+bash bin/check_outputs.sh -c /path/to/CONFIG -m all
+bash bin/check_outputs.sh -c /path/to/CONFIG -m rna
+bash bin/check_outputs.sh -c /path/to/CONFIG -m germline
 ```
-
-## HPC clone/update workflow (run from other folders)
-
-Recommended pattern:
-
-1. Clone once in a stable tools path (example):
-
-```bash
-git clone <repo-url> /hpc/tools/post_rnadnavar_mupexi_prep
-```
-
-2. Keep dataset-specific `CONFIG` files outside the repo (one per dataset).
-3. Run any step from any working directory by passing absolute `-c /dataset/.../CONFIG`.
-4. Update pipeline safely:
-
-```bash
-cd /hpc/tools/post_rnadnavar_mupexi_prep
-git fetch --tags
-git checkout v0.1.0    # or a newer tag/branch
-```
-
-5. Test updates on one dataset/single sample before full reruns (use `-s` and optionally `-f`).
-
-This gives reproducible versions (`git checkout <tag>`) while allowing per-dataset parameter changes in external CONFIG files.
 
 ## Notes
 
-- All numbered scripts in both pipelines use the same `CONFIG` and `SAMPLES`.
-- `SAMPLES` can contain multiple rows per patient (DNA normal, DNA tumor, RNA tumor); scripts process unique patient IDs by suffix stripping.
-- Legacy reformat scripts from the older germline workflow are preserved under `germline_calling/legacy/` but are not required for the current whatshap-based path.
+- Scripts precheck inputs before `qsub`; broken/missing inputs are reported immediately.
+- Duplicate submission guard is enabled per step/sample using stored job IDs + `qstat`.
+- Dataset-specific `CONFIG` files should stay outside git-tracked repo content.

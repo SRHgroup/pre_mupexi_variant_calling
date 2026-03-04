@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# 2.0.2 Keep only PASS/uncalled-filter variants from filtered germline VCF.
+# gdna1: call germline variants in DNA normal BAM with GATK HaplotypeCaller.
 
 usage() {
   cat <<'USAGE'
-Usage: bash 2.0.2_SelectVariants.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [-f]
+Usage: bash gdna1_HaplotypeCaller.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [-f]
 USAGE
 }
 
@@ -14,13 +14,24 @@ while :; do
   case ${1:-} in
     -c|--config)
       [ -n "${2:-}" ] || { echo "ERROR: -c/--config requires a path" >&2; exit 1; }
-      config=$2; shift ;;
+      config=$2
+      shift
+      ;;
     -s|--sample)
       [ -n "${2:-}" ] || { echo "ERROR: -s/--sample requires a value" >&2; exit 1; }
-      sample=$2; shift ;;
-    -f|--force) force=1 ;;
-    -h|--help) usage; exit 0 ;;
-    *) break ;;
+      sample=$2
+      shift
+      ;;
+    -f|--force)
+      force=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      break
+      ;;
   esac
   shift
 done
@@ -30,15 +41,19 @@ done
 source "$config"
 
 : "${samples:?CONFIG must define samples}"
+: "${bamdir:?CONFIG must define bamdir}"
 : "${vcfdir:?CONFIG must define vcfdir}"
-: "${output_extension_201:?CONFIG must define output_extension_201}"
-: "${output_extension_202:?CONFIG must define output_extension_202}"
-out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
+: "${FASTA:?CONFIG must define FASTA}"
+: "${gdna1_vcf_extension:?CONFIG must define gdna1_vcf_extension}"
+
+dna_normal_label="${dna_normal_label:-DNA_NORMAL}"
+dna_bam_suffix="${dna_bam_suffix:-md.bam}"
+out_normal_label="${out_dna_normal_label:-${dna_normal_label}}"
 
 sample_base_name() {
   local value="$1"
   local labels=(
-    "${dna_normal_label:-DNA_NORMAL}" "${dna_tumor_label:-DNA_TUMOR}" "${rna_tumor_label:-RNA_TUMOR}"
+    "${dna_normal_label}" "${dna_tumor_label:-DNA_TUMOR}" "${rna_tumor_label:-RNA_TUMOR}"
     "${out_dna_normal_label:-DNA_NORMAL}" "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}" "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
     "DNA_NORMAL" "DNA_TUMOR" "DNA_TUMOUR" "RNA_TUMOR" "RNA_TUMOUR" "TUMOR" "TUMOUR"
   )
@@ -64,6 +79,12 @@ if [ -n "${QSUB_DEPEND:-}" ]; then
   qsub_depend_arg=(-W "depend=${QSUB_DEPEND}")
 fi
 
+if [ -z "${sample:-}" ]; then
+  echo "Running gdna1 for all patients in $samples"
+else
+  echo "Running gdna1 only for $sample"
+fi
+
 declare -A seen_patients=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
@@ -76,16 +97,16 @@ while IFS= read -r line; do
   [[ -n "${seen_patients[$name]:-}" ]] && continue
   seen_patients["$name"]=1
 
+  normal_bam="${bamdir}/${name}_${dna_normal_label}/${name}_${dna_normal_label}.${dna_bam_suffix}"
   germline_dir="${vcfdir}/${name}_${out_normal_label}"
-  filteredvcf="${germline_dir}/${name}_${output_extension_201}"
-  selectedvcf="${germline_dir}/${name}_${output_extension_202}"
+  outvcf="${germline_dir}/${name}_${gdna1_vcf_extension}"
 
-  if [ "$force" -eq 0 ] && [ -f "$selectedvcf" ]; then
-    echo "[skip] ${prefix}.${name}: output already exists: $selectedvcf (use -f to overwrite)"
+  if [ "$force" -eq 0 ] && [ -f "$outvcf" ]; then
+    echo "[skip] ${prefix}.${name}: output already exists: $outvcf (use -f to overwrite)"
     continue
   fi
-  if [ ! -s "$filteredvcf" ]; then
-    echo "[precheck] ${prefix}.${name}: missing/empty filtered germline VCF from 2.0.1: $filteredvcf" >&2
+  if [ ! -f "$normal_bam" ]; then
+    echo "[precheck] ${prefix}.${name}: missing DNA normal BAM: $normal_bam" >&2
     echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi
@@ -107,26 +128,30 @@ while IFS= read -r line; do
 set -euo pipefail
 module load tools ngs java/17-openjdk gatk/4.4.0.0
 SCRIPT
-    printf 'filteredvcf=%q\n' "$filteredvcf"
-    printf 'selectedvcf=%q\n' "$selectedvcf"
+    printf 'normal_bam=%q\n' "$normal_bam"
     printf 'germline_dir=%q\n' "$germline_dir"
+    printf 'outvcf=%q\n' "$outvcf"
+    printf 'FASTA=%q\n' "$FASTA"
     cat <<'SCRIPT'
-if [ ! -f "$filteredvcf" ]; then
-  echo "ERROR: missing filtered germline VCF from 2.0.1: $filteredvcf" >&2
+if [ ! -f "$normal_bam" ]; then
+  echo "ERROR: missing DNA normal BAM: $normal_bam" >&2
   exit 1
 fi
 
-gatk SelectVariants \
-  -V "$filteredvcf" \
-  -O "$selectedvcf" \
-  --exclude-filtered true
+mkdir -p "$germline_dir"
+
+gatk HaplotypeCaller \
+  -I "$normal_bam" \
+  -R "$FASTA" \
+  -O "$outvcf" \
+  -G StandardAnnotation
 SCRIPT
   } > "$runscript"
   chmod +x "$runscript"
 
   qsub_output="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
     "${qsub_depend_arg[@]}" \
-    -l nodes=1:ppn=8,mem=16gb,walltime="00:04:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
+    -l nodes=1:ppn=8,mem=24gb,walltime="00:12:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
   echo "$qsub_output"
   printf '%s\n' "$qsub_output" > "$submit_marker"
   echo "[submit] ${job_name}: jobid=${qsub_output}"

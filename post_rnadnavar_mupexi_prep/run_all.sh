@@ -69,13 +69,13 @@ run_step_collect() {
 }
 
 for step in \
-  4.1_OnlyRnaVcf.sh \
-  4.2_FilterEditSignature.sh \
-  4.3_AnnotateKnownSites.sh \
-  4.4_SummariseRnaMetrics.sh \
-  4.5_FilterByAfDpAr.sh \
-  4.6_MergeDnaRnaVcfs.sh \
-  4.7.1_GenotypeAndPhaseMergedVcf.sh
+  rna1_OnlyRnaVcf.sh \
+  rna2_FilterEditSignature.sh \
+  rna3_AnnotateKnownSites.sh \
+  rna4_SummariseRnaMetrics.sh \
+  rna5_FilterByAfDpAr.sh \
+  rna6_MergeDnaRnaVcfs.sh \
+  rna7_GenotypeAndPhaseMergedVcf.sh
   do
   run_step_collect "$step"
   done

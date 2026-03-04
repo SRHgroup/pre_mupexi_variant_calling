@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# 4.2 Split multi-allelics and filter to RNA-editing signatures (ADAR/APOBEC3).
+# rna2: split multi-allelics and filter to RNA-editing signatures (ADAR/APOBEC3).
 
 usage() {
   cat <<'USAGE'
-Usage: bash 4.2_FilterEditSignature.sh -c CONFIG [-s SAMPLE] [-f]
+Usage: bash rna2_FilterEditSignature.sh -c CONFIG [-s SAMPLE] [-f]
 USAGE
 }
 
@@ -30,9 +30,9 @@ source "$config"
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${rnae_scripts:?CONFIG must define rnae_scripts}"
-: "${rna_only_vcf_extension:?CONFIG must define rna_only_vcf_extension}"
-: "${split_vcf_extension:?CONFIG must define split_vcf_extension}"
-: "${filtered_edit_labeled_vcf_extension:?CONFIG must define filtered_edit_labeled_vcf_extension}"
+: "${rna1_vcf_extension:?CONFIG must define rna1_vcf_extension}"
+: "${rna2_split_vcf_extension:?CONFIG must define rna2_split_vcf_extension}"
+: "${rna2_labeled_vcf_extension:?CONFIG must define rna2_labeled_vcf_extension}"
 
 sample_base_name() {
   local value="$1"
@@ -72,9 +72,9 @@ precheck_vcfgz() {
 }
 
 if [ -z "${sample:-}" ]; then
-  echo "Running 4.2 for all samples in $samples"
+  echo "Running rna2 for all samples in $samples"
 else
-  echo "Running 4.2 only for $sample"
+  echo "Running rna2 only for $sample"
 fi
 
 prefix=$(basename "${BASH_SOURCE[0]}" .sh)
@@ -102,9 +102,9 @@ while IFS= read -r line; do
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   outdir_only="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
 
-  rna_only_vcf="${outdir_only}/${name}_${rna_only_vcf_extension}"
-  split_vcf="${outdir_only}/${name}_${split_vcf_extension}"
-  filtered_vcf="${outdir_only}/${name}_${filtered_edit_labeled_vcf_extension}"
+  rna_only_vcf="${outdir_only}/${name}_${rna1_vcf_extension}"
+  split_vcf="${outdir_only}/${name}_${rna2_split_vcf_extension}"
+  filtered_vcf="${outdir_only}/${name}_${rna2_labeled_vcf_extension}"
   stats_file="${filtered_vcf%.vcf.gz}.stats.tsv"
   counts_file="${filtered_vcf%.vcf.gz}.counts.txt"
 
@@ -112,7 +112,7 @@ while IFS= read -r line; do
     echo "[skip] ${prefix}.${name}: output already exists: $filtered_vcf (use -f to overwrite)"
     continue
   fi
-  if ! precheck_vcfgz "$rna_only_vcf" "${prefix}.${name}" "run 4.1 first"; then
+  if ! precheck_vcfgz "$rna_only_vcf" "${prefix}.${name}" "run rna1 first"; then
     echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi
@@ -145,7 +145,7 @@ SCRIPT
 mkdir -p "$outdir_only"
 
 if [ ! -f "$rna_only_vcf" ]; then
-  echo "ERROR: missing input (run 4.1 first): $rna_only_vcf" >&2
+  echo "ERROR: missing input (run rna1 first): $rna_only_vcf" >&2
   exit 1
 fi
 

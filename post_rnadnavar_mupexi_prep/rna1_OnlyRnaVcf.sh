@@ -1,11 +1,11 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# 4.1 Only RNA VCF: remove variants from RNA whose CHROM+POS exist in DNA tumour VCF.
+# rna1: remove variants from RNA whose CHROM+POS exist in DNA tumour VCF.
 
 usage() {
   cat <<'USAGE'
-Usage: bash 4.1_OnlyRnaVcf.sh -c CONFIG [-s SAMPLE] [-f]
+Usage: bash rna1_OnlyRnaVcf.sh -c CONFIG [-s SAMPLE] [-f]
 USAGE
 }
 
@@ -39,7 +39,7 @@ source "$config"
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${rnae_scripts:?CONFIG must define rnae_scripts}"
-: "${rna_only_vcf_extension:?CONFIG must define rna_only_vcf_extension}"
+: "${rna1_vcf_extension:?CONFIG must define rna1_vcf_extension}"
 
 sample_is_requested() {
   local sample_id="$1"
@@ -67,9 +67,9 @@ sample_base_name() {
 }
 
 if [ -z "${sample:-}" ]; then
-  echo "Running 4.1 for all samples in $samples"
+  echo "Running rna1 for all samples in $samples"
 else
-  echo "Running 4.1 only for $sample"
+  echo "Running rna1 only for $sample"
 fi
 
 prefix=$(basename "${BASH_SOURCE[0]}" .sh)
@@ -105,7 +105,7 @@ while IFS= read -r line; do
   sdna_vcf="${dna_vcf_dir}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
   srna_vcf="${rna_vcf_dir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
 
-  rna_only_vcf="${rna_vcf_dir}/${name}_${rna_only_vcf_extension}"
+  rna_only_vcf="${rna_vcf_dir}/${name}_${rna1_vcf_extension}"
   rna_only_log="${rna_only_vcf%.vcf.gz}.log.txt"
 
   if [ "$force" -eq 0 ] && [ -f "$rna_only_vcf" ]; then
