@@ -111,6 +111,17 @@ if [ ! -f "$in_vcf" ]; then
   exit 1
 fi
 
+if ! gzip -t "$in_vcf" 2>/dev/null; then
+  echo "ERROR: 4.5 input is not a valid gzip VCF: $in_vcf" >&2
+  echo "Re-run step 4.4 with -f for this sample to regenerate the file." >&2
+  exit 1
+fi
+if ! bcftools view -h "$in_vcf" | grep -q '^#CHROM'; then
+  echo "ERROR: 4.5 input header is malformed (missing #CHROM): $in_vcf" >&2
+  echo "Re-run step 4.4 with -f for this sample to regenerate the file." >&2
+  exit 1
+fi
+
 normal_sample=$(bcftools query -l "$in_vcf" | grep -x "$out_dna_normal_label" | head -n 1 || true)
 rna_sample=$(bcftools query -l "$in_vcf" | grep -x "$out_rna_tumor_label" | head -n 1 || true)
 
