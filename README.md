@@ -110,6 +110,13 @@ bash bin/check_outputs.sh -c /path/to/CONFIG -m rna
 bash bin/check_outputs.sh -c /path/to/CONFIG -m germline
 ```
 
+If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can check one step per patient with YES/NO:
+
+```bash
+./run_pipeline.sh check-step rna5
+./run_pipeline.sh check-step gdna4 01-CH-L
+```
+
 ## Notes
 
 - Scripts precheck inputs before `qsub`; broken/missing inputs are reported immediately.
