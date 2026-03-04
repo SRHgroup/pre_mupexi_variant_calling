@@ -90,6 +90,27 @@ pick_first_existing() {
   return 1
 }
 
+resolve_bam_candidates() {
+  local patient="$1"
+  local tumor_label="$2"
+  local suffix="${dna_bam_suffix:-md.bam}"
+  local alt_label="$tumor_label"
+  if [[ "$tumor_label" == *TUMOR* ]]; then
+    alt_label="${tumor_label/TUMOR/TUMOUR}"
+  elif [[ "$tumor_label" == *TUMOUR* ]]; then
+    alt_label="${tumor_label/TUMOUR/TUMOR}"
+  fi
+  printf '%s\n' \
+    "${bamdir}/${patient}_${tumor_label}/${patient}_${tumor_label}.${suffix}" \
+    "${bamdir}/${patient}_${tumor_label}/${patient}_${suffix}" \
+    "${bamdir}/${patient}_${tumor_label}/${patient}_${tumor_label}.md.bam" \
+    "${bamdir}/${patient}_${tumor_label}/${patient}_md.bam" \
+    "${bamdir}/${patient}_${alt_label}/${patient}_${alt_label}.${suffix}" \
+    "${bamdir}/${patient}_${alt_label}/${patient}_${suffix}" \
+    "${bamdir}/${patient}_${alt_label}/${patient}_${alt_label}.md.bam" \
+    "${bamdir}/${patient}_${alt_label}/${patient}_md.bam"
+}
+
 precheck_vcf_or_vcfgz() {
   local file="$1"
   local tag="$2"
@@ -178,7 +199,10 @@ while IFS= read -r line; do
   germ_merge_ext="${germline_for_merge_extension:-${gdna4_vcf_extension:-${output_extension_30:-3.0.Filtered.vcf}}}"
   germ_vcf="${germ_dir}/${name}_${germ_merge_ext}"
 
-  dna_bam="${bamdir}/${name}_${dna_label}/${name}_${dna_bam_suffix:-md.bam}"
+  dna_bam="$(pick_first_existing $(resolve_bam_candidates "$name" "$dna_label"))"
+  if [ -z "${dna_bam:-}" ]; then
+    dna_bam="${bamdir}/${name}_${dna_label}/${name}_${dna_label}.${dna_bam_suffix:-md.bam}"
+  fi
 
   outdir="${dna_vcf_dir}"
   dna_only_merged_vcf_extension="${dna_only_merged_vcf_extension:-dna_only6.DNAt_DNAn_merged.vcf.gz}"
