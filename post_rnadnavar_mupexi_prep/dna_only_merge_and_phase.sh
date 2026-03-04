@@ -199,7 +199,7 @@ while IFS= read -r line; do
   germ_merge_ext="${germline_for_merge_extension:-${gdna4_vcf_extension:-${output_extension_30:-3.0.Filtered.vcf}}}"
   germ_vcf="${germ_dir}/${name}_${germ_merge_ext}"
 
-  dna_bam="$(pick_first_existing $(resolve_bam_candidates "$name" "$dna_label"))"
+  dna_bam="$(pick_first_existing $(resolve_bam_candidates "$name" "$dna_label"))" || dna_bam=""
   if [ -z "${dna_bam:-}" ]; then
     dna_bam="${bamdir}/${name}_${dna_label}/${name}_${dna_label}.${dna_bam_suffix:-md.bam}"
   fi
