@@ -3,11 +3,12 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: bash dna_only_merge_and_phase.sh -c CONFIG [-s SAMPLE] [-f]
+Usage: bash dna_only_merge_and_phase.sh -c CONFIG [-s SAMPLE] [-f] [--allow-with-rna]
 USAGE
 }
 
 force=0
+allow_with_rna=0
 while :; do
   case ${1:-} in
     -c|--config)
@@ -18,6 +19,9 @@ while :; do
       ;;
     -f|--force)
       force=1
+      ;;
+    --allow-with-rna)
+      allow_with_rna=1
       ;;
     -h|--help)
       usage
@@ -139,15 +143,28 @@ while IFS= read -r line; do
 
   out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
+  out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 
+  rna_vcf_dir="${vcfdir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}"
   dna_vcf_dir="${vcfdir}/${name}_${dna_label}_vs_${name}_${out_normal_label}"
   germ_dir="${vcfdir}/${name}_${out_normal_label}"
 
+  source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension:-${out_rna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
   source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension:-${dna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
+  source_rna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_rna_mutect2_vcf_extension" "$name")"
   source_dna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_dna_mutect2_vcf_extension" "$name")"
+  source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension%\}}"
   source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension%\}}"
 
+  rna_vcf_pref="${rna_vcf_dir}/${name}_${source_rna_mutect2_vcf_extension}"
   dna_vcf_pref="${dna_vcf_dir}/${name}_${source_dna_mutect2_vcf_extension}"
+  rna_vcf="$(pick_first_existing \
+    "$rna_vcf_pref" \
+    "${rna_vcf_dir}/${name}_${out_rna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${rna_vcf_dir}/${name}_${rna_tumor_label:-RNA_TUMOR}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${rna_vcf_dir}/${name}_RNA_TUMOR_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+    "${rna_vcf_dir}/${name}_RNA_TUMOUR_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
+  )" || rna_vcf=""
   dna_vcf="$(pick_first_existing \
     "$dna_vcf_pref" \
     "${dna_vcf_dir}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz" \
@@ -170,6 +187,11 @@ while IFS= read -r line; do
   genotyped_vcf="${outdir}/${name}_${dna_only_genotyped_vcf_extension}"
   phased_vcf="${outdir}/${name}_${dna_only_phased_vcf_extension}"
   run_log="${phased_vcf%.vcf.gz}.dna_only.log.txt"
+
+  if [ "$allow_with_rna" -eq 0 ] && [ -n "$rna_vcf" ]; then
+    echo "[skip] ${prefix}.${name}: RNA source VCF exists, run RNA pipeline instead: $rna_vcf"
+    continue
+  fi
 
   if [ "$force" -eq 0 ] && [ -f "$phased_vcf" ]; then
     echo "[skip] ${prefix}.${name}: output already exists: $phased_vcf (use -f to overwrite)"
