@@ -65,6 +65,28 @@ precheck_vcfgz() {
     echo "[precheck] ${tag}: invalid gzip VCF: $path" >&2
     return 1
   fi
+  # Primary fast check
+  if zgrep -m1 '^#CHROM[[:space:]]' "$path" >/dev/null 2>&1; then
+    return 0
+  fi
+  # Fallback: inspect first non-meta line (handles odd grep behavior/BOM/CRLF)
+  local first_non_meta
+  first_non_meta="$(gzip -dc "$path" 2>/dev/null | awk '
+    BEGIN{found=0}
+    /^##/ {next}
+    {
+      sub(/\r$/,"",$0)
+      sub(/^\xef\xbb\xbf/,"",$0)
+      print
+      found=1
+      exit
+    }
+    END{ if (!found) exit 2 }
+  ' || true)"
+  if [[ "$first_non_meta" =~ ^#CHROM[[:space:]] ]]; then
+    echo "[precheck] ${tag}: header check recovered via fallback parser: $path" >&2
+    return 0
+  fi
   if ! zgrep -m1 '^#CHROM' "$path" >/dev/null 2>&1; then
     echo "[precheck] ${tag}: malformed VCF header (missing #CHROM): $path" >&2
     return 1
