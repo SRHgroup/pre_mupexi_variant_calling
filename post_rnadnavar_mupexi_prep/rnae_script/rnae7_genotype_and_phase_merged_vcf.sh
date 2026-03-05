@@ -5,7 +5,6 @@ set -euo pipefail
 # Sample-name aware (supports TUMOR/TUMOUR and configurable output names).
 
 threads=8
-hc_assembly_region_padding="${HC_ASSEMBLY_REGION_PADDING:-150}"
 merged_vcf=""
 dna_bam=""
 rna_bam=""
@@ -108,12 +107,16 @@ union_sites_vcf="${tmpdir}/union.sites.vcf.gz"
 bcftools view -G -Oz -o "$union_sites_vcf" "$merged_vcf"
 bcftools index -f -t "$union_sites_vcf"
 
+# BED of positions from merged VCF to force GATK evaluation exactly at these loci
+intervals_bed="${tmpdir}/union.sites.bed"
+bcftools query -f '%CHROM\t%POS\n' "$union_sites_vcf" | awk 'BEGIN{OFS="\t"}{print $1,$2-1,$2}' > "$intervals_bed"
+
 # 2) Genotype those same alleles in each BAM
 hc_genotype_union () {
   local bam="$1"
   local out="$2"
 
-  gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$union_sites_vcf" --assembly-region-padding "$hc_assembly_region_padding" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --disable-tool-default-annotations --annotations-to-exclude TandemRepeat --active-probability-threshold 0.0 --native-pair-hmm-threads "$threads" -O "$out"
+  gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$intervals_bed" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --active-probability-threshold 0.0 --native-pair-hmm-threads "$threads" -O "$out"
 }
 
 dna_raw="${tmpdir}/dna.raw.vcf.gz"
@@ -146,24 +149,7 @@ bcftools index -f -t "$normal_vcf"
 
 # Merge back to 3-sample VCF (same positions)
 info_rules="KNOWN_RNAEDIT_DB:join,SOURCE_SET:join,EDIT_SIG:join"
-genotyped_raw="${tmpdir}/genotyped.raw.vcf.gz"
-genotyped_restored="${tmpdir}/genotyped.restored.vcf.gz"
-bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$genotyped_raw" "$normal_vcf" "$dna_fix" "$rna_fix"
-bcftools index -f -t "$genotyped_raw"
-
-# IMPORTANT:
-# HaplotypeCaller can emit missing GT (./.) for some union alleles. If we keep those,
-# true rna6 tumor calls get wiped. Restore per-sample fields from rna6 merged VCF when
-# HC GT is missing, then refresh AC/AN tags.
-python3 "$(dirname "$0")/rnae7_restore_missing_from_merged.py" \
-  --merged "$merged_vcf" \
-  --genotyped "$genotyped_raw" \
-  --out "$genotyped_restored" \
-  --normal-name "$normal_name" \
-  --dna-name "$dna_name" \
-  --rna-name "$rna_name"
-bcftools index -f -t "$genotyped_restored"
-bcftools +fill-tags "$genotyped_restored" -Oz -o "$out_genotyped" -- -t AN,AC,AF
+bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$out_genotyped" "$normal_vcf" "$dna_fix" "$rna_fix"
 bcftools index -f -t "$out_genotyped"
 
 echo "[info] Wrote genotyped: $out_genotyped"
