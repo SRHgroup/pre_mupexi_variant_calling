@@ -306,6 +306,7 @@ SCRIPT
     printf 'phased_vcf=%q\n' "$phased_vcf"
     printf 'out_normal=%q\n' "$out_normal_label"
     printf 'out_dna=%q\n' "$dna_label"
+    printf 'export DNA_ONLY_GENOTYPER_MODE=%q\n' "${dna_only_genotyper_mode:-safe}"
     printf 'phase_log=%q\n' "$phase_log"
     cat <<'SCRIPT'
 if [ ! -f "$merged_vcf" ]; then

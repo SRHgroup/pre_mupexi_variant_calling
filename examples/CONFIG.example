@@ -103,6 +103,11 @@ rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"
 dna_only_merged_vcf_extension="dna_only6.DNAt_DNAn_merged.vcf.gz"
 dna_only_genotyped_vcf_extension="dna_only7.DNAt_DNAn_merged_genotyped.vcf.gz"
 dna_only_phased_vcf_extension="dna_only7.DNAt_DNAn_merged_phased.vcf.gz"
+# dna_only_genotyper_mode: safe|auto|hc
+# safe (recommended): no HaplotypeCaller, composes tumor genotype from merged VCF with hard validation.
+# auto: try HaplotypeCaller then fallback to safe if HC crashes.
+# hc: require HaplotypeCaller success.
+dna_only_genotyper_mode="safe"
 
 # MuPeXI2 integration
 mupexi2_repo="/home/projects/SRHgroup/apps/mupexi2"
