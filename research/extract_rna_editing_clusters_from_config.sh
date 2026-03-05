@@ -77,6 +77,8 @@ python3 "$(dirname "$0")/extract_rna_editing_clusters.py" \
   --out-clusters "${outdir}/rna_edit_clusters.tsv" \
   --max-distance "$max_distance" \
   --min-cluster-size "$min_cluster_size" \
-  --rna-label "${rna_tumor_label:-RNA_TUMOR}"
+  --rna-label "${rna_tumor_label:-RNA_TUMOR}" \
+  --tumor-label "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}" \
+  --normal-label "${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 
 echo "[done] wrote: ${outdir}/rna_edit_variants.tsv and ${outdir}/rna_edit_clusters.tsv"

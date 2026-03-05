@@ -26,7 +26,7 @@ def parse_info(info):
     return out
 
 
-def detect_rna_sample(samples, requested, labels):
+def detect_label_sample(samples, requested, labels):
     if requested:
         for s in samples:
             if s == requested:
@@ -44,6 +44,17 @@ def detect_rna_sample(samples, requested, labels):
         for p in patterns:
             if p.search(s):
                 return s
+    return None
+
+
+def detect_non_normal_sample(samples, normal_labels):
+    pats = []
+    for lab in normal_labels:
+        pats.append(re.compile(rf"(?:_|^){re.escape(lab)}(?:\\.|$)", re.IGNORECASE))
+    for s in samples:
+        is_norm = any(p.search(s) for p in pats)
+        if not is_norm:
+            return s
     return None
 
 
@@ -189,6 +200,8 @@ def main():
     ap.add_argument('--min-cluster-size', type=int, default=2)
     ap.add_argument('--rna-sample', default='')
     ap.add_argument('--rna-label', action='append', default=['RNA_TUMOR'])
+    ap.add_argument('--tumor-label', action='append', default=['TUMOR', 'DNA_TUMOR', 'DNA_TUMOUR'])
+    ap.add_argument('--normal-label', action='append', default=['DNA_NORMAL'])
     args = ap.parse_args()
 
     pairs = []
@@ -206,21 +219,26 @@ def main():
 
         with open_text(vcf) as fh:
             header_samples = None
-            rna_col_idx = None
-            rna_sample_name = None
+            sig_col_idx = None
+            sig_sample_name = None
             for line in fh:
                 if line.startswith('##'):
                     continue
                 if line.startswith('#CHROM'):
                     cols = line.rstrip('\n').split('\t')
                     header_samples = cols[9:]
-                    rna_sample_name = detect_rna_sample(header_samples, args.rna_sample, args.rna_label)
-                    if rna_sample_name is None:
-                        print(f'[warn] no RNA sample detected for {patient} in {vcf}')
+                    # Prefer RNA-labelled column. If absent (e.g., only DNA_NORMAL+TUMOR), use tumor/sample-not-normal column.
+                    sig_sample_name = detect_label_sample(header_samples, args.rna_sample, args.rna_label)
+                    if sig_sample_name is None:
+                        sig_sample_name = detect_label_sample(header_samples, '', args.tumor_label)
+                    if sig_sample_name is None:
+                        sig_sample_name = detect_non_normal_sample(header_samples, args.normal_label)
+                    if sig_sample_name is None:
+                        print(f'[warn] no signal sample detected for {patient} in {vcf}')
                         break
-                    rna_col_idx = 9 + header_samples.index(rna_sample_name)
+                    sig_col_idx = 9 + header_samples.index(sig_sample_name)
                     continue
-                if header_samples is None or rna_col_idx is None:
+                if header_samples is None or sig_col_idx is None:
                     continue
 
                 f = line.rstrip('\n').split('\t')
@@ -236,15 +254,15 @@ def main():
                     continue
 
                 fmt_keys = f[8].split(':')
-                rna_sv = f[rna_col_idx]
-                gt = parse_format_value(fmt_keys, rna_sv, 'GT') or ''
-                ad = parse_format_value(fmt_keys, rna_sv, 'AD') or ''
-                af = parse_numeric(parse_format_value(fmt_keys, rna_sv, 'AF'))
+                sig_sv = f[sig_col_idx]
+                gt = parse_format_value(fmt_keys, sig_sv, 'GT') or ''
+                ad = parse_format_value(fmt_keys, sig_sv, 'AD') or ''
+                af = parse_numeric(parse_format_value(fmt_keys, sig_sv, 'AF'))
                 if af is None:
                     af = infer_af_from_ad(ad)
-                dp = parse_numeric(parse_format_value(fmt_keys, rna_sv, 'DP'))
-                ps = parse_format_value(fmt_keys, rna_sv, 'PS') or ''
-                pid = parse_format_value(fmt_keys, rna_sv, 'PID') or ''
+                dp = parse_numeric(parse_format_value(fmt_keys, sig_sv, 'DP'))
+                ps = parse_format_value(fmt_keys, sig_sv, 'PS') or ''
+                pid = parse_format_value(fmt_keys, sig_sv, 'PID') or ''
                 gene, transcript = infer_gene_and_transcript(info_map)
 
                 variants.append({
@@ -254,7 +272,7 @@ def main():
                     'ref': ref,
                     'alt': alt,
                     'signature': infer_signature(info_map),
-                    'rna_sample': rna_sample_name,
+                    'rna_sample': sig_sample_name,
                     'rna_gt': gt,
                     'rna_ad': ad,
                     'rna_af': '' if af is None else round(af, 6),
