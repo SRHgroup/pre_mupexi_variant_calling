@@ -98,9 +98,18 @@ def infer_af_from_ad(ad):
     return alt / denom
 
 
-def infer_alt_count_from_fields(ad, af, dp):
+def infer_alt_count_from_fields(ad, af, dp, info_map):
     if ad:
         parts = ad.split(',')
+        if len(parts) >= 2:
+            try:
+                return float(parts[1])
+            except Exception:
+                pass
+    # Some merged/phased VCFs carry sample-level FAD instead of AD.
+    fad = info_map.get('_sample_fad', '')
+    if fad:
+        parts = fad.split(',')
         if len(parts) >= 2:
             try:
                 return float(parts[1])
@@ -110,7 +119,18 @@ def infer_alt_count_from_fields(ad, af, dp):
         try:
             return float(af) * float(dp)
         except Exception:
-            return None
+            pass
+    # Fallback for merged VCFs where sample AD/AF/DP are missing:
+    # approximate from INFO AF/DP (or MLEAF/DP).
+    info_dp = parse_numeric(info_map.get('DP', ''))
+    info_af = parse_numeric(info_map.get('AF', ''))
+    if info_af is None:
+        info_af = parse_numeric(info_map.get('MLEAF', ''))
+    if info_dp is not None and info_af is not None:
+        try:
+            return float(info_dp) * float(info_af)
+        except Exception:
+            pass
     return None
 
 
@@ -274,11 +294,14 @@ def main():
                 sig_sv = f[sig_col_idx]
                 gt = parse_format_value(fmt_keys, sig_sv, 'GT') or ''
                 ad = parse_format_value(fmt_keys, sig_sv, 'AD') or ''
+                fad = parse_format_value(fmt_keys, sig_sv, 'FAD') or ''
                 af = parse_numeric(parse_format_value(fmt_keys, sig_sv, 'AF'))
                 if af is None:
                     af = infer_af_from_ad(ad)
                 dp = parse_numeric(parse_format_value(fmt_keys, sig_sv, 'DP'))
-                alt_count = infer_alt_count_from_fields(ad, af, dp)
+                # pass sample FAD through info_map fallback channel
+                info_map['_sample_fad'] = fad
+                alt_count = infer_alt_count_from_fields(ad, af, dp, info_map)
                 if alt_count is None or alt_count < args.min_alt_count:
                     continue
                 ps = parse_format_value(fmt_keys, sig_sv, 'PS') or ''
