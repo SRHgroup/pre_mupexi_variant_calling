@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# rnae7: genotype union alleles (from merged VCF) back into BAMs and phase with whatshap.
+# rnae7: compose final DNA_NORMAL+TUMOR VCF from merged VCF and phase with whatshap.
 # Sample-name aware (supports TUMOR/TUMOUR and configurable output names).
 
 threads=8
@@ -17,6 +17,7 @@ normal_name="DNA_NORMAL"
 dna_name="DNA_TUMOR"
 rna_name="RNA_TUMOR"
 tumor_name="TUMOR"
+genotyper_mode="${rna7_genotyper_mode:-${RNA7_GENOTYPER_MODE:-auto}}"
 
 usage() {
   cat <<USAGE
@@ -86,9 +87,11 @@ done
 [[ -f "$rna_bam" ]] || die "Missing RNA tumor BAM: $rna_bam"
 
 command -v whatshap >/dev/null 2>&1 || die "whatshap not found in PATH"
-command -v gatk >/dev/null 2>&1 || die "gatk not found in PATH"
 command -v bcftools >/dev/null 2>&1 || die "bcftools not found in PATH"
 command -v bgzip >/dev/null 2>&1 || die "bgzip not found in PATH"
+if [ "$genotyper_mode" != "safe" ]; then
+  command -v gatk >/dev/null 2>&1 || die "gatk not found in PATH (required for rna7_genotyper_mode=${genotyper_mode})"
+fi
 
 bcftools index -f -t "$merged_vcf" >/dev/null 2>&1 || true
 
@@ -103,56 +106,76 @@ rna_in=$(resolve_sample_name "$rna_name" "${samples_arr[@]}") || die "$rna_name 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "'$tmpdir'"' EXIT
 
-# 1) Union-alleles VCF (same rows as merged, without genotypes)
-union_sites_vcf="${tmpdir}/union.sites.vcf.gz"
-bcftools view -G -Oz -o "$union_sites_vcf" "$merged_vcf"
-bcftools index -f -t "$union_sites_vcf"
+run_hc_genotyper() {
+  local out_vcf="$1"
 
-# BED of positions from merged VCF to force GATK evaluation exactly at these loci
-intervals_bed="${tmpdir}/union.sites.bed"
-bcftools query -f '%CHROM\t%POS\n' "$union_sites_vcf" | awk 'BEGIN{OFS="\t"}{print $1,$2-1,$2}' > "$intervals_bed"
+  # 1) Union-alleles VCF (same rows as merged, without genotypes)
+  local union_sites_vcf="${tmpdir}/union.sites.vcf.gz"
+  bcftools view -G -Oz -o "$union_sites_vcf" "$merged_vcf"
+  bcftools index -f -t "$union_sites_vcf"
 
-# 2) Genotype those same alleles in each BAM
-hc_genotype_union () {
-  local bam="$1"
-  local out="$2"
+  # BED of positions from merged VCF to force GATK evaluation exactly at these loci
+  local intervals_bed="${tmpdir}/union.sites.bed"
+  bcftools query -f '%CHROM\t%POS\n' "$union_sites_vcf" | awk 'BEGIN{OFS="\t"}{print $1,$2-1,$2}' > "$intervals_bed"
 
-  gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$intervals_bed" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --disable-tool-default-annotations --annotations-to-exclude TandemRepeat --active-probability-threshold 0.0 --native-pair-hmm-threads "$threads" -O "$out"
+  hc_genotype_union () {
+    local bam="$1"
+    local out="$2"
+    gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$intervals_bed" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --disable-tool-default-annotations --annotations-to-exclude TandemRepeat --active-probability-threshold 0.0 --native-pair-hmm-threads "$threads" -O "$out"
+  }
+
+  local dna_raw="${tmpdir}/dna.raw.vcf.gz"
+  local rna_raw="${tmpdir}/rna.raw.vcf.gz"
+  echo "[info] Genotyping union alleles in ${dna_name} BAM..."
+  hc_genotype_union "$dna_bam" "$dna_raw"
+  bcftools index -f -t "$dna_raw" >/dev/null 2>&1 || true
+
+  echo "[info] Genotyping union alleles in ${rna_name} BAM..."
+  hc_genotype_union "$rna_bam" "$rna_raw"
+  bcftools index -f -t "$rna_raw" >/dev/null 2>&1 || true
+
+  # Force sample names (in case BAM SM is different)
+  local dna_fix="${tmpdir}/${dna_name}.vcf.gz"
+  local rna_fix="${tmpdir}/${rna_name}.vcf.gz"
+  echo -e "$(bcftools query -l "$dna_raw" | head -n1)\t${dna_name}" > "${tmpdir}/dna.map"
+  bcftools reheader -s "${tmpdir}/dna.map" -o "$dna_fix" "$dna_raw"
+  bcftools index -f -t "$dna_fix"
+  echo -e "$(bcftools query -l "$rna_raw" | head -n1)\t${rna_name}" > "${tmpdir}/rna.map"
+  bcftools reheader -s "${tmpdir}/rna.map" -o "$rna_fix" "$rna_raw"
+  bcftools index -f -t "$rna_fix"
+
+  # Keep DNA normal genotypes from merged VCF
+  local normal_vcf="${tmpdir}/${normal_name}.vcf.gz"
+  bcftools view -s "$normal_in" -Oz -o "$normal_vcf" "$merged_vcf"
+  bcftools index -f -t "$normal_vcf"
+
+  # Merge back to 3-sample VCF (same positions)
+  local info_rules="KNOWN_RNAEDIT_DB:join,SOURCE_SET:join,EDIT_SIG:join"
+  bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$out_vcf" "$normal_vcf" "$dna_fix" "$rna_fix"
+  bcftools index -f -t "$out_vcf"
 }
 
-dna_raw="${tmpdir}/dna.raw.vcf.gz"
-rna_raw="${tmpdir}/rna.raw.vcf.gz"
-
-echo "[info] Genotyping union alleles in ${dna_name} BAM..."
-hc_genotype_union "$dna_bam" "$dna_raw"
-bcftools index -f -t "$dna_raw" >/dev/null 2>&1 || true
-
-echo "[info] Genotyping union alleles in ${rna_name} BAM..."
-hc_genotype_union "$rna_bam" "$rna_raw"
-bcftools index -f -t "$rna_raw" >/dev/null 2>&1 || true
-
-# Force sample names (in case BAM SM is different)
-dna_fix="${tmpdir}/${dna_name}.vcf.gz"
-rna_fix="${tmpdir}/${rna_name}.vcf.gz"
-
-echo -e "$(bcftools query -l "$dna_raw" | head -n1)\t${dna_name}" > "${tmpdir}/dna.map"
-bcftools reheader -s "${tmpdir}/dna.map" -o "$dna_fix" "$dna_raw"
-bcftools index -f -t "$dna_fix"
-
-echo -e "$(bcftools query -l "$rna_raw" | head -n1)\t${rna_name}" > "${tmpdir}/rna.map"
-bcftools reheader -s "${tmpdir}/rna.map" -o "$rna_fix" "$rna_raw"
-bcftools index -f -t "$rna_fix"
-
-# Keep DNA normal genotypes from merged VCF
-normal_vcf="${tmpdir}/${normal_name}.vcf.gz"
-bcftools view -s "$normal_in" -Oz -o "$normal_vcf" "$merged_vcf"
-bcftools index -f -t "$normal_vcf"
-
-# Merge back to 3-sample VCF (same positions)
-info_rules="KNOWN_RNAEDIT_DB:join,SOURCE_SET:join,EDIT_SIG:join"
 genotyped_raw="${tmpdir}/genotyped.raw.vcf.gz"
-bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$genotyped_raw" "$normal_vcf" "$dna_fix" "$rna_fix"
-bcftools index -f -t "$genotyped_raw"
+case "$genotyper_mode" in
+  hc)
+    run_hc_genotyper "$genotyped_raw"
+    ;;
+  safe)
+    echo "[warn] rna7_genotyper_mode=safe: skipping HaplotypeCaller and composing from merged VCF directly"
+    genotyped_raw="$merged_vcf"
+    ;;
+  auto)
+    if run_hc_genotyper "$genotyped_raw"; then
+      echo "[info] HaplotypeCaller genotyper completed"
+    else
+      echo "[warn] HaplotypeCaller genotyper failed; falling back to merged-VCF composition for this sample"
+      genotyped_raw="$merged_vcf"
+    fi
+    ;;
+  *)
+    die "Unknown rna7_genotyper_mode: ${genotyper_mode} (allowed: auto|hc|safe)"
+    ;;
+esac
 
 # Build final 2-sample VCF: DNA_NORMAL + TUMOR.
 # TUMOR is composed from source-aware DNA/RNA calls with fallback to merged_vcf to avoid erasing real calls.
