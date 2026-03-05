@@ -124,7 +124,7 @@ def main():
         ax_top.plot(b['gpos'], b['mean_dp'], color='#2ca02c', linewidth=1.5)
         ax_top.fill_between(b['gpos'], b['mean_dp'], alpha=0.2, color='#2ca02c')
     ax_top.set_ylabel('Mean RNA DP')
-    ax_top.set_title('RNA-editing Variant Landscape Across Patients')
+    ax_top.set_title('RNA-editing Variant Landscape Across Patients', pad=30)
 
     # Bottom: points by signature color and known-db shape.
     for sig, sub in vx.groupby('signature'):
@@ -211,10 +211,11 @@ def main():
         Line2D([], [], marker='o', linestyle='None', color='black', label='Phased', markersize=4),
         Line2D([], [], marker='o', linestyle='None', markerfacecolor='none', color='black', label='Unphased (middle lane)', markersize=4),
     ]
+    legend_y = 1.22
     leg1 = ax_top.legend(
         handles=sig_handles,
         loc='upper left',
-        bbox_to_anchor=(0.0, 1.55),
+        bbox_to_anchor=(0.0, legend_y),
         ncol=3,
         frameon=False,
         title='Signature'
@@ -223,7 +224,7 @@ def main():
     leg2 = ax_top.legend(
         handles=shape_handles,
         loc='upper center',
-        bbox_to_anchor=(0.5, 1.55),
+        bbox_to_anchor=(0.5, legend_y),
         frameon=False,
         title='Database'
     )
@@ -231,7 +232,7 @@ def main():
     ax_top.legend(
         handles=phase_handles,
         loc='upper right',
-        bbox_to_anchor=(1.0, 1.55),
+        bbox_to_anchor=(1.0, legend_y),
         frameon=False,
         title='Phasing'
     )
@@ -248,7 +249,7 @@ def main():
     ax.set_xticks(xticks)
     ax.set_xticklabels(xlabels, rotation=45, ha='right')
 
-    plt.tight_layout(rect=(0, 0, 1, 0.94))
+    plt.tight_layout(rect=(0, 0, 1, 0.92))
     out_png = f"{args.out_prefix}.png"
     out_pdf = f"{args.out_prefix}.pdf"
     os.makedirs(os.path.dirname(out_png) or '.', exist_ok=True)
