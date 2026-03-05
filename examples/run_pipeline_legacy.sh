@@ -63,6 +63,24 @@ run_make() {
   fi
 }
 
+legacy_target() {
+  case "$1" in
+    4.1) printf '%s\n' "runrna1" ;;
+    4.2) printf '%s\n' "runrna2" ;;
+    4.3) printf '%s\n' "runrna3" ;;
+    4.4) printf '%s\n' "runrna4" ;;
+    4.5) printf '%s\n' "runrna5" ;;
+    4.6) printf '%s\n' "runrna6" ;;
+    4.7.0) printf '%s\n' "runrna7.0" ;;
+    4.7) printf '%s\n' "runrna7" ;;
+    2.0) printf '%s\n' "rungdna1" ;;
+    2.0.1) printf '%s\n' "rungdna2" ;;
+    2.0.2) printf '%s\n' "rungdna3" ;;
+    3.0) printf '%s\n' "rungdna4" ;;
+    *) return 1 ;;
+  esac
+}
+
 run_research_rna_clusters() {
   local sample="${1:-}"
   local outdir="${2:-}"
@@ -580,7 +598,8 @@ case "$cmd" in
     sample="${2:-}"
     case "$step_name" in
       4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0)
-        run_make "run${step_name}" "$sample"
+        target="$(legacy_target "$step_name")"
+        run_make "$target" "$sample"
         ;;
       *)
         echo "Unknown step: $step_name" >&2
