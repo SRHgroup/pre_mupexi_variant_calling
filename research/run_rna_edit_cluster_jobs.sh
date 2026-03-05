@@ -111,25 +111,35 @@ while IFS= read -r line; do
   variants_tsv="${outdir}/${patient}.rna_edit_variants.tsv"
   clusters_tsv="${outdir}/${patient}.rna_edit_clusters.tsv"
   plot_prefix="${outdir}/${patient}.rna_edit_cluster_landscape"
-  plot_png="${plot_prefix}.png"
-  plot_pdf="${plot_prefix}.pdf"
 
-  if [ "$force" != "1" ] && [ -s "$variants_tsv" ] && [ -s "$clusters_tsv" ] && [ -s "$plot_png" ] && [ -s "$plot_pdf" ]; then
+  if [ "$force" != "1" ] && [ -s "$variants_tsv" ] && [ -s "$clusters_tsv" ]; then
     echo "[skip] ${patient}: outputs already exist (use -f to overwrite)"
     continue
   fi
 
   prefix="research_rna_clusters"
   marker="${logdir}/submitted.${prefix}.${patient}.jobid"
-  if [ "$skip_running" = "1" ] && [ -f "$marker" ]; then
+  active_jobid=""
+  if [ -f "$marker" ]; then
     prev_jobid="$(head -n1 "$marker" 2>/dev/null || true)"
     if [ -n "$prev_jobid" ]; then
       pbs_state="$(pbs_state_for_jobid "$prev_jobid")"
       if [ "$pbs_state" = "RUNNING" ] || [ "$pbs_state" = "QUEUED" ]; then
-        echo "[skip-running] ${prefix}.${patient}: active job ${prev_jobid} (${pbs_state})"
+        echo "[skip] ${prefix}.${patient}: active job ${prev_jobid} (${pbs_state})"
         continue
       fi
     fi
+  fi
+  # Also detect scheduler-active job by name if marker is absent/stale.
+  if command -v qselect >/dev/null 2>&1; then
+    active_jobid="$(qselect -u "${USER:-$(whoami)}" -N "${prefix}.${patient}" 2>/dev/null | head -n1 || true)"
+  fi
+  if [ -z "$active_jobid" ] && command -v qstat >/dev/null 2>&1; then
+    active_jobid="$(qstat -u "${USER:-$(whoami)}" 2>/dev/null | awk -v n="${prefix}.${patient}" '$4==n {print $1; exit}')"
+  fi
+  if [ -n "$active_jobid" ]; then
+    echo "[skip] ${prefix}.${patient}: scheduler already has active job ${active_jobid}"
+    continue
   fi
 
   runscript="${logdir}/run.${patient}.${prefix}.sh"

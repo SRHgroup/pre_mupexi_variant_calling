@@ -100,15 +100,27 @@ pbs_state_for_jobid() {
   esac
 }
 
-if [ "$skip_running" = "1" ] && [ -f "$marker" ]; then
+if [ -f "$marker" ]; then
   prev_jobid="$(head -n1 "$marker" 2>/dev/null || true)"
   if [ -n "$prev_jobid" ]; then
     st="$(pbs_state_for_jobid "$prev_jobid")"
     if [ "$st" = "RUNNING" ] || [ "$st" = "QUEUED" ]; then
-      echo "[skip-running] ${prefix}.${tag}: active job ${prev_jobid} (${st})"
+      echo "[skip] ${prefix}.${tag}: active job ${prev_jobid} (${st})"
       exit 0
     fi
   fi
+fi
+
+active_jobid=""
+if command -v qselect >/dev/null 2>&1; then
+  active_jobid="$(qselect -u "${USER:-$(whoami)}" -N "${prefix}.${tag}" 2>/dev/null | head -n1 || true)"
+fi
+if [ -z "$active_jobid" ] && command -v qstat >/dev/null 2>&1; then
+  active_jobid="$(qstat -u "${USER:-$(whoami)}" 2>/dev/null | awk -v n="${prefix}.${tag}" '$4==n {print $1; exit}')"
+fi
+if [ -n "$active_jobid" ]; then
+  echo "[skip] ${prefix}.${tag}: scheduler already has active job ${active_jobid}"
+  exit 0
 fi
 
 if [ "$force" != "1" ] && [ -s "$outfile" ]; then
