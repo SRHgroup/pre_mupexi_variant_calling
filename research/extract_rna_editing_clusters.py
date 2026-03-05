@@ -302,7 +302,9 @@ def main():
                 # pass sample FAD through info_map fallback channel
                 info_map['_sample_fad'] = fad
                 alt_count = infer_alt_count_from_fields(ad, af, dp, info_map)
-                if alt_count is None or alt_count < args.min_alt_count:
+                # Keep variants when alt_count cannot be derived from merged/phased fields.
+                # Only enforce threshold when alt_count is actually known.
+                if alt_count is not None and alt_count < args.min_alt_count:
                     continue
                 ps = parse_format_value(fmt_keys, sig_sv, 'PS') or ''
                 pid = parse_format_value(fmt_keys, sig_sv, 'PID') or ''
@@ -318,7 +320,7 @@ def main():
                     'rna_sample': sig_sample_name,
                     'rna_gt': gt,
                     'rna_ad': ad,
-                    'rna_alt_count': round(alt_count, 3),
+                    'rna_alt_count': '' if alt_count is None else round(alt_count, 3),
                     'rna_af': '' if af is None else round(af, 6),
                     'rna_dp': None if dp is None else float(dp),
                     'ps': ps,
