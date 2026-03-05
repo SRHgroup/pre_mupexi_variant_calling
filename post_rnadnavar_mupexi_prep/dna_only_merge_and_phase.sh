@@ -239,6 +239,24 @@ while IFS= read -r line; do
 
   merge_job_name="${prefix}.merge.${name}"
   phase_job_name="${prefix}.phase.${name}"
+  if [ "${SKIP_RUNNING:-0}" = "1" ]; then
+    active_merge=""
+    active_phase=""
+    if command -v qselect >/dev/null 2>&1; then
+      active_merge="$(qselect -u "${USER:-$(whoami)}" -N "$merge_job_name" 2>/dev/null | head -n1 || true)"
+      active_phase="$(qselect -u "${USER:-$(whoami)}" -N "$phase_job_name" 2>/dev/null | head -n1 || true)"
+    fi
+    if [ -z "$active_merge" ] && command -v qstat >/dev/null 2>&1; then
+      active_merge="$(qstat -u "${USER:-$(whoami)}" 2>/dev/null | awk -v n="$merge_job_name" '$4==n {print $1; exit}')"
+    fi
+    if [ -z "$active_phase" ] && command -v qstat >/dev/null 2>&1; then
+      active_phase="$(qstat -u "${USER:-$(whoami)}" 2>/dev/null | awk -v n="$phase_job_name" '$4==n {print $1; exit}')"
+    fi
+    if [ -n "$active_merge" ] || [ -n "$active_phase" ]; then
+      echo "[skip] ${phase_job_name}: matching merge/phase job already active: ${active_merge:-none} ${active_phase:-none}"
+      continue
+    fi
+  fi
   submit_marker="${logdir}/submitted.${phase_job_name}.jobid"
   if [ -f "$submit_marker" ]; then
     prev_jobid="$(head -n1 "$submit_marker" 2>/dev/null || true)"

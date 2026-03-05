@@ -139,6 +139,19 @@ while IFS= read -r line; do
   fi
 
   job_name="${prefix}.${name}"
+  if [ "${SKIP_RUNNING:-0}" = "1" ]; then
+    active_jobid=""
+    if command -v qselect >/dev/null 2>&1; then
+      active_jobid="$(qselect -u "${USER:-$(whoami)}" -N "$job_name" 2>/dev/null | head -n1 || true)"
+    fi
+    if [ -z "$active_jobid" ] && command -v qstat >/dev/null 2>&1; then
+      active_jobid="$(qstat -u "${USER:-$(whoami)}" 2>/dev/null | awk -v n="$job_name" '$4==n {print $1; exit}')"
+    fi
+    if [ -n "$active_jobid" ]; then
+      echo "[skip] ${job_name}: job already active in scheduler: ${active_jobid}"
+      continue
+    fi
+  fi
   submit_marker="${logdir}/submitted.${job_name}.jobid"
   if [ -f "$submit_marker" ]; then
     prev_jobid="$(head -n1 "$submit_marker" 2>/dev/null || true)"

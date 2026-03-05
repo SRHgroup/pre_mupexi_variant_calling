@@ -22,28 +22,38 @@ Usage:
   $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
+  (append --skip-running to submit commands to avoid re-submitting active jobs)
 USAGE
   exit 0
 fi
 
 force=0
+skip_running=0
 if [[ " ${*:-} " == *" -f "* ]] || [[ " ${*:-} " == *" --force "* ]]; then
   force=1
   set -- "${@/-f/}"
   set -- "${@/--force/}"
 fi
+if [[ " ${*:-} " == *" --skip-running "* ]]; then
+  skip_running=1
+  set -- "${@/--skip-running/}"
+fi
 force_arg=""
 if [ "$force" -eq 1 ]; then
   force_arg="FORCE=1"
+fi
+skip_running_arg=""
+if [ "$skip_running" -eq 1 ]; then
+  skip_running_arg="SKIP_RUNNING=1"
 fi
 
 run_make() {
   local target="$1"
   local sample="${2:-}"
   if [ -n "$sample" ]; then
-    make -C "$REPO" "$target" CONFIG="$CONFIG" SAMPLE="$sample" $force_arg
+    make -C "$REPO" "$target" CONFIG="$CONFIG" SAMPLE="$sample" $force_arg $skip_running_arg
   else
-    make -C "$REPO" "$target" CONFIG="$CONFIG" $force_arg
+    make -C "$REPO" "$target" CONFIG="$CONFIG" $force_arg $skip_running_arg
   fi
 }
 

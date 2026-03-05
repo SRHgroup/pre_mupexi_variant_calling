@@ -21,6 +21,7 @@ Usage:
   $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
+  (append --skip-running to submit commands to avoid re-submitting active jobs)
 
 Examples:
   $0 show-config
@@ -31,6 +32,7 @@ Examples:
   $0 dna-only 01-CH-L
   $0 all 01-CH-L
   $0 step rna4 01-CH-L -f
+  $0 step rna7 01-CH-L --skip-running
   $0 step rna7.0 01-CH-L -f
   $0 step rna7 01-CH-L -f
   $0 step gdna2 01-CH-L
@@ -45,23 +47,32 @@ USAGE
 fi
 
 force=0
+skip_running=0
 if [[ " ${*:-} " == *" -f "* ]] || [[ " ${*:-} " == *" --force "* ]]; then
   force=1
   set -- "${@/-f/}"
   set -- "${@/--force/}"
 fi
+if [[ " ${*:-} " == *" --skip-running "* ]]; then
+  skip_running=1
+  set -- "${@/--skip-running/}"
+fi
 force_arg=""
 if [ "$force" -eq 1 ]; then
   force_arg="FORCE=1"
+fi
+skip_running_arg=""
+if [ "$skip_running" -eq 1 ]; then
+  skip_running_arg="SKIP_RUNNING=1"
 fi
 
 run_make() {
   local target="$1"
   local sample="${2:-}"
   if [ -n "$sample" ]; then
-    make -C "$REPO" "$target" CONFIG="$CONFIG" SAMPLE="$sample" $force_arg
+    make -C "$REPO" "$target" CONFIG="$CONFIG" SAMPLE="$sample" $force_arg $skip_running_arg
   else
-    make -C "$REPO" "$target" CONFIG="$CONFIG" $force_arg
+    make -C "$REPO" "$target" CONFIG="$CONFIG" $force_arg $skip_running_arg
   fi
 }
 
