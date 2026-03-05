@@ -119,6 +119,10 @@ mupexi_enable_superpeptides="true"
 mupexi_enable_rna_edit="true"
 
 # HLA is read per patient from hladir (legacy suffix logic compatible).
+# Primary expected file pattern:
+#   ${hladir}/${patient}_hla1.tab
+# Optional override for direct suffix:
+# mupexi_hla_direct_extension="hla1.tab"
 # Default suffix uses output_extension_14 when present.
 # mupexi_hla_extension="${output_extension_14}"
 #

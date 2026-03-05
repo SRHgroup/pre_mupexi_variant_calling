@@ -64,6 +64,7 @@ enable_superpeptides="${mupexi_enable_superpeptides:-true}"
 enable_rna_edit="${mupexi_enable_rna_edit:-true}"
 phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}"
 hld_ext="${mupexi_hla_extension:-${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}}"
+hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
 [ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
 
 resolve_patient_placeholder() {
@@ -202,11 +203,16 @@ while IFS= read -r line; do
   if [ -n "$sample" ] && [ -n "$cli_hla" ]; then
     hla="$cli_hla"
   else
-    normal_name="$(find_normal_sample_name "$patient")"
     hla_file=""
+    # Primary expected layout: Pat101_hla1.tab
+    direct_hla="${hladir}/${patient}_${hld_direct_ext}"
+    if [ -f "$direct_hla" ]; then
+      hla_file="$direct_hla"
+    fi
+    normal_name="$(find_normal_sample_name "$patient")"
     if [ -n "$normal_name" ]; then
       cand1="${hladir}/${normal_name}_${hld_ext}"
-      if [ -f "$cand1" ]; then
+      if [ -z "$hla_file" ] && [ -f "$cand1" ]; then
         hla_file="$cand1"
       fi
     fi
@@ -234,7 +240,7 @@ while IFS= read -r line; do
     fi
   fi
   if [ -z "$hla" ]; then
-    echo "[skip] ${patient}: missing HLA (expected in ${hladir} with suffix ${hld_ext}; optional override --hla)"
+    echo "[skip] ${patient}: missing HLA (expected ${hladir}/${patient}_${hld_direct_ext}; optional override --hla)"
     continue
   fi
 
