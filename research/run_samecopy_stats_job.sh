@@ -49,6 +49,7 @@ mkdir -p "$(dirname "$outfile")"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd "$script_dir/.." && pwd)"
+research_python_modules="${research_python_modules:-tools ngs anaconda3/2025.06-1}"
 
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 out_dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
@@ -105,6 +106,7 @@ if [ -n "\${PIPELINE_DEFAULTS:-}" ] && [ -f "\$PIPELINE_DEFAULTS" ]; then
   # shellcheck disable=SC1090
   source "\$PIPELINE_DEFAULTS"
 fi
+module load ${research_python_modules}
 
 python3 "${repo_dir}/research/vcf_samecopy_stats_with_rna.py" \\
   --samples "${samples}" \\
