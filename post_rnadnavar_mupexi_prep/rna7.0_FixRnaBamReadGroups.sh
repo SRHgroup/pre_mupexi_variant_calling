@@ -27,6 +27,9 @@ done
 [ -f "$config" ] || { echo "ERROR: Cannot find config file: $config" >&2; exit 1; }
 source "$config"
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain.defaults.sh}"
+
 : "${samples:?CONFIG must define samples}"
 : "${bamdir:?CONFIG must define bamdir}"
 : "${rna7_smfixed_bam_suffix:?CONFIG must define rna7_smfixed_bam_suffix}"
@@ -88,10 +91,14 @@ while IFS= read -r line; do
 
   runscript="${logdir}/run.${name}.${prefix}.sh"
   {
+    printf 'export PIPELINE_DEFAULTS=%q\n' "$pipeline_defaults"
     cat <<'SCRIPT'
 #!/usr/bin/bash
 set -euo pipefail
-module load tools htslib/1.23 samtools/1.23
+if [ -n "${PIPELINE_DEFAULTS:-}" ] && [ -f "$PIPELINE_DEFAULTS" ]; then
+  source "$PIPELINE_DEFAULTS"
+fi
+module load ${modules_rna_bamfix:-tools htslib/1.23 samtools/1.23}
 SCRIPT
     printf 'inbam=%q\n' "$inbam"
     printf 'outbam=%q\n' "$outbam"

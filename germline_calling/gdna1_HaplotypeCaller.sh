@@ -40,6 +40,9 @@ done
 [ -f "$config" ] || { echo "ERROR: config not found: $config" >&2; exit 1; }
 source "$config"
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain.defaults.sh}"
+
 : "${samples:?CONFIG must define samples}"
 : "${bamdir:?CONFIG must define bamdir}"
 : "${vcfdir:?CONFIG must define vcfdir}"
@@ -136,10 +139,14 @@ while IFS= read -r line; do
 
   runscript="${logdir}/run.${name}.${prefix}.sh"
   {
+    printf 'export PIPELINE_DEFAULTS=%q\n' "$pipeline_defaults"
     cat <<'SCRIPT'
 #!/usr/bin/bash
 set -euo pipefail
-module load tools ngs java/17-openjdk gatk/4.4.0.0
+if [ -n "${PIPELINE_DEFAULTS:-}" ] && [ -f "$PIPELINE_DEFAULTS" ]; then
+  source "$PIPELINE_DEFAULTS"
+fi
+module load ${modules_gdna_hc:-tools ngs java/17-openjdk gatk/4.5.0.0}
 SCRIPT
     printf 'normal_bam=%q\n' "$normal_bam"
     printf 'germline_dir=%q\n' "$germline_dir"

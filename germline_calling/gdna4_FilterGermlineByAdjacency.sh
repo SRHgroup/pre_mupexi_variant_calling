@@ -29,6 +29,9 @@ done
 [ -f "$config" ] || { echo "ERROR: config not found: $config" >&2; exit 1; }
 source "$config"
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain.defaults.sh}"
+
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${gdna3_vcf_extension:?CONFIG must define gdna3_vcf_extension}"
@@ -208,10 +211,14 @@ while IFS= read -r line; do
 
   runscript="${logdir}/run.${name}.${prefix}.sh"
   {
+    printf 'export PIPELINE_DEFAULTS=%q\n' "$pipeline_defaults"
     cat <<'SCRIPT'
 #!/usr/bin/bash
 set -euo pipefail
-module load tools ngs anaconda3/2025.06-1
+if [ -n "${PIPELINE_DEFAULTS:-}" ] && [ -f "$PIPELINE_DEFAULTS" ]; then
+  source "$PIPELINE_DEFAULTS"
+fi
+module load ${modules_gdna_post:-tools ngs anaconda3/2025.06-1}
 SCRIPT
     printf 'germ_in=%q\n' "$germ_in"
     printf 'germ_out=%q\n' "$germ_out"

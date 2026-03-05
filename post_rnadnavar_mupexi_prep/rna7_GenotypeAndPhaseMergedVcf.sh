@@ -27,6 +27,9 @@ done
 [ -f "$config" ] || { echo "ERROR: Cannot find config file: $config" >&2; exit 1; }
 source "$config"
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain.defaults.sh}"
+
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${bamdir:?CONFIG must define bamdir}"
@@ -181,10 +184,14 @@ while IFS= read -r line; do
 
   runscript="${logdir}/run.${name}.${prefix}.sh"
   {
+    printf 'export PIPELINE_DEFAULTS=%q\n' "$pipeline_defaults"
     cat <<'SCRIPT'
 #!/usr/bin/bash
 set -euo pipefail
-module load ngs tools htslib/1.23 bcftools/1.23 java/17-openjdk gatk/4.4.0.0 anaconda3/2025.06-1
+if [ -n "${PIPELINE_DEFAULTS:-}" ] && [ -f "$PIPELINE_DEFAULTS" ]; then
+  source "$PIPELINE_DEFAULTS"
+fi
+module load ${modules_rna:-ngs tools htslib/1.23 bcftools/1.23 gatk/4.5.0.0 anaconda3/2025.06-1}
 SCRIPT
     printf 'merged_vcf=%q\n' "$merged_vcf"
     printf 'dna_bam=%q\n' "$dna_bam"

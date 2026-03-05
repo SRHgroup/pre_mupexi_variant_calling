@@ -4,6 +4,7 @@ set -euo pipefail
 # Copy this file to your project folder, then edit these two paths:
 REPO="/home/projects/SRHgroup/apps/pre_mupexi_variant_calling"
 CONFIG="/home/projects/SRHgroup/projects/PemBOv_trial/bin/rnadnavar/CONFIG"
+PIPELINE_DEFAULTS="${PIPELINE_DEFAULTS:-$REPO/pipeline_defaults/toolchain.defaults.sh}"
 
 cmd="${1:-help}"
 shift || true
@@ -70,9 +71,9 @@ run_make() {
   local target="$1"
   local sample="${2:-}"
   if [ -n "$sample" ]; then
-    make -C "$REPO" "$target" CONFIG="$CONFIG" SAMPLE="$sample" $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" "$target" CONFIG="$CONFIG" SAMPLE="$sample" $force_arg $skip_running_arg
   else
-    make -C "$REPO" "$target" CONFIG="$CONFIG" $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" "$target" CONFIG="$CONFIG" $force_arg $skip_running_arg
   fi
 }
 

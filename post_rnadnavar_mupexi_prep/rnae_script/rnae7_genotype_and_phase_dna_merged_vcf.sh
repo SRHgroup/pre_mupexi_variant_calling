@@ -1,7 +1,10 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-module load ngs tools htslib/1.23 bcftools/1.23 gatk/4.4.0.0 anaconda3/2025.06-1
+if [ -n "${PIPELINE_DEFAULTS:-}" ] && [ -f "$PIPELINE_DEFAULTS" ]; then
+  source "$PIPELINE_DEFAULTS"
+fi
+module load ${modules_dna_only_phase:-ngs tools htslib/1.23 bcftools/1.23 gatk/4.5.0.0 anaconda3/2025.06-1}
 
 threads=8
 merged_vcf=""

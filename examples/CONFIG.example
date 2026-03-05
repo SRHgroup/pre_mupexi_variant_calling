@@ -87,6 +87,12 @@ rna7_phased_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_phased.vcf.gz"
 # Required rna7.0 output suffix (rna7 consumes this BAM)
 rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"
 
+# Optional module profile override (wrappers default to REPO/pipeline_defaults/toolchain.defaults.sh).
+# You can define these in CONFIG to override repo defaults:
+# module_gatk="gatk/4.5.0.0"
+# modules_rna="ngs tools htslib/1.23 bcftools/1.23 ${module_gatk} anaconda3/2025.06-1"
+# modules_gdna_hc="tools ngs java/17-openjdk ${module_gatk}"
+
 # DNA-only path (no RNA): merge germline + DNA somatic, then genotype/phase DNA tumor
 # If unset, defaults are used by dna_only_merge_and_phase.sh.
 # germline_for_merge_extension defaults to gdna4_vcf_extension (or output_extension_30 in legacy config).
