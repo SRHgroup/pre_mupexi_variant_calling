@@ -149,7 +149,107 @@ bcftools index -f -t "$normal_vcf"
 
 # Merge back to 3-sample VCF (same positions)
 info_rules="KNOWN_RNAEDIT_DB:join,SOURCE_SET:join,EDIT_SIG:join"
-bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$out_genotyped" "$normal_vcf" "$dna_fix" "$rna_fix"
+genotyped_raw="${tmpdir}/genotyped.raw.vcf.gz"
+genotyped_safe="${tmpdir}/genotyped.safe.vcf.gz"
+bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$genotyped_raw" "$normal_vcf" "$dna_fix" "$rna_fix"
+bcftools index -f -t "$genotyped_raw"
+
+# Prevent loss of real calls from rna6:
+# if HC emits missing GT (./.) in DNA/RNA sample, keep original sample field from merged_vcf.
+python3 - "$merged_vcf" "$genotyped_raw" "$genotyped_safe" "$normal_name" "$dna_name" "$rna_name" <<'PY'
+import gzip
+import sys
+
+merged, genotyped, out, normal_name, dna_name, rna_name = sys.argv[1:7]
+want = [normal_name, dna_name, rna_name]
+
+def op(path, mode):
+    return gzip.open(path, mode) if path.endswith(".gz") else open(path, mode)
+
+def key(cols):
+    return (cols[0], int(cols[1]), cols[3], cols[4])
+
+def cmpk(a, b):
+    return (a > b) - (a < b)
+
+def gt_missing(sample_value, fmt):
+    keys = fmt.split(":")
+    try:
+        i = keys.index("GT")
+    except ValueError:
+        return True
+    vals = sample_value.split(":")
+    gt = vals[i] if i < len(vals) else "."
+    return gt in ("", ".", "./.", ".|.")
+
+def header_and_samples(path):
+    fh = op(path, "rt")
+    hdr = []
+    samples = []
+    for ln in fh:
+        hdr.append(ln)
+        if ln.startswith("#CHROM"):
+            samples = ln.rstrip("\n").split("\t")[9:]
+            break
+    return fh, hdr, samples
+
+def next_var(fh):
+    for ln in fh:
+        if not ln.startswith("#"):
+            return ln
+    return None
+
+mfh, _mhdr, ms = header_and_samples(merged)
+gfh, ghdr, gs = header_and_samples(genotyped)
+midx = {s: 9 + ms.index(s) for s in want if s in ms}
+gidx = {s: 9 + gs.index(s) for s in want if s in gs}
+
+restored = 0
+total = 0
+mline = next_var(mfh)
+with op(out, "wt") as ofh:
+    for h in ghdr:
+        ofh.write(h)
+    while True:
+        gline = next_var(gfh)
+        if gline is None:
+            break
+        total += 1
+        gc = gline.rstrip("\n").split("\t")
+        gk = key(gc)
+
+        mc = None
+        while mline is not None:
+            cand = mline.rstrip("\n").split("\t")
+            ck = key(cand)
+            c = cmpk(ck, gk)
+            if c < 0:
+                mline = next_var(mfh)
+                continue
+            if c == 0:
+                mc = cand
+            break
+
+        if mc is not None:
+            gfmt = gc[8]
+            mfmt = mc[8]
+            for s in (dna_name, rna_name, normal_name):
+                if s not in gidx or s not in midx:
+                    continue
+                gi = gidx[s]
+                mi = midx[s]
+                if gi >= len(gc) or mi >= len(mc):
+                    continue
+                if gt_missing(gc[gi], gfmt) and not gt_missing(mc[mi], mfmt):
+                    gc[gi] = mc[mi]
+                    restored += 1
+
+        ofh.write("\t".join(gc) + "\n")
+
+print(f"[info] kept original sample fields for missing HC calls: restored={restored} records={total}", file=sys.stderr)
+PY
+
+bcftools +fill-tags "$genotyped_safe" -Oz -o "$out_genotyped" -- -t AN,AC,AF
 bcftools index -f -t "$out_genotyped"
 
 echo "[info] Wrote genotyped: $out_genotyped"
