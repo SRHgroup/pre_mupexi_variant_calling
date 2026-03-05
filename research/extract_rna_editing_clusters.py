@@ -98,6 +98,22 @@ def infer_af_from_ad(ad):
     return alt / denom
 
 
+def infer_alt_count_from_fields(ad, af, dp):
+    if ad:
+        parts = ad.split(',')
+        if len(parts) >= 2:
+            try:
+                return float(parts[1])
+            except Exception:
+                pass
+    if af is not None and dp is not None:
+        try:
+            return float(af) * float(dp)
+        except Exception:
+            return None
+    return None
+
+
 def infer_signature(info_map):
     if 'ADAR_SIG' in info_map:
         return 'ADAR'
@@ -198,6 +214,7 @@ def main():
     ap.add_argument('--out-clusters', required=True)
     ap.add_argument('--max-distance', type=int, default=500)
     ap.add_argument('--min-cluster-size', type=int, default=2)
+    ap.add_argument('--min-alt-count', type=float, default=10.0)
     ap.add_argument('--rna-sample', default='')
     ap.add_argument('--rna-label', action='append', default=['RNA_TUMOR'])
     ap.add_argument('--tumor-label', action='append', default=['TUMOR', 'DNA_TUMOR', 'DNA_TUMOUR'])
@@ -261,6 +278,9 @@ def main():
                 if af is None:
                     af = infer_af_from_ad(ad)
                 dp = parse_numeric(parse_format_value(fmt_keys, sig_sv, 'DP'))
+                alt_count = infer_alt_count_from_fields(ad, af, dp)
+                if alt_count is None or alt_count < args.min_alt_count:
+                    continue
                 ps = parse_format_value(fmt_keys, sig_sv, 'PS') or ''
                 pid = parse_format_value(fmt_keys, sig_sv, 'PID') or ''
                 gene, transcript = infer_gene_and_transcript(info_map)
@@ -275,6 +295,7 @@ def main():
                     'rna_sample': sig_sample_name,
                     'rna_gt': gt,
                     'rna_ad': ad,
+                    'rna_alt_count': round(alt_count, 3),
                     'rna_af': '' if af is None else round(af, 6),
                     'rna_dp': None if dp is None else float(dp),
                     'ps': ps,
@@ -291,7 +312,7 @@ def main():
     os.makedirs(os.path.dirname(args.out_clusters) or '.', exist_ok=True)
 
     v_fields = [
-        'patient', 'chrom', 'pos', 'ref', 'alt', 'signature', 'rna_sample', 'rna_gt', 'rna_ad', 'rna_af', 'rna_dp',
+        'patient', 'chrom', 'pos', 'ref', 'alt', 'signature', 'rna_sample', 'rna_gt', 'rna_ad', 'rna_alt_count', 'rna_af', 'rna_dp',
         'ps', 'pid', 'gene', 'transcript', 'source_set', 'known_db'
     ]
     with open(args.out_variants, 'w', newline='') as outv:

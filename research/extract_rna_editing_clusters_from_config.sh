@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: bash research/extract_rna_editing_clusters_from_config.sh -c CONFIG [-s PATIENT] [--max-distance N] [--min-cluster-size N] [-o OUTDIR]
+Usage: bash research/extract_rna_editing_clusters_from_config.sh -c CONFIG [-s PATIENT] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-o OUTDIR]
 USAGE
 }
 
@@ -11,6 +11,7 @@ outdir="research/output"
 sample=""
 max_distance=500
 min_cluster_size=2
+min_alt_count=10
 
 while :; do
   case ${1:-} in
@@ -19,6 +20,7 @@ while :; do
     -o|--outdir) outdir="$2"; shift 2 ;;
     --max-distance) max_distance="$2"; shift 2 ;;
     --min-cluster-size) min_cluster_size="$2"; shift 2 ;;
+    --min-alt-count) min_alt_count="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) break ;;
   esac
@@ -77,6 +79,7 @@ python3 "$(dirname "$0")/extract_rna_editing_clusters.py" \
   --out-clusters "${outdir}/rna_edit_clusters.tsv" \
   --max-distance "$max_distance" \
   --min-cluster-size "$min_cluster_size" \
+  --min-alt-count "$min_alt_count" \
   --rna-label "${rna_tumor_label:-RNA_TUMOR}" \
   --tumor-label "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}" \
   --normal-label "${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"

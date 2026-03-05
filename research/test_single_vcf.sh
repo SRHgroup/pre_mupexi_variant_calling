@@ -7,7 +7,7 @@ Usage:
   bash research/test_single_vcf.sh \
     -i /path/to/phased.vcf.gz \
     -p SAMPLE_ID \
-    [-o OUTDIR] [--max-distance N] [--min-cluster-size N] [--rna-label LABEL] [--tumor-label LABEL]
+    [-o OUTDIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [--rna-label LABEL] [--tumor-label LABEL]
 
 Example:
   bash research/test_single_vcf.sh \
@@ -20,6 +20,7 @@ USAGE
 outdir="research/output_single"
 max_distance=500
 min_cluster_size=2
+min_alt_count=10
 rna_label="RNA_TUMOUR"
 tumor_label="TUMOR"
 
@@ -30,6 +31,7 @@ while :; do
     -o|--outdir) outdir="$2"; shift 2 ;;
     --max-distance) max_distance="$2"; shift 2 ;;
     --min-cluster-size) min_cluster_size="$2"; shift 2 ;;
+    --min-alt-count) min_alt_count="$2"; shift 2 ;;
     --rna-label) rna_label="$2"; shift 2 ;;
     --tumor-label) tumor_label="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -49,6 +51,7 @@ python3 "$(dirname "$0")/extract_rna_editing_clusters.py" \
   --out-clusters "${outdir}/rna_edit_clusters.tsv" \
   --max-distance "$max_distance" \
   --min-cluster-size "$min_cluster_size" \
+  --min-alt-count "$min_alt_count" \
   --rna-label "$rna_label" \
   --tumor-label "$tumor_label"
 

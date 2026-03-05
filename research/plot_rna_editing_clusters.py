@@ -3,6 +3,7 @@ import argparse
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
 
 
@@ -32,10 +33,10 @@ def expanded_copy_rows(df):
                     copies = [1, 2]
                 phased = True if ps not in ('', '.', 'nan', 'None') else False
             else:
-                copies = [1, 2]
+                copies = ['U']
         else:
-            # Unphased or missing genotype: show in both copies.
-            copies = [1, 2]
+            # Unphased or missing genotype: show once in middle lane.
+            copies = ['U']
         for cp in copies:
             rr = r.copy()
             rr['copy'] = cp
@@ -102,9 +103,12 @@ def main():
     vx = expanded_copy_rows(v)
     vx['patient_idx'] = vx['patient'].map(p_rank)
     copy_track_gap = 3
-    vx['copy_row'] = vx['patient_idx'] * copy_track_gap + vx['copy'].map({1: 0, 2: 1})
+    vx['copy_row'] = vx['patient_idx'] * copy_track_gap + vx['copy'].map({1: 0.0, 'U': 0.5, 2: 1.0})
     copy_x_offset = 600000
-    vx['gpos_copy'] = vx['gpos'] + vx['copy'].map({1: -copy_x_offset, 2: copy_x_offset})
+    vx['gpos_copy'] = vx['gpos'] + vx['copy'].map({1: -copy_x_offset, 'U': 0, 2: copy_x_offset})
+    # Small deterministic y-jitter to reduce overplotting while staying on each lane.
+    rng = np.random.default_rng(42)
+    vx['copy_row_plot'] = vx['copy_row'] + rng.uniform(-0.08, 0.08, size=len(vx))
 
     color_map = {'ADAR': '#1f77b4', 'APOBEC3': '#d62728', 'OTHER': '#7f7f7f'}
 
@@ -134,7 +138,7 @@ def main():
             sub_novel = part[~part['known_db_hit']]
             if not sub_novel.empty:
                 ax.scatter(
-                    sub_novel['gpos_copy'], sub_novel['copy_row'],
+                    sub_novel['gpos_copy'], sub_novel['copy_row_plot'],
                     s=8, alpha=alpha,
                     c='none' if hollow else cval,
                     edgecolors=cval if hollow else 'none',
@@ -142,7 +146,7 @@ def main():
                 )
             if not sub_known.empty:
                 ax.scatter(
-                    sub_known['gpos_copy'], sub_known['copy_row'],
+                    sub_known['gpos_copy'], sub_known['copy_row_plot'],
                     s=11, alpha=alpha,
                     c='none' if hollow else cval,
                     edgecolors='black' if not hollow else cval,
@@ -205,13 +209,32 @@ def main():
     ]
     phase_handles = [
         Line2D([], [], marker='o', linestyle='None', color='black', label='Phased', markersize=4),
-        Line2D([], [], marker='o', linestyle='None', markerfacecolor='none', color='black', label='Unphased (duplicated)', markersize=4),
+        Line2D([], [], marker='o', linestyle='None', markerfacecolor='none', color='black', label='Unphased (middle lane)', markersize=4),
     ]
-    leg1 = ax.legend(handles=sig_handles, loc='upper right', ncol=3, frameon=False, title='Signature')
-    ax.add_artist(leg1)
-    leg2 = ax.legend(handles=shape_handles, loc='lower right', frameon=False, title='Database')
-    ax.add_artist(leg2)
-    ax.legend(handles=phase_handles, loc='center right', frameon=False, title='Phasing')
+    leg1 = ax_top.legend(
+        handles=sig_handles,
+        loc='upper left',
+        bbox_to_anchor=(0.0, 1.55),
+        ncol=3,
+        frameon=False,
+        title='Signature'
+    )
+    ax_top.add_artist(leg1)
+    leg2 = ax_top.legend(
+        handles=shape_handles,
+        loc='upper center',
+        bbox_to_anchor=(0.5, 1.55),
+        frameon=False,
+        title='Database'
+    )
+    ax_top.add_artist(leg2)
+    ax_top.legend(
+        handles=phase_handles,
+        loc='upper right',
+        bbox_to_anchor=(1.0, 1.55),
+        frameon=False,
+        title='Phasing'
+    )
 
     # Chromosome tick labels
     xticks = []
@@ -225,7 +248,7 @@ def main():
     ax.set_xticks(xticks)
     ax.set_xticklabels(xlabels, rotation=45, ha='right')
 
-    plt.tight_layout()
+    plt.tight_layout(rect=(0, 0, 1, 0.94))
     out_png = f"{args.out_prefix}.png"
     out_pdf = f"{args.out_prefix}.pdf"
     os.makedirs(os.path.dirname(out_png) or '.', exist_ok=True)
