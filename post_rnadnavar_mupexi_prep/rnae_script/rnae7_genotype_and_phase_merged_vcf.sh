@@ -333,6 +333,19 @@ bcftools +fill-tags "$out_genotyped" -Oz -o "${tmpdir}/genotyped.filled.vcf.gz" 
 mv "${tmpdir}/genotyped.filled.vcf.gz" "$out_genotyped"
 bcftools index -f -t "$out_genotyped"
 
+# Hard gate: every record must have callable genotype in TUMOR before phasing.
+# If not, fail rna7 so the sample is not marked successful.
+missing_tumor_gt=$(
+  bcftools query -s "$tumor_name" -f '[%GT\n]' "$out_genotyped" \
+    | awk '($1=="./." || $1==".|." || $1=="." || $1==""){n++} END{print n+0}'
+)
+if [ "$missing_tumor_gt" -gt 0 ]; then
+  echo "[error] rna7 validation failed: ${missing_tumor_gt} variants have missing TUMOR genotype in ${out_genotyped}" >&2
+  echo "[error] refusing to phase incomplete genotypes; inspect source_set composition/inputs for this sample" >&2
+  exit 12
+fi
+echo "[info] rna7 validation passed: no missing TUMOR genotypes in ${out_genotyped}"
+
 echo "[info] Wrote genotyped: $out_genotyped"
 
 # 3) Read-backed phasing
