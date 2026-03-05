@@ -4,7 +4,6 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import colors as mcolors
 from matplotlib.lines import Line2D
 
 
@@ -59,16 +58,6 @@ def build_chr_order(chrs):
         else:
             order.append((2, 999, c))
     return [x[2] for x in sorted(order)]
-
-
-def adjust_color(base_hex, factor):
-    r, g, b = mcolors.to_rgb(base_hex)
-    if factor >= 1.0:
-        # lighten toward white
-        f = factor - 1.0
-        return (min(1.0, r + (1.0 - r) * f), min(1.0, g + (1.0 - g) * f), min(1.0, b + (1.0 - b) * f))
-    # darken toward black
-    return (max(0.0, r * factor), max(0.0, g * factor), max(0.0, b * factor))
 
 
 def main():
@@ -131,17 +120,15 @@ def main():
                 cid.loc[hit] = str(r['cluster_id'])
             v.loc[mask, 'cluster_id'] = cid
 
-    # Build per-signature shade map across ordered clusters (nearby clusters -> different shades).
-    shade_cycle = [0.72, 0.86, 1.00, 1.14, 1.28]
-    shade_map = {}
+    # Build cluster color map (nearby clusters cycle through distinct colors).
+    cluster_color_map = {}
     if not c.empty:
         c_work = c.copy()
         c_work['gstart'] = c_work.apply(lambda r: offsets.get(r['chrom'], 0) + int(r['start']), axis=1)
-        c_work['sig_major'] = np.where(c_work['adar_count'].fillna(0) >= c_work['apobec_count'].fillna(0), 'ADAR', 'APOBEC3')
-        for sig, g in c_work.groupby('sig_major'):
-            g = g.sort_values(['patient', 'gstart', 'end'])
-            for i, cid in enumerate(g['cluster_id'].astype(str)):
-                shade_map[(sig, cid)] = shade_cycle[i % len(shade_cycle)]
+        c_work = c_work.sort_values(['patient', 'gstart', 'end'])
+        palette = list(plt.get_cmap('tab20').colors) + list(plt.get_cmap('tab20b').colors)
+        for i, cid in enumerate(c_work['cluster_id'].astype(str)):
+            cluster_color_map[cid] = palette[i % len(palette)]
 
     vx = expanded_copy_rows(v)
     vx['patient_idx'] = vx['patient'].map(p_rank)
@@ -153,7 +140,7 @@ def main():
     rng = np.random.default_rng(42)
     vx['copy_row_plot'] = vx['copy_row'] + rng.uniform(-0.08, 0.08, size=len(vx))
 
-    color_map = {'ADAR': '#1f77b4', 'APOBEC3': '#d62728', 'OTHER': '#7f7f7f'}
+    signature_marker = {'ADAR': 's', 'APOBEC3': 'o', 'OTHER': '^'}
 
     fig_h = max(5.5, min(10.5, 4.0 + 0.14 * len(patients)))
     fig, (ax_top, ax) = plt.subplots(2, 1, figsize=(16, fig_h), gridspec_kw={'height_ratios': [1, 3]}, sharex=True)
@@ -169,37 +156,37 @@ def main():
     ax_top.set_ylabel('Mean RNA DP')
     ax_top.set_title('RNA-editing Variant Landscape Across Patients', pad=30)
 
-    # Bottom: points by signature color and known-db shape.
+    # Bottom: signature by shape, cluster by color, known-db by alpha.
     for sig, sub in vx.groupby('signature'):
-        base_c = color_map.get(sig, '#333333')
+        marker = signature_marker.get(sig, 'o')
         phased = sub[sub['is_phased']]
         unphased = sub[~sub['is_phased']]
-        for part, alpha, hollow in ((phased, 0.9, False), (unphased, 0.35, True)):
+        for part, hollow in ((phased, False), (unphased, True)):
             if part.empty:
                 continue
-            # Draw per cluster shade (same signature, different cluster tone).
             for cid, g in part.groupby(part['cluster_id'].fillna('')):
-                if cid and (sig, str(cid)) in shade_map:
-                    cval = adjust_color(base_c, shade_map[(sig, str(cid))])
-                else:
-                    cval = base_c
                 sub_known = g[g['known_db_hit']]
                 sub_novel = g[~g['known_db_hit']]
+                cval = cluster_color_map.get(str(cid), (0.72, 0.72, 0.72))
                 if not sub_novel.empty:
                     ax.scatter(
                         sub_novel['gpos_copy'], sub_novel['copy_row_plot'],
-                        s=8, alpha=alpha,
-                        c='none' if hollow else cval,
-                        edgecolors=cval if hollow else 'none',
-                        marker='o', linewidths=0.5 if hollow else 0.2
+                        s=9,
+                        alpha=0.30,
+                        marker=marker,
+                        facecolors='none' if hollow else cval,
+                        edgecolors=cval if hollow else 'black',
+                        linewidths=0.7 if hollow else 0.25
                     )
                 if not sub_known.empty:
                     ax.scatter(
                         sub_known['gpos_copy'], sub_known['copy_row_plot'],
-                        s=11, alpha=alpha,
-                        c='none' if hollow else cval,
-                        edgecolors='black' if not hollow else cval,
-                        marker='s', linewidths=0.6 if hollow else 0.25
+                        s=9,
+                        alpha=1.0,
+                        marker=marker,
+                        facecolors='none' if hollow else cval,
+                        edgecolors=cval if hollow else 'black',
+                        linewidths=0.7 if hollow else 0.25
                     )
 
     # Draw PS connectors to make haplotype blocks visually explicit.
@@ -248,13 +235,13 @@ def main():
     ax.set_ylabel('Patient / Copy')
     ax.set_xlabel('Genomic Position (chromosome-concatenated)')
     sig_handles = [
-        Line2D([], [], marker='o', linestyle='None', color=color_map['ADAR'], label='ADAR', markersize=5),
-        Line2D([], [], marker='o', linestyle='None', color=color_map['APOBEC3'], label='APOBEC3', markersize=5),
-        Line2D([], [], marker='o', linestyle='None', color=color_map['OTHER'], label='OTHER', markersize=5),
+        Line2D([], [], marker='s', linestyle='None', color='black', label='ADAR', markersize=5),
+        Line2D([], [], marker='o', linestyle='None', color='black', label='APOBEC3', markersize=5),
+        Line2D([], [], marker='^', linestyle='None', color='black', label='OTHER', markersize=5),
     ]
     shape_handles = [
-        Line2D([], [], marker='o', linestyle='None', color='black', label='No KNOWN_RNAEDIT_DB', markersize=4),
-        Line2D([], [], marker='s', linestyle='None', color='black', label='KNOWN_RNAEDIT_DB hit', markersize=5),
+        Line2D([], [], marker='o', linestyle='None', color='black', alpha=1.0, label='KNOWN_RNAEDIT_DB hit', markersize=5),
+        Line2D([], [], marker='o', linestyle='None', color='black', alpha=0.30, label='No KNOWN_RNAEDIT_DB', markersize=5),
     ]
     phase_handles = [
         Line2D([], [], marker='o', linestyle='None', color='black', label='Phased', markersize=4),
