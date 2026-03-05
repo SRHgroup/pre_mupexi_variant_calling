@@ -123,3 +123,34 @@ If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can chec
 - Duplicate submission guard is enabled per step/sample using stored job IDs + `qstat`.
 - `rna7` requires the SM-fixed RNA BAM from `rna7.0` and will fail/skip if that file is missing.
 - Dataset-specific `CONFIG` files should stay outside git-tracked repo content.
+
+## Research Utilities: RNA-Editing Clusters
+
+`research/` contains scripts to find clustered RNA-editing variants from merged+phased VCFs and plot multi-patient landscapes.
+
+Extract from project `CONFIG`:
+
+```bash
+bash research/extract_rna_editing_clusters_from_config.sh \
+  -c /path/to/CONFIG \
+  -o research/output \
+  --max-distance 500 \
+  --min-cluster-size 2
+```
+
+Outputs:
+- `research/output/rna_edit_variants.tsv`
+- `research/output/rna_edit_clusters.tsv`
+
+Plot:
+
+```bash
+python3 research/plot_rna_editing_clusters.py \
+  --variants research/output/rna_edit_variants.tsv \
+  --clusters research/output/rna_edit_clusters.tsv \
+  --out-prefix research/output/rna_edit_cluster_landscape
+```
+
+Outputs:
+- `research/output/rna_edit_cluster_landscape.png`
+- `research/output/rna_edit_cluster_landscape.pdf`
