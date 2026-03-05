@@ -146,7 +146,24 @@ bcftools index -f -t "$normal_vcf"
 
 # Merge back to 3-sample VCF (same positions)
 info_rules="KNOWN_RNAEDIT_DB:join,SOURCE_SET:join,EDIT_SIG:join"
-bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$out_genotyped" "$normal_vcf" "$dna_fix" "$rna_fix"
+genotyped_raw="${tmpdir}/genotyped.raw.vcf.gz"
+genotyped_restored="${tmpdir}/genotyped.restored.vcf.gz"
+bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$genotyped_raw" "$normal_vcf" "$dna_fix" "$rna_fix"
+bcftools index -f -t "$genotyped_raw"
+
+# IMPORTANT:
+# HaplotypeCaller can emit missing GT (./.) for some union alleles. If we keep those,
+# true rna6 tumor calls get wiped. Restore per-sample fields from rna6 merged VCF when
+# HC GT is missing, then refresh AC/AN tags.
+python3 "$(dirname "$0")/rnae7_restore_missing_from_merged.py" \
+  --merged "$merged_vcf" \
+  --genotyped "$genotyped_raw" \
+  --out "$genotyped_restored" \
+  --normal-name "$normal_name" \
+  --dna-name "$dna_name" \
+  --rna-name "$rna_name"
+bcftools index -f -t "$genotyped_restored"
+bcftools +fill-tags "$genotyped_restored" -Oz -o "$out_genotyped" -- -t AN,AC,AF
 bcftools index -f -t "$out_genotyped"
 
 echo "[info] Wrote genotyped: $out_genotyped"
