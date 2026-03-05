@@ -31,7 +31,8 @@ def expanded_copy_rows(df):
                     copies.append(2)
                 if not copies:
                     copies = [1, 2]
-                phased = True if ps not in ('', '.', 'nan', 'None') else False
+                # Phase state comes from GT separator. PS is only for block grouping.
+                phased = True
             else:
                 copies = ['U']
         else:
