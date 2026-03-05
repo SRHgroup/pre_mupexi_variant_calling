@@ -58,39 +58,12 @@ sample_is_requested() {
 precheck_input_vcf() {
   local path="$1"
   local tag="$2"
-  if [ ! -f "$path" ]; then
-    echo "[precheck] ${tag}: missing input VCF (run rna4 first): $path" >&2
-    return 1
-  fi
-  if ! gzip -t "$path" 2>/dev/null; then
-    echo "[precheck] ${tag}: input VCF is not valid gzip: $path" >&2
-    return 1
-  fi
-  if zgrep -m1 '^#CHROM[[:space:]]' "$path" >/dev/null 2>&1; then
-    return 0
-  fi
-  local first_non_meta
-  first_non_meta="$(gzip -dc "$path" 2>/dev/null | awk '
-    BEGIN{found=0}
-    /^##/ {next}
-    {
-      sub(/\r$/,"",$0)
-      sub(/^\xef\xbb\xbf/,"",$0)
-      print
-      found=1
-      exit
-    }
-    END{ if (!found) exit 2 }
-  ' || true)"
-  if [[ "$first_non_meta" =~ ^#CHROM[[:space:]] ]]; then
-    return 0
-  fi
-  if ! zgrep -m1 '^#CHROM' "$path" >/dev/null 2>&1; then
-    echo "[precheck] ${tag}: input VCF header missing #CHROM (corrupt/malformed): $path" >&2
-    return 1
-  fi
-  return 0
+  precheck_vcfgz "$path" "$tag" "run rna4 first"
 }
+
+# Use shared precheck implementation everywhere.
+# shellcheck disable=SC1090
+source "${repo_root}/post_rnadnavar_mupexi_prep/lib/vcf_precheck.sh"
 
 if [ -z "${sample:-}" ]; then
   echo "Running rna5 for all samples in $samples"

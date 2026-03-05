@@ -97,6 +97,10 @@ precheck_vcfgz() {
   fi
 }
 
+# Use shared precheck implementation everywhere.
+# shellcheck disable=SC1090
+source "${repo_root}/post_rnadnavar_mupexi_prep/lib/vcf_precheck.sh"
+
 if [ -z "${sample:-}" ]; then
   echo "Running rna7 for all samples in $samples"
 else
