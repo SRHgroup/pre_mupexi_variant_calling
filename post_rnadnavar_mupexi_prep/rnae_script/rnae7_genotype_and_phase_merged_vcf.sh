@@ -220,6 +220,28 @@ def gt_missing(sample_value, fmt):
     gt = vals[i] if i < len(vals) else "."
     return gt in ("", ".", "./.", ".|.")
 
+def set_gt(sample_value, fmt, gt_value):
+    keys = fmt.split(":")
+    vals = sample_value.split(":") if sample_value else []
+    if len(vals) < len(keys):
+        vals += ["."] * (len(keys) - len(vals))
+    try:
+        i = keys.index("GT")
+    except ValueError:
+        return sample_value
+    vals[i] = gt_value
+    return ":".join(vals[:len(keys)])
+
+def make_homref(fmt):
+    keys = fmt.split(":")
+    vals = ["."] * len(keys)
+    try:
+        i = keys.index("GT")
+    except ValueError:
+        return ":".join(vals)
+    vals[i] = "0/0"
+    return ":".join(vals)
+
 def parse_info(info):
     out = {}
     if info in ("", "."):
@@ -332,8 +354,24 @@ with op(out, "wt") as ofh:
                 tumor_g = dna_m; source_backup += 1
             elif not gt_missing(rna_m, gfmt):
                 tumor_g = rna_m; source_backup += 1
+            elif not gt_missing(norm_g, gfmt):
+                tumor_g = norm_g; source_backup += 1
+            elif not gt_missing(norm_m, gfmt):
+                tumor_g = norm_m; source_backup += 1
             else:
                 tumor_g = "./."
+
+        # Hard safety: never leave TUMOR GT missing.
+        if gt_missing(tumor_g, gfmt):
+            if not gt_missing(norm_g, gfmt):
+                tumor_g = norm_g
+            elif not gt_missing(norm_m, gfmt):
+                tumor_g = norm_m
+            else:
+                tumor_g = make_homref(gfmt)
+        # Normalize missing-style GT to explicit hom-ref where needed.
+        if gt_missing(tumor_g, gfmt):
+            tumor_g = set_gt(tumor_g, gfmt, "0/0")
 
         out_cols = gc[:9] + [norm_g, tumor_g]
         ofh.write("\t".join(out_cols) + "\n")
