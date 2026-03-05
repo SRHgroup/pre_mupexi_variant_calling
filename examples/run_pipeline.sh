@@ -15,7 +15,7 @@ Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
   $0 dna-only [PATIENT] [-f]
-  $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [-f] [--skip-running]
+  $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
@@ -36,6 +36,7 @@ Examples:
   $0 dna-only 01-CH-L
   $0 mupexi 01-CH-L
   $0 mupexi 01-CH-L --run-fusions
+  $0 mupexi Pat11 --hla HLA-A26:01,HLA-A24:02,HLA-B27:02,HLA-B15:09,HLA-C02:02,HLA-C07:04 --expr /path/to/Patient_11.expr.tsv
   $0 all 01-CH-L
   $0 step rna4 01-CH-L -f
   $0 step rna7 01-CH-L --skip-running
@@ -116,14 +117,23 @@ run_mupexi() {
   local sample="${1:-}"
   local outdir="${2:-}"
   local run_fusions="${3:-0}"
+  local hla="${4:-}"
+  local expr="${5:-}"
+  local fusion="${6:-}"
   local fusion_arg=""
+  local hla_arg=""
+  local expr_arg=""
+  local fusion_path_arg=""
   if [ "$run_fusions" = "1" ]; then
     fusion_arg="RUN_FUSIONS=1"
   fi
+  if [ -n "$hla" ]; then hla_arg="HLA=$hla"; fi
+  if [ -n "$expr" ]; then expr_arg="EXPR=$expr"; fi
+  if [ -n "$fusion" ]; then fusion_path_arg="FUSION=$fusion"; fi
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $fusion_arg $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $fusion_arg $hla_arg $expr_arg $fusion_path_arg $force_arg $skip_running_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" OUTDIR="$outdir" $fusion_arg $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" OUTDIR="$outdir" $fusion_arg $hla_arg $expr_arg $fusion_path_arg $force_arg $skip_running_arg
   fi
 }
 
@@ -535,6 +545,9 @@ case "$cmd" in
     sample=""
     outdir=""
     run_fusions="0"
+    hla=""
+    expr=""
+    fusion=""
     if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
       sample="$1"
       shift
@@ -543,10 +556,13 @@ case "$cmd" in
       case "${1:-}" in
         --outdir|-o) outdir="${2:-}"; shift 2 ;;
         --run-fusions) run_fusions="1"; shift ;;
+        --hla) hla="${2:-}"; shift 2 ;;
+        --expr) expr="${2:-}"; shift 2 ;;
+        --fusion) fusion="${2:-}"; shift 2 ;;
         *) echo "Unknown mupexi option: $1" >&2; exit 1 ;;
       esac
     done
-    run_mupexi "$sample" "$outdir" "$run_fusions"
+    run_mupexi "$sample" "$outdir" "$run_fusions" "$hla" "$expr" "$fusion"
     ;;
   all)       run_make run_all "${1:-}" ;;
   research)

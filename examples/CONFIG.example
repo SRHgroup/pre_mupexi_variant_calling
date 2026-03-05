@@ -105,6 +105,7 @@ mupexi2_repo="/home/projects/SRHgroup/apps/mupexi2"
 mupexi_outdir="/path/to/project/mupexi2"
 mupexi_netmhc_config="/home/projects/SRHgroup/apps/netMHCpan/4.0a/config.computerome.ini"
 mupexi_modules="tools ngs anaconda3/2025.06-1 netmhcpan/4.0a perl/5.36.1 ensembl-tools/90"
+fus_dir="${datadir}/arriba"
 
 # Sample names in merged phased VCF
 mupexi_tumor_sample="TUMOR"
@@ -117,18 +118,13 @@ mupexi_enable_germlines="true"
 mupexi_enable_superpeptides="true"
 mupexi_enable_rna_edit="true"
 
-# HLA: either global string for all patients OR per-patient map TSV (patient<TAB>HLA_STRING).
-mupexi_hla="HLA-A02:01,HLA-A03:01,HLA-B07:02,HLA-B08:01,HLA-C07:01,HLA-C07:02"
-# mupexi_hla_map_tsv="/path/to/mupexi_hla_map.tsv"
-
-# Expression input: either template with {patient} OR per-patient map TSV (patient<TAB>expr_path).
-mupexi_expression_tsv_template="/path/to/kallisto/{patient}_expression.tsv"
-# mupexi_expression_map_tsv="/path/to/mupexi_expression_map.tsv"
-
-# Optional fusion input (only used when run_pipeline mupexi --run-fusions is passed):
-# Provide standard arriba TSV (not fusion_discarded).
-mupexi_fusion_arriba_template="/path/to/arriba/{patient}.fusion_arriba.tsv"
-# mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv"
+# Patient-specific HLA / expression / optional fusion are expected to be provided per run,
+# e.g.:
+#   ./run_pipeline.sh mupexi Pat11 --hla "HLA-A26:01,..." --expr /path/to/Patient_11.expr.tsv
+# Optional convenience (cohort mode) if you maintain maps:
+# mupexi_hla_map_tsv="/path/to/mupexi_hla_map.tsv"                     # patient<TAB>HLA_STRING
+# mupexi_expression_map_tsv="/path/to/mupexi_expression_map.tsv"       # patient<TAB>expr_path
+# mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv" # patient<TAB>fusion_arriba_path
 
 # Research plotting/extraction python env used in qsub jobs (pandas/matplotlib).
 research_python_modules="tools ngs anaconda3/2025.06-1"

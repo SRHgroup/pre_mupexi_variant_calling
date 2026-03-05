@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [-f] [--skip-running]
+  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [-f] [--skip-running]
 USAGE
 }
 
@@ -14,6 +14,9 @@ outdir=""
 run_fusions=0
 force=0
 skip_running=0
+cli_hla=""
+cli_expr=""
+cli_fusion=""
 
 while [ $# -gt 0 ]; do
   case "${1:-}" in
@@ -21,6 +24,9 @@ while [ $# -gt 0 ]; do
     -s|--sample) sample="$2"; shift 2 ;;
     -o|--outdir) outdir="$2"; shift 2 ;;
     --run-fusions) run_fusions=1; shift ;;
+    --hla) cli_hla="$2"; shift 2 ;;
+    --expr) cli_expr="$2"; shift 2 ;;
+    --fusion) cli_fusion="$2"; shift 2 ;;
     -f|--force) force=1; shift ;;
     --skip-running) skip_running=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -125,35 +131,51 @@ while IFS= read -r line; do
   fi
 
   expr=""
-  if [ -n "${mupexi_expression_map_tsv:-}" ]; then
+  if [ -n "$sample" ] && [ -n "$cli_expr" ]; then
+    expr="$cli_expr"
+  elif [ -n "${mupexi_expression_map_tsv:-}" ]; then
     expr="$(lookup_map_value "$mupexi_expression_map_tsv" "$patient" || true)"
   elif [ -n "${mupexi_expression_tsv_template:-}" ]; then
     expr="$(resolve_patient_placeholder "$mupexi_expression_tsv_template" "$patient")"
   fi
   if [ -z "$expr" ] || [ ! -f "$expr" ]; then
-    echo "[skip] ${patient}: missing expression file (set mupexi_expression_tsv_template or mupexi_expression_map_tsv)"
+    echo "[skip] ${patient}: missing expression file (pass --expr for single sample, or set mupexi_expression_* in CONFIG)"
     continue
   fi
 
   hla=""
-  if [ -n "${mupexi_hla_map_tsv:-}" ]; then
+  if [ -n "$sample" ] && [ -n "$cli_hla" ]; then
+    hla="$cli_hla"
+  elif [ -n "${mupexi_hla_map_tsv:-}" ]; then
     hla="$(lookup_map_value "$mupexi_hla_map_tsv" "$patient" || true)"
-  fi
-  if [ -z "$hla" ]; then
+  elif [ -n "${mupexi_hla:-}" ]; then
     hla="${mupexi_hla:-}"
   fi
   if [ -z "$hla" ]; then
-    echo "[skip] ${patient}: missing HLA string (set mupexi_hla or mupexi_hla_map_tsv)"
+    echo "[skip] ${patient}: missing HLA string (pass --hla for single sample, or set mupexi_hla(_map_tsv) in CONFIG)"
     continue
   fi
 
   fusion_arg=""
   if [ "$run_fusions" = "1" ]; then
     fusion_path=""
-    if [ -n "${mupexi_fusion_arriba_map_tsv:-}" ]; then
+    if [ -n "$sample" ] && [ -n "$cli_fusion" ]; then
+      fusion_path="$cli_fusion"
+    elif [ -n "${mupexi_fusion_arriba_map_tsv:-}" ]; then
       fusion_path="$(lookup_map_value "$mupexi_fusion_arriba_map_tsv" "$patient" || true)"
     elif [ -n "${mupexi_fusion_arriba_template:-}" ]; then
       fusion_path="$(resolve_patient_placeholder "$mupexi_fusion_arriba_template" "$patient")"
+    elif [ -n "${fus_dir:-}" ]; then
+      for p in \
+        "${fus_dir}/${patient}.fusion_arriba.tsv" \
+        "${fus_dir}/${patient}_fusion_arriba.tsv" \
+        "${fus_dir}/${patient}/fusion_arriba.tsv" \
+        "${fus_dir}/${patient}/${patient}.fusion_arriba.tsv"; do
+        if [ -f "$p" ]; then
+          fusion_path="$p"
+          break
+        fi
+      done
     fi
     if [ -n "$fusion_path" ] && [ -f "$fusion_path" ]; then
       fusion_arg="--fusion ${fusion_path}"
