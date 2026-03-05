@@ -127,12 +127,27 @@ run_hc_genotyper() {
   local dna_raw="${tmpdir}/dna.raw.vcf.gz"
   local rna_raw="${tmpdir}/rna.raw.vcf.gz"
   echo "[info] Genotyping union alleles in ${dna_name} BAM..."
-  hc_genotype_union "$dna_bam" "$dna_raw"
+  if ! hc_genotype_union "$dna_bam" "$dna_raw"; then
+    echo "[warn] HaplotypeCaller failed for DNA BAM: ${dna_bam}" >&2
+    return 1
+  fi
   bcftools index -f -t "$dna_raw" >/dev/null 2>&1 || true
 
   echo "[info] Genotyping union alleles in ${rna_name} BAM..."
-  hc_genotype_union "$rna_bam" "$rna_raw"
+  if ! hc_genotype_union "$rna_bam" "$rna_raw"; then
+    echo "[warn] HaplotypeCaller failed for RNA BAM: ${rna_bam}" >&2
+    return 1
+  fi
   bcftools index -f -t "$rna_raw" >/dev/null 2>&1 || true
+
+  if ! bcftools view -h "$dna_raw" | grep -q '^#CHROM'; then
+    echo "[warn] Invalid HC DNA output header: ${dna_raw}" >&2
+    return 1
+  fi
+  if ! bcftools view -h "$rna_raw" | grep -q '^#CHROM'; then
+    echo "[warn] Invalid HC RNA output header: ${rna_raw}" >&2
+    return 1
+  fi
 
   # Force sample names (in case BAM SM is different)
   local dna_fix="${tmpdir}/${dna_name}.vcf.gz"
