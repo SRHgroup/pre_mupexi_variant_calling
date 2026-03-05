@@ -16,3 +16,7 @@ modules_gdna_hc="tools ngs ${module_java} ${module_gatk}"
 modules_gdna_post="tools ngs ${module_anaconda}"
 modules_dna_only_merge="ngs tools ${module_htslib} ${module_bcftools} ${module_anaconda}"
 modules_dna_only_phase="ngs tools ${module_htslib} ${module_bcftools} ${module_java} ${module_gatk} ${module_anaconda}"
+
+# Research/auxiliary jobs
+research_python_modules="tools ngs ${module_anaconda}"
+mupexi_modules="tools ngs ${module_anaconda} netmhcpan/4.0a perl/5.36.1 ensembl-tools/90"

@@ -104,7 +104,6 @@ dna_only_phased_vcf_extension="dna_only7.DNAt_DNAn_merged_phased.vcf.gz"
 mupexi2_repo="/home/projects/SRHgroup/apps/mupexi2"
 mupexi_outdir="/path/to/project/mupexi2"
 mupexi_netmhc_config="/home/projects/SRHgroup/apps/netMHCpan/4.0a/config.computerome.ini"
-mupexi_modules="tools ngs anaconda3/2025.06-1 netmhcpan/4.0a perl/5.36.1 ensembl-tools/90"
 fus_dir="${datadir}/arriba"
 
 # Sample names in merged phased VCF
@@ -126,5 +125,4 @@ mupexi_enable_rna_edit="true"
 # mupexi_expression_map_tsv="/path/to/mupexi_expression_map.tsv"       # patient<TAB>expr_path
 # mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv" # patient<TAB>fusion_arriba_path
 
-# Research plotting/extraction python env used in qsub jobs (pandas/matplotlib).
-research_python_modules="tools ngs anaconda3/2025.06-1"
+# Module stacks for research/MuPeXI jobs are defined in pipeline_defaults/toolchain.defaults.sh.
