@@ -7,6 +7,7 @@ fi
 module load ${modules_dna_only_phase:-ngs tools htslib/1.23 bcftools/1.23 gatk/4.5.0.0 anaconda3/2025.06-1}
 
 threads=8
+hc_assembly_region_padding="${HC_ASSEMBLY_REGION_PADDING:-150}"
 merged_vcf=""
 dna_bam=""
 fasta=""
@@ -98,12 +99,10 @@ union_sites_vcf="${tmpdir}/union.sites.vcf.gz"
 bcftools view -G -Oz -o "$union_sites_vcf" "$merged_vcf"
 bcftools index -f -t "$union_sites_vcf"
 
-intervals_bed="${tmpdir}/union.sites.bed"
-bcftools query -f '%CHROM\t%POS\n' "$union_sites_vcf" | awk 'BEGIN{OFS="\t"}{print $1,$2-1,$2}' > "$intervals_bed"
-
 dna_raw="${tmpdir}/dna.raw.vcf.gz"
 gatk --java-options "-Xmx16g" HaplotypeCaller \
-  -R "$fasta" -I "$dna_bam" -L "$intervals_bed" \
+  -R "$fasta" -I "$dna_bam" -L "$union_sites_vcf" \
+  --assembly-region-padding "$hc_assembly_region_padding" \
   --alleles "$union_sites_vcf" \
   --output-mode EMIT_ALL_ACTIVE_SITES \
   --disable-tool-default-annotations \

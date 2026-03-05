@@ -5,6 +5,7 @@ set -euo pipefail
 # Sample-name aware (supports TUMOR/TUMOUR and configurable output names).
 
 threads=8
+hc_assembly_region_padding="${HC_ASSEMBLY_REGION_PADDING:-150}"
 merged_vcf=""
 dna_bam=""
 rna_bam=""
@@ -107,16 +108,12 @@ union_sites_vcf="${tmpdir}/union.sites.vcf.gz"
 bcftools view -G -Oz -o "$union_sites_vcf" "$merged_vcf"
 bcftools index -f -t "$union_sites_vcf"
 
-# BED of positions from merged VCF to force GATK evaluation exactly at these loci
-intervals_bed="${tmpdir}/union.sites.bed"
-bcftools query -f '%CHROM\t%POS\n' "$union_sites_vcf" | awk 'BEGIN{OFS="\t"}{print $1,$2-1,$2}' > "$intervals_bed"
-
 # 2) Genotype those same alleles in each BAM
 hc_genotype_union () {
   local bam="$1"
   local out="$2"
 
-  gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$intervals_bed" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --disable-tool-default-annotations --annotations-to-exclude TandemRepeat --active-probability-threshold 0.0 --native-pair-hmm-threads "$threads" -O "$out"
+  gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$union_sites_vcf" --assembly-region-padding "$hc_assembly_region_padding" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --disable-tool-default-annotations --annotations-to-exclude TandemRepeat --active-probability-threshold 0.0 --native-pair-hmm-threads "$threads" -O "$out"
 }
 
 dna_raw="${tmpdir}/dna.raw.vcf.gz"
