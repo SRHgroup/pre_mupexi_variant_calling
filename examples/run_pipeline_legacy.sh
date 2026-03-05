@@ -20,10 +20,10 @@ Usage:
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
-  $0 step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
+  $0 step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|4.8|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT]
-  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
+  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|4.8|2.0|2.0.1|2.0.2|3.0> [PATIENT]
+  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|4.8|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
   (append --skip-running to submit commands to avoid re-submitting active jobs)
@@ -181,6 +181,7 @@ legacy_step_expected_output() {
     4.6) printf '%s\n' "${outdir}/${patient}_${merged_vcf_extension}" ;;
     4.7.0) printf '%s\n' "${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna_bam_smfixed_suffix}" ;;
     4.7) printf '%s\n' "${outdir}/${patient}_${phased_vcf_extension}" ;;
+    4.8) printf '%s\n' "${outdir}/${patient}_${rna8_reshaped_vcf_extension:-rna8.DNAt_DNAn_RNAt_merged_phased.reshaped.vcf.gz}" ;;
     *) return 1 ;;
   esac
 }
@@ -322,6 +323,14 @@ legacy_step_input_status() {
         printf 'NO_INPUT\tBAM:%s\n' "$in_47_2"
       fi
       ;;
+    4.8)
+      local in_48="${outdir}/${patient}_${phased_vcf_extension}"
+      if [ -f "$in_48" ] && [ -s "$in_48" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_48"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_48"
+      fi
+      ;;
     *)
       printf 'NO_INPUT\tunknown-step\n'
       ;;
@@ -338,6 +347,7 @@ legacy_step_prefix() {
     4.6) printf '%s\n' "4.6_MergeDnaRnaVcfs" ;;
     4.7.0) printf '%s\n' "4.7.0_FixRnaBamReadGroups" ;;
     4.7) printf '%s\n' "4.7.1_GenotypeAndPhaseMergedVcf" ;;
+    4.8) printf '%s\n' "rna8_ReshapeVcf" ;;
     2.0) printf '%s\n' "2.0_HaplotypeCaller" ;;
     2.0.1) printf '%s\n' "2.0.1_FilterGermline" ;;
     2.0.2) printf '%s\n' "2.0.2_SelectVariants" ;;
@@ -350,7 +360,7 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|4.8|2.0|2.0.1|2.0.2|3.0) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
@@ -408,7 +418,7 @@ watch_step_outputs() {
   local selected="${2:-}"
   local interval="${3:-5}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|4.8|2.0|2.0.1|2.0.2|3.0) ;;
     *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
   esac
   [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
@@ -578,7 +588,7 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     case "$step_name" in
-      4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0)
+      4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|4.8|2.0|2.0.1|2.0.2|3.0)
         run_make "run${step_name}" "$sample"
         ;;
       *)

@@ -76,7 +76,8 @@ for step in \
   rna5_FilterByAfDpAr.sh \
   rna6_MergeDnaRnaVcfs.sh \
   rna7.0_FixRnaBamReadGroups.sh \
-  rna7_GenotypeAndPhaseMergedVcf.sh
+  rna7_GenotypeAndPhaseMergedVcf.sh \
+  rna8_ReshapeVcf.sh
   do
   run_step_collect "$step"
   done

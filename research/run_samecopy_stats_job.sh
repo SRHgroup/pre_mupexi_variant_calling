@@ -60,8 +60,8 @@ out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 germline_ext="${samecopy_germline_vcf_extension:-${ndna_vcf:-${gdna4_vcf_extension:-${gdna3_vcf_extension:-${output_extension_30:-${output_extension_202:-2.0.2.Filtered.Selected.HaplotypeCaller.vcf}}}}}}"
 src_dna_ext="${source_dna_mutect2_vcf_extension:-${out_dna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
 src_rna_ext="${source_rna_mutect2_vcf_extension:-${out_rna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
-merged_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-4.7_DNAt_DNAn_RNAt_merged_phased.vcf.gz}}"
-tumor_col_label="${out_dna_label:-TUMOR}"
+merged_ext="${rna8_reshaped_vcf_extension:-${rna7_phased_vcf_extension:-${phased_vcf_extension:-4.7_DNAt_DNAn_RNAt_merged_phased.vcf.gz}}}"
+tumor_col_label="${rna8_tumor_output_label:-${rna7_signal_sample_label:-TUMOR}}"
 
 sanitize_mutect2_suffix() {
   local s="$1"

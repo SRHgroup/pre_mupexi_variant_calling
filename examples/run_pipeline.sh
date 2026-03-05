@@ -19,10 +19,10 @@ Usage:
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
-  $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
+  $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|rna8|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
-  $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
+  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|rna8|gdna1|gdna2|gdna3|gdna4> [PATIENT]
+  $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|rna8|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
   (append --skip-running to submit commands to avoid re-submitting active jobs)
@@ -42,6 +42,7 @@ Examples:
   $0 step rna7 01-CH-L --skip-running
   $0 step rna7.0 01-CH-L -f
   $0 step rna7 01-CH-L -f
+  $0 step rna8 01-CH-L -f
   $0 step gdna2 01-CH-L
   $0 research rna-clusters --outdir /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/editing_clusters33
   $0 research rna-clusters Pat96 --max-distance 33 --min-alt-count 10
@@ -207,6 +208,7 @@ step_expected_output() {
       printf '%s\n' "${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna7_smfixed_bam_suffix}"
       ;;
     rna7) printf '%s\n' "${outdir}/${patient}_${rna7_phased_vcf_extension}" ;;
+    rna8) printf '%s\n' "${outdir}/${patient}_${rna8_reshaped_vcf_extension:-rna8.DNAt_DNAn_RNAt_merged_phased.reshaped.vcf.gz}" ;;
     *) return 1 ;;
   esac
 }
@@ -348,6 +350,14 @@ step_input_status() {
         printf 'NO_INPUT\tBAM:%s\n' "$in_rna7_2"
       fi
       ;;
+    rna8)
+      local in_rna8="${outdir}/${patient}_${rna7_phased_vcf_extension}"
+      if [ -f "$in_rna8" ] && [ -s "$in_rna8" ]; then
+        printf 'INPUT_OK\t%s\n' "$in_rna8"
+      else
+        printf 'NO_INPUT\t%s\n' "$in_rna8"
+      fi
+      ;;
     *)
       printf 'NO_INPUT\tunknown-step\n'
       ;;
@@ -364,6 +374,7 @@ step_prefix() {
     rna6) printf '%s\n' "rna6_MergeDnaRnaVcfs" ;;
     rna7.0) printf '%s\n' "rna7.0_FixRnaBamReadGroups" ;;
     rna7) printf '%s\n' "rna7_GenotypeAndPhaseMergedVcf" ;;
+    rna8) printf '%s\n' "rna8_ReshapeVcf" ;;
     gdna1) printf '%s\n' "gdna1_HaplotypeCaller" ;;
     gdna2) printf '%s\n' "gdna2_FilterGermline" ;;
     gdna3) printf '%s\n' "gdna3_SelectVariants" ;;
@@ -389,7 +400,7 @@ watch_step_outputs() {
   local selected="${2:-}"
   local interval="${3:-5}"
   case "$step" in
-    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|rna8|gdna1|gdna2|gdna3|gdna4) ;;
     *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
   esac
   [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
@@ -483,7 +494,7 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|rna8|gdna1|gdna2|gdna3|gdna4) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
@@ -617,7 +628,7 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     case "$step_name" in
-      rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4)
+      rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|rna8|gdna1|gdna2|gdna3|gdna4)
         run_make "run${step_name}" "$sample"
         ;;
       *)

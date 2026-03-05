@@ -55,17 +55,17 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
-tumor_sample_name="${mupexi_tumor_sample:-TUMOR}"
+tumor_sample_name="${mupexi_tumor_sample:-${rna8_tumor_output_label:-TUMOR}}"
 normal_sample_name="${mupexi_normal_sample:-DNA_NORMAL}"
 peptide_lengths="${mupexi_peptide_lengths:-9-11}"
 parallel_k="${mupexi_parallel_k:-true}"
 enable_germlines="${mupexi_enable_germlines:-true}"
 enable_superpeptides="${mupexi_enable_superpeptides:-true}"
 enable_rna_edit="${mupexi_enable_rna_edit:-true}"
-phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}"
+phased_ext="${rna8_reshaped_vcf_extension:-${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}}"
 hld_ext="${mupexi_hla_extension:-${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}}"
 hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
-[ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
+[ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna8_reshaped_vcf_extension/rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
 
 resolve_patient_placeholder() {
   local template="$1"

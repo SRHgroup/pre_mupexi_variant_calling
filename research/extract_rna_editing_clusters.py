@@ -72,6 +72,13 @@ def parse_format_value(fmt_keys, sample_value, key):
     return v
 
 
+def gt_is_missing(gt):
+    if gt is None:
+        return True
+    g = str(gt).strip()
+    return g in ("", ".", "./.", ".|.")
+
+
 def parse_numeric(x):
     if x is None:
         return None
@@ -258,6 +265,8 @@ def main():
             header_samples = None
             sig_col_idx = None
             sig_sample_name = None
+            fallback_col_idx = None
+            fallback_sample_name = None
             for line in fh:
                 if line.startswith('##'):
                     continue
@@ -274,6 +283,12 @@ def main():
                         print(f'[warn] no signal sample detected for {patient} in {vcf}')
                         break
                     sig_col_idx = 9 + header_samples.index(sig_sample_name)
+                    # Secondary candidate used when primary sample GT is missing (common in merged VCFs).
+                    fallback_sample_name = detect_label_sample(header_samples, '', args.tumor_label)
+                    if fallback_sample_name is None:
+                        fallback_sample_name = detect_non_normal_sample(header_samples, args.normal_label)
+                    if fallback_sample_name and fallback_sample_name != sig_sample_name:
+                        fallback_col_idx = 9 + header_samples.index(fallback_sample_name)
                     continue
                 if header_samples is None or sig_col_idx is None:
                     continue
@@ -292,7 +307,16 @@ def main():
 
                 fmt_keys = f[8].split(':')
                 sig_sv = f[sig_col_idx]
+                current_sample_name = sig_sample_name
                 gt = parse_format_value(fmt_keys, sig_sv, 'GT') or ''
+                # Per-record fallback: if primary sample is missing GT, use fallback tumor/non-normal sample.
+                if gt_is_missing(gt) and fallback_col_idx is not None:
+                    fb_sv = f[fallback_col_idx]
+                    fb_gt = parse_format_value(fmt_keys, fb_sv, 'GT') or ''
+                    if not gt_is_missing(fb_gt):
+                        sig_sv = fb_sv
+                        gt = fb_gt
+                        current_sample_name = fallback_sample_name
                 ad = parse_format_value(fmt_keys, sig_sv, 'AD') or ''
                 fad = parse_format_value(fmt_keys, sig_sv, 'FAD') or ''
                 af = parse_numeric(parse_format_value(fmt_keys, sig_sv, 'AF'))
@@ -317,7 +341,7 @@ def main():
                     'ref': ref,
                     'alt': alt,
                     'signature': infer_signature(info_map),
-                    'rna_sample': sig_sample_name,
+                    'rna_sample': current_sample_name,
                     'rna_gt': gt,
                     'rna_ad': ad,
                     'rna_alt_count': '' if alt_count is None else round(alt_count, 3),

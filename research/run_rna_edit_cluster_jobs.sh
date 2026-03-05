@@ -52,7 +52,8 @@ research_python_modules="${research_python_modules:-tools ngs anaconda3/2025.06-
 
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
-phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-rna7.DNAt_DNAn_RNAt_merged_phased.vcf.gz}}"
+phased_ext="${rna8_reshaped_vcf_extension:-${rna7_phased_vcf_extension:-${phased_vcf_extension:-rna7.DNAt_DNAn_RNAt_merged_phased.vcf.gz}}}"
+signal_sample_label="${rna8_tumor_output_label:-${rna7_signal_sample_label:-TUMOR}}"
 
 logroot="${outdir}/rna_edit_cluster_jobs.logs_and_reports"
 logdir="${logroot}/logs"
@@ -159,7 +160,8 @@ python3 "${repo_dir}/research/extract_rna_editing_clusters.py" \\
   --max-distance "${max_distance}" \\
   --min-cluster-size "${min_cluster_size}" \\
   --min-alt-count "${min_alt_count}" \\
-  --rna-label "${rna_tumor_label:-RNA_TUMOR}" \\
+  --rna-sample "${signal_sample_label}" \\
+  --tumor-label "${signal_sample_label}" \\
   --tumor-label "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}" \\
   --normal-label "${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 
