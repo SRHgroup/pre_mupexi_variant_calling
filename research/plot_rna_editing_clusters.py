@@ -13,6 +13,33 @@ def is_canonical(chrom):
     return s.isdigit() and 1 <= int(s) <= 22
 
 
+def expanded_copy_rows(df):
+    rows = []
+    for _, r in df.iterrows():
+        gt = str(r.get('rna_gt', ''))
+        copies = []
+        if '|' in gt:
+            parts = gt.split('|')
+            if len(parts) >= 2:
+                # Alt on copy i if allele is non-reference and not missing.
+                if parts[0] not in ('0', '.', ''):
+                    copies.append(1)
+                if parts[1] not in ('0', '.', ''):
+                    copies.append(2)
+                if not copies:
+                    copies = [1, 2]
+            else:
+                copies = [1, 2]
+        else:
+            # Unphased or missing genotype: show in both copies.
+            copies = [1, 2]
+        for cp in copies:
+            rr = r.copy()
+            rr['copy'] = cp
+            rows.append(rr)
+    return pd.DataFrame(rows)
+
+
 def build_chr_order(chrs):
     order = []
     for c in chrs:
@@ -67,8 +94,12 @@ def main():
         bounds.append((ch, start, cur))
 
     v['gpos'] = v.apply(lambda r: offsets.get(r['chrom'], 0) + r['pos'], axis=1)
-    v['patient_idx'] = v['patient'].map(p_rank)
     v['known_db_hit'] = v['known_db'].fillna('').astype(str).map(lambda x: x not in ('', '.'))
+    vx = expanded_copy_rows(v)
+    vx['patient_idx'] = vx['patient'].map(p_rank)
+    vx['copy_row'] = vx['patient_idx'] * 2 + vx['copy'].map({1: 0, 2: 1})
+    copy_x_offset = 250000
+    vx['gpos_copy'] = vx['gpos'] + vx['copy'].map({1: -copy_x_offset, 2: copy_x_offset})
 
     color_map = {'ADAR': '#1f77b4', 'APOBEC3': '#d62728', 'OTHER': '#7f7f7f'}
 
@@ -87,14 +118,14 @@ def main():
     ax_top.set_title('RNA-editing Variant Landscape Across Patients')
 
     # Bottom: points by signature color and known-db shape.
-    for sig, sub in v.groupby('signature'):
+    for sig, sub in vx.groupby('signature'):
         cval = color_map.get(sig, '#333333')
         sub_known = sub[sub['known_db_hit']]
         sub_novel = sub[~sub['known_db_hit']]
         if not sub_novel.empty:
-            ax.scatter(sub_novel['gpos'], sub_novel['patient_idx'], s=10, alpha=0.85, c=cval, marker='o')
+            ax.scatter(sub_novel['gpos_copy'], sub_novel['copy_row'], s=9, alpha=0.85, c=cval, marker='o')
         if not sub_known.empty:
-            ax.scatter(sub_known['gpos'], sub_known['patient_idx'], s=14, alpha=0.9, c=cval, marker='s', edgecolors='black', linewidths=0.2)
+            ax.scatter(sub_known['gpos_copy'], sub_known['copy_row'], s=12, alpha=0.9, c=cval, marker='s', edgecolors='black', linewidths=0.2)
 
     # Highlight top clusters by size.
     if not c.empty:
@@ -102,10 +133,13 @@ def main():
         for _, r in c2.iterrows():
             x0 = offsets.get(r['chrom'], 0) + int(r['start'])
             x1 = offsets.get(r['chrom'], 0) + int(r['end'])
-            y = p_rank.get(r['patient'], None)
-            if y is None:
+            pidx = p_rank.get(r['patient'], None)
+            if pidx is None:
                 continue
-            ax.plot([x0, x1], [y, y], color='black', linewidth=2, alpha=0.45)
+            y1 = pidx * 2
+            y2 = pidx * 2 + 1
+            ax.plot([x0 - copy_x_offset, x1 - copy_x_offset], [y1, y1], color='black', linewidth=1.8, alpha=0.35)
+            ax.plot([x0 + copy_x_offset, x1 + copy_x_offset], [y2, y2], color='black', linewidth=1.8, alpha=0.35)
 
     # Visual chromosome separation.
     for i, (_, start, end) in enumerate(bounds):
@@ -116,10 +150,15 @@ def main():
             ax.axvline(start, color='black', alpha=0.18, linewidth=0.8)
             ax_top.axvline(start, color='black', alpha=0.18, linewidth=0.8)
 
-    ax.set_yticks(range(len(patients)))
-    ax.set_yticklabels(patients)
-    ax.set_ylim(-0.5, max(0.5, len(patients) - 0.5))
-    ax.set_ylabel('Patient')
+    yticks = []
+    ylabels = []
+    for i, p in enumerate(patients):
+        yticks.extend([i * 2, i * 2 + 1])
+        ylabels.extend([f'{p} copy1', f'{p} copy2'])
+    ax.set_yticks(yticks)
+    ax.set_yticklabels(ylabels, fontsize=8)
+    ax.set_ylim(-0.7, max(1.3, len(yticks) - 0.3))
+    ax.set_ylabel('Patient / Copy')
     ax.set_xlabel('Genomic Position (chromosome-concatenated)')
     sig_handles = [
         Line2D([], [], marker='o', linestyle='None', color=color_map['ADAR'], label='ADAR', markersize=5),
