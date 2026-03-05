@@ -60,6 +60,19 @@ def build_chr_order(chrs):
     return [x[2] for x in sorted(order)]
 
 
+def write_empty_plot(out_prefix, reason):
+    fig, ax = plt.subplots(1, 1, figsize=(12, 3))
+    ax.axis('off')
+    ax.text(0.5, 0.5, f'No variants to plot\n{reason}', ha='center', va='center', fontsize=12)
+    out_png = f"{out_prefix}.png"
+    out_pdf = f"{out_prefix}.pdf"
+    os.makedirs(os.path.dirname(out_png) or '.', exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=180)
+    plt.savefig(out_pdf)
+    print(f"[warn] empty plot written: {out_png}, {out_pdf} ({reason}; check extract filters like --min-alt-count)")
+
+
 def main():
     ap = argparse.ArgumentParser(description='Plot multi-patient RNA-editing clusters.')
     ap.add_argument('--variants', required=True)
@@ -72,13 +85,15 @@ def main():
     v = pd.read_csv(args.variants, sep='\t')
     c = pd.read_csv(args.clusters, sep='\t')
     if v.empty:
-        raise SystemExit('No variants to plot.')
+        write_empty_plot(args.out_prefix, 'variants TSV has no rows')
+        return
 
     if args.canonical_only:
         v = v[v['chrom'].map(is_canonical)].copy()
         c = c[c['chrom'].map(is_canonical)].copy()
         if v.empty:
-            raise SystemExit('No canonical-chromosome variants to plot.')
+            write_empty_plot(args.out_prefix, 'no canonical-chromosome variants')
+            return
 
     v['pos'] = pd.to_numeric(v['pos'])
     v['rna_dp'] = pd.to_numeric(v['rna_dp'], errors='coerce')
