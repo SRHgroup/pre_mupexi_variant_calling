@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import colors as mcolors
 from matplotlib.lines import Line2D
 
 
@@ -60,6 +61,16 @@ def build_chr_order(chrs):
     return [x[2] for x in sorted(order)]
 
 
+def adjust_color(base_hex, factor):
+    r, g, b = mcolors.to_rgb(base_hex)
+    if factor >= 1.0:
+        # lighten toward white
+        f = factor - 1.0
+        return (min(1.0, r + (1.0 - r) * f), min(1.0, g + (1.0 - g) * f), min(1.0, b + (1.0 - b) * f))
+    # darken toward black
+    return (max(0.0, r * factor), max(0.0, g * factor), max(0.0, b * factor))
+
+
 def main():
     ap = argparse.ArgumentParser(description='Plot multi-patient RNA-editing clusters.')
     ap.add_argument('--variants', required=True)
@@ -100,6 +111,38 @@ def main():
 
     v['gpos'] = v.apply(lambda r: offsets.get(r['chrom'], 0) + r['pos'], axis=1)
     v['known_db_hit'] = v['known_db'].fillna('').astype(str).map(lambda x: x not in ('', '.'))
+
+    # Map each variant to a cluster_id by interval overlap (patient/chrom/start-end).
+    v['cluster_id'] = ''
+    if not c.empty:
+        c_idx = c[['cluster_id', 'patient', 'chrom', 'start', 'end']].copy()
+        c_idx['start'] = pd.to_numeric(c_idx['start'], errors='coerce')
+        c_idx['end'] = pd.to_numeric(c_idx['end'], errors='coerce')
+        c_idx = c_idx.dropna(subset=['start', 'end'])
+        for (pt, ch), g in c_idx.groupby(['patient', 'chrom']):
+            mask = (v['patient'] == pt) & (v['chrom'] == ch)
+            if not mask.any():
+                continue
+            iv = g.sort_values(['start', 'end'])
+            pos = v.loc[mask, 'pos']
+            cid = pd.Series('', index=pos.index, dtype=object)
+            for _, r in iv.iterrows():
+                hit = (pos >= int(r['start'])) & (pos <= int(r['end'])) & (cid == '')
+                cid.loc[hit] = str(r['cluster_id'])
+            v.loc[mask, 'cluster_id'] = cid
+
+    # Build per-signature shade map across ordered clusters (nearby clusters -> different shades).
+    shade_cycle = [0.72, 0.86, 1.00, 1.14, 1.28]
+    shade_map = {}
+    if not c.empty:
+        c_work = c.copy()
+        c_work['gstart'] = c_work.apply(lambda r: offsets.get(r['chrom'], 0) + int(r['start']), axis=1)
+        c_work['sig_major'] = np.where(c_work['adar_count'].fillna(0) >= c_work['apobec_count'].fillna(0), 'ADAR', 'APOBEC3')
+        for sig, g in c_work.groupby('sig_major'):
+            g = g.sort_values(['patient', 'gstart', 'end'])
+            for i, cid in enumerate(g['cluster_id'].astype(str)):
+                shade_map[(sig, cid)] = shade_cycle[i % len(shade_cycle)]
+
     vx = expanded_copy_rows(v)
     vx['patient_idx'] = vx['patient'].map(p_rank)
     copy_track_gap = 3
@@ -128,30 +171,36 @@ def main():
 
     # Bottom: points by signature color and known-db shape.
     for sig, sub in vx.groupby('signature'):
-        cval = color_map.get(sig, '#333333')
+        base_c = color_map.get(sig, '#333333')
         phased = sub[sub['is_phased']]
         unphased = sub[~sub['is_phased']]
         for part, alpha, hollow in ((phased, 0.9, False), (unphased, 0.35, True)):
             if part.empty:
                 continue
-            sub_known = part[part['known_db_hit']]
-            sub_novel = part[~part['known_db_hit']]
-            if not sub_novel.empty:
-                ax.scatter(
-                    sub_novel['gpos_copy'], sub_novel['copy_row_plot'],
-                    s=8, alpha=alpha,
-                    c='none' if hollow else cval,
-                    edgecolors=cval if hollow else 'none',
-                    marker='o', linewidths=0.5 if hollow else 0.2
-                )
-            if not sub_known.empty:
-                ax.scatter(
-                    sub_known['gpos_copy'], sub_known['copy_row_plot'],
-                    s=11, alpha=alpha,
-                    c='none' if hollow else cval,
-                    edgecolors='black' if not hollow else cval,
-                    marker='s', linewidths=0.6 if hollow else 0.25
-                )
+            # Draw per cluster shade (same signature, different cluster tone).
+            for cid, g in part.groupby(part['cluster_id'].fillna('')):
+                if cid and (sig, str(cid)) in shade_map:
+                    cval = adjust_color(base_c, shade_map[(sig, str(cid))])
+                else:
+                    cval = base_c
+                sub_known = g[g['known_db_hit']]
+                sub_novel = g[~g['known_db_hit']]
+                if not sub_novel.empty:
+                    ax.scatter(
+                        sub_novel['gpos_copy'], sub_novel['copy_row_plot'],
+                        s=8, alpha=alpha,
+                        c='none' if hollow else cval,
+                        edgecolors=cval if hollow else 'none',
+                        marker='o', linewidths=0.5 if hollow else 0.2
+                    )
+                if not sub_known.empty:
+                    ax.scatter(
+                        sub_known['gpos_copy'], sub_known['copy_row_plot'],
+                        s=11, alpha=alpha,
+                        c='none' if hollow else cval,
+                        edgecolors='black' if not hollow else cval,
+                        marker='s', linewidths=0.6 if hollow else 0.25
+                    )
 
     # Draw PS connectors to make haplotype blocks visually explicit.
     psub = vx[(vx['is_phased']) & (vx['ps'].notna()) & (vx['ps'].astype(str) != '') & (vx['ps'].astype(str) != '.')]
