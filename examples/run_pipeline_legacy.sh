@@ -32,15 +32,16 @@ fi
 
 force=0
 skip_running=0
-if [[ " ${*:-} " == *" -f "* ]] || [[ " ${*:-} " == *" --force "* ]]; then
-  force=1
-  set -- "${@/-f/}"
-  set -- "${@/--force/}"
-fi
-if [[ " ${*:-} " == *" --skip-running "* ]]; then
-  skip_running=1
-  set -- "${@/--skip-running/}"
-fi
+filtered_args=()
+while [ $# -gt 0 ]; do
+  case "${1:-}" in
+    -f|--force) force=1 ;;
+    --skip-running) skip_running=1 ;;
+    *) filtered_args+=("$1") ;;
+  esac
+  shift
+done
+set -- "${filtered_args[@]}"
 force_arg=""
 if [ "$force" -eq 1 ]; then
   force_arg="FORCE=1"
