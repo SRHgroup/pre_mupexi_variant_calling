@@ -1,9 +1,10 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# Legacy wrapper for old numeric-step pipeline (4.x / 2.0-3.0).
-# Copy to project folder and edit REPO/CONFIG.
-REPO="/home/projects/SRHgroup/apps/pre_mupexi_variant_calling_old"
+# Legacy-naming wrapper on top of the current pipeline implementation.
+# Keeps numeric step names (4.x / 2.0-3.0) but executes targets in the new repo.
+# Copy to project folder and edit REPO/CONFIG if needed.
+REPO="/home/projects/SRHgroup/apps/pre_mupexi_variant_calling"
 CONFIG="/home/projects/SRHgroup/projects/PemBOv_trial/bin/rnadnavar/CONFIG"
 PIPELINE_DEFAULTS="${PIPELINE_DEFAULTS:-$REPO/pipeline_defaults/toolchain.defaults.sh}"
 
