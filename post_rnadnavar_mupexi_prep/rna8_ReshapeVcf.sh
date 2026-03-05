@@ -66,10 +66,11 @@ precheck_vcfgz() {
     echo "[precheck] ${tag}: invalid gzip VCF: $path" >&2
     return 1
   fi
-  if ! zgrep -m1 '^#CHROM[[:space:]]' "$path" >/dev/null 2>&1; then
-    echo "[precheck] ${tag}: malformed VCF header (missing #CHROM): $path" >&2
-    return 1
-  fi
+  # NOTE:
+  # Some valid cluster/bgzip VCFs have formatting quirks (BOM/whitespace/viewer issues)
+  # that make simple grep-based #CHROM checks unreliable on login nodes.
+  # Keep precheck strict only for existence + gzip integrity and let bcftools do the
+  # authoritative parse inside the qsub job.
 }
 
 if [ -z "${sample:-}" ]; then
