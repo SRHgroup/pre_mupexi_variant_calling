@@ -98,6 +98,7 @@ bcftools index -f -t "$merged_vcf" >/dev/null 2>&1 || true
 mapfile -t samples_arr < <(bcftools query -l "$merged_vcf")
 samples=$(printf '%s ' "${samples_arr[@]}")
 echo "[info] merged samples: $samples"
+echo "[info] rna7 genotyper mode: ${genotyper_mode}"
 
 normal_in=$(resolve_sample_name "$normal_name" "${samples_arr[@]}") || die "$normal_name not found (flexible match) in merged VCF"
 dna_in=$(resolve_sample_name "$dna_name" "${samples_arr[@]}") || die "$dna_name not found (flexible match) in merged VCF"

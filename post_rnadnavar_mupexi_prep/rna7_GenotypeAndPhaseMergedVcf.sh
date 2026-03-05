@@ -206,6 +206,7 @@ SCRIPT
     printf 'phased_vcf=%q\n' "$phased_vcf"
     printf 'run_log=%q\n' "$run_log"
     printf 'rnae_scripts=%q\n' "$rnae_scripts"
+    printf 'export RNA7_GENOTYPER_MODE=%q\n' "${rna7_genotyper_mode:-auto}"
     printf 'out_dna_normal_label=%q\n' "${out_dna_normal_label:-DNA_NORMAL}"
     printf 'out_dna_tumor_label=%q\n' "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
     printf 'out_rna_tumor_label=%q\n' "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
