@@ -74,6 +74,9 @@ run_research_rna_clusters: check-config
 run_research_samecopy_stats: check-config
 	cd research && bash run_samecopy_stats_job.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTFILE_FLAG) --window "$(WINDOW)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
+run_mupexi: check-config
+	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+
 check_outputs: check-config
 	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) -m "$(MODE)"
 

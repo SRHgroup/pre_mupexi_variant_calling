@@ -99,3 +99,33 @@ rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"
 dna_only_merged_vcf_extension="dna_only6.DNAt_DNAn_merged.vcf.gz"
 dna_only_genotyped_vcf_extension="dna_only7.DNAt_DNAn_merged_genotyped.vcf.gz"
 dna_only_phased_vcf_extension="dna_only7.DNAt_DNAn_merged_phased.vcf.gz"
+
+# MuPeXI2 integration
+mupexi2_repo="/home/projects/SRHgroup/apps/mupexi2"
+mupexi_outdir="/path/to/project/mupexi2"
+mupexi_netmhc_config="/home/projects/SRHgroup/apps/netMHCpan/4.0a/config.computerome.ini"
+mupexi_modules="tools ngs anaconda3/2025.06-1 netmhcpan/4.0a perl/5.36.1 ensembl-tools/90"
+
+# Sample names in merged phased VCF
+mupexi_tumor_sample="TUMOR"
+mupexi_normal_sample="DNA_NORMAL"
+
+# MuPeXI behavior
+mupexi_peptide_lengths="9-11"
+mupexi_parallel_k="true"
+mupexi_enable_germlines="true"
+mupexi_enable_superpeptides="true"
+mupexi_enable_rna_edit="true"
+
+# HLA: either global string for all patients OR per-patient map TSV (patient<TAB>HLA_STRING).
+mupexi_hla="HLA-A02:01,HLA-A03:01,HLA-B07:02,HLA-B08:01,HLA-C07:01,HLA-C07:02"
+# mupexi_hla_map_tsv="/path/to/mupexi_hla_map.tsv"
+
+# Expression input: either template with {patient} OR per-patient map TSV (patient<TAB>expr_path).
+mupexi_expression_tsv_template="/path/to/kallisto/{patient}_expression.tsv"
+# mupexi_expression_map_tsv="/path/to/mupexi_expression_map.tsv"
+
+# Optional fusion input (only used when run_pipeline mupexi --run-fusions is passed):
+# Provide standard arriba TSV (not fusion_discarded).
+mupexi_fusion_arriba_template="/path/to/arriba/{patient}.fusion_arriba.tsv"
+# mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv"

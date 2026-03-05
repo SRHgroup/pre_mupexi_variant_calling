@@ -16,6 +16,7 @@ Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
   $0 dna-only [PATIENT] [-f]
+  $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
@@ -84,6 +85,21 @@ run_research_samecopy_stats() {
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_samecopy_stats CONFIG="$CONFIG" SAMPLE="$sample" OUTFILE="$outfile" WINDOW="$window" $force_arg $skip_running_arg
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_samecopy_stats CONFIG="$CONFIG" OUTFILE="$outfile" WINDOW="$window" $force_arg $skip_running_arg
+  fi
+}
+
+run_mupexi() {
+  local sample="${1:-}"
+  local outdir="${2:-}"
+  local run_fusions="${3:-0}"
+  local fusion_arg=""
+  if [ "$run_fusions" = "1" ]; then
+    fusion_arg="RUN_FUSIONS=1"
+  fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $fusion_arg $force_arg $skip_running_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" OUTDIR="$outdir" $fusion_arg $force_arg $skip_running_arg
   fi
 }
 
@@ -477,6 +493,23 @@ case "$cmd" in
   rna)       run_make run_all_rna "${1:-}" ;;
   germline)  run_make run_all_germline "${1:-}" ;;
   dna-only)  run_make run_dna_only "${1:-}" ;;
+  mupexi)
+    sample=""
+    outdir=""
+    run_fusions="0"
+    if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+      sample="$1"
+      shift
+    fi
+    while [ $# -gt 0 ]; do
+      case "${1:-}" in
+        --outdir|-o) outdir="${2:-}"; shift 2 ;;
+        --run-fusions) run_fusions="1"; shift ;;
+        *) echo "Unknown mupexi option: $1" >&2; exit 1 ;;
+      esac
+    done
+    run_mupexi "$sample" "$outdir" "$run_fusions"
+    ;;
   all)       run_make run_all "${1:-}" ;;
   research)
     task="${1:-}"
