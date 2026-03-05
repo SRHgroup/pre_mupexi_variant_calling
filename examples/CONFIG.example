@@ -47,6 +47,9 @@ gdna4_vcf_extension="gdna4.Filtered.vcf"
 
 # Which gDNA VCF suffix rna6 should merge (defaults to gdna4_vcf_extension).
 ndna_vcf="${gdna4_vcf_extension}"
+# Optional override for research samecopy stats germline input suffix.
+# Default resolution: samecopy_germline_vcf_extension -> ndna_vcf -> gdna4_vcf_extension -> gdna3_vcf_extension
+# samecopy_germline_vcf_extension="${ndna_vcf}"
 
 # gDNA filtering knobs
 germline_min_dp=10

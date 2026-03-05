@@ -57,7 +57,7 @@ out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 out_dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 
-gdna3_ext="${gdna3_vcf_extension:-${output_extension_202:-2.0.2.Filtered.Selected.HaplotypeCaller.vcf}}"
+germline_ext="${samecopy_germline_vcf_extension:-${ndna_vcf:-${gdna4_vcf_extension:-${gdna3_vcf_extension:-${output_extension_30:-${output_extension_202:-2.0.2.Filtered.Selected.HaplotypeCaller.vcf}}}}}}"
 src_dna_ext="${source_dna_mutect2_vcf_extension:-${out_dna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
 src_rna_ext="${source_rna_mutect2_vcf_extension:-${out_rna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
 merged_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-4.7_DNAt_DNAn_RNAt_merged_phased.vcf.gz}}"
@@ -144,7 +144,7 @@ python3 "${repo_dir}/research/vcf_samecopy_stats_with_rna.py" \\
   --out-normal-label "${out_normal_label}" \\
   --out-dna-label "${out_dna_label}" \\
   --out-rna-label "${out_rna_label}" \\
-  --gdna3-ext "${gdna3_ext}" \\
+  --gdna3-ext "${germline_ext}" \\
   --source-dna-ext "${src_dna_ext}" \\
   --source-rna-ext "${src_rna_ext}" \\
   --merged-ext "${merged_ext}" \\
