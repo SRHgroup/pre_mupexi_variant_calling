@@ -38,10 +38,12 @@ source "$config"
 : "${vcfdir:?CONFIG must define vcfdir}"
 
 if [ -z "$outfile" ]; then
+  stats_dir="${vcfdir}/samecopy_stats"
+  mkdir -p "$stats_dir"
   if [ -n "$sample" ]; then
-    outfile="${vcfdir}/research_samecopy_stats_with_rna.${sample}.tsv"
+    outfile="${stats_dir}/${sample}.samecopy_stats_with_rna.tsv"
   else
-    outfile="${vcfdir}/research_samecopy_stats_with_rna.tsv"
+    outfile="${stats_dir}/cohort.samecopy_stats_with_rna.tsv"
   fi
 fi
 

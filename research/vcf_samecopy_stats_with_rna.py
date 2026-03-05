@@ -415,6 +415,7 @@ def main():
     ]
 
     os.makedirs(os.path.dirname(args.outfile) or ".", exist_ok=True)
+    written_rows = 0
     with open(args.outfile, "w") as out:
         out.write("\t".join(cols) + "\n")
         for i, patient in enumerate(patients, 1):
@@ -424,22 +425,32 @@ def main():
                 f"{patient}_{args.out_normal_label}",
                 f"{patient}_{args.gdna3_ext}",
             )
+            if not file_nonempty(germ) and file_nonempty(germ + ".gz"):
+                germ = germ + ".gz"
             dna_src_suffix = resolve_src_suffix(args.source_dna_ext, patient)
             rna_src_suffix = resolve_src_suffix(args.source_rna_ext, patient)
             dna_src = first_existing(
                 [
                     os.path.join(args.vcfdir, f"{patient}_{args.out_dna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{dna_src_suffix}"),
+                    os.path.join(args.vcfdir, f"{patient}_{args.out_dna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{dna_src_suffix}".removesuffix(".gz")),
                     os.path.join(args.vcfdir, f"{patient}_{args.out_dna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{args.out_dna_label}_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf.gz"),
+                    os.path.join(args.vcfdir, f"{patient}_{args.out_dna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{args.out_dna_label}_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf"),
                     os.path.join(args.vcfdir, f"{patient}_DNA_TUMOR_vs_{patient}_{args.out_normal_label}", f"{patient}_DNA_TUMOR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf.gz"),
+                    os.path.join(args.vcfdir, f"{patient}_DNA_TUMOR_vs_{patient}_{args.out_normal_label}", f"{patient}_DNA_TUMOR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf"),
                     os.path.join(args.vcfdir, f"{patient}_DNA_TUMOUR_vs_{patient}_{args.out_normal_label}", f"{patient}_DNA_TUMOUR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf.gz"),
+                    os.path.join(args.vcfdir, f"{patient}_DNA_TUMOUR_vs_{patient}_{args.out_normal_label}", f"{patient}_DNA_TUMOUR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf"),
                 ]
             )
             rna_src = first_existing(
                 [
                     os.path.join(args.vcfdir, f"{patient}_{args.out_rna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{rna_src_suffix}"),
+                    os.path.join(args.vcfdir, f"{patient}_{args.out_rna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{rna_src_suffix}".removesuffix(".gz")),
                     os.path.join(args.vcfdir, f"{patient}_{args.out_rna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{args.out_rna_label}_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf.gz"),
+                    os.path.join(args.vcfdir, f"{patient}_{args.out_rna_label}_vs_{patient}_{args.out_normal_label}", f"{patient}_{args.out_rna_label}_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf"),
                     os.path.join(args.vcfdir, f"{patient}_RNA_TUMOR_vs_{patient}_{args.out_normal_label}", f"{patient}_RNA_TUMOR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf.gz"),
+                    os.path.join(args.vcfdir, f"{patient}_RNA_TUMOR_vs_{patient}_{args.out_normal_label}", f"{patient}_RNA_TUMOR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf"),
                     os.path.join(args.vcfdir, f"{patient}_RNA_TUMOUR_vs_{patient}_{args.out_normal_label}", f"{patient}_RNA_TUMOUR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf.gz"),
+                    os.path.join(args.vcfdir, f"{patient}_RNA_TUMOUR_vs_{patient}_{args.out_normal_label}", f"{patient}_RNA_TUMOUR_vs_{patient}_{args.out_normal_label}.mutect2.filtered.vcf"),
                 ]
             )
             merged = os.path.join(
@@ -447,6 +458,8 @@ def main():
                 f"{patient}_{args.out_rna_label}_vs_{patient}_{args.out_normal_label}",
                 f"{patient}_{args.merged_ext}",
             )
+            if not file_nonempty(merged) and file_nonempty(merged + ".gz"):
+                merged = merged + ".gz"
 
             miss = [p for p in [germ, dna_src, rna_src, merged] if not file_nonempty(p)]
             if miss:
@@ -502,8 +515,12 @@ def main():
                 "rna_het_samecopy_with_somatic_phasedcis": rs[2],
             }
             out.write("\t".join(str(row.get(c, "")) for c in cols) + "\n")
+            written_rows += 1
 
-    print(f"[done] wrote cohort stats -> {args.outfile}", file=sys.stderr)
+    if written_rows == 0:
+        print(f"ERROR: no patient rows written; check skip messages above. Output header only: {args.outfile}", file=sys.stderr)
+        sys.exit(2)
+    print(f"[done] wrote {written_rows} patient rows -> {args.outfile}", file=sys.stderr)
 
 
 if __name__ == "__main__":
