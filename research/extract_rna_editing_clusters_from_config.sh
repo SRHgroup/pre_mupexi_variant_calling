@@ -37,9 +37,9 @@ source "$config"
 
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
-phased_ext="${rna8_reshaped_vcf_extension:-${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}}"
-signal_sample_label="${rna8_tumor_output_label:-${rna7_signal_sample_label:-TUMOR}}"
-[ -n "$phased_ext" ] || { echo "ERROR: phased extension not found in CONFIG (rna8_reshaped_vcf_extension, rna7_phased_vcf_extension or phased_vcf_extension)" >&2; exit 1; }
+phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}"
+signal_sample_label="${rna7_signal_sample_label:-TUMOR}"
+[ -n "$phased_ext" ] || { echo "ERROR: phased extension not found in CONFIG (rna7_phased_vcf_extension or phased_vcf_extension)" >&2; exit 1; }
 
 mkdir -p "$outdir"
 inputs=()

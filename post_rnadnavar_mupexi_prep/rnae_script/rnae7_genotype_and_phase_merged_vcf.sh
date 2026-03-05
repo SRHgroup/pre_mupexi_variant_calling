@@ -16,6 +16,7 @@ out_phased=""
 normal_name="DNA_NORMAL"
 dna_name="DNA_TUMOR"
 rna_name="RNA_TUMOR"
+tumor_name="TUMOR"
 
 usage() {
   cat <<USAGE
@@ -150,17 +151,16 @@ bcftools index -f -t "$normal_vcf"
 # Merge back to 3-sample VCF (same positions)
 info_rules="KNOWN_RNAEDIT_DB:join,SOURCE_SET:join,EDIT_SIG:join"
 genotyped_raw="${tmpdir}/genotyped.raw.vcf.gz"
-genotyped_safe="${tmpdir}/genotyped.safe.vcf.gz"
 bcftools merge --threads "$threads" -m all --info-rules "$info_rules" -Oz -o "$genotyped_raw" "$normal_vcf" "$dna_fix" "$rna_fix"
 bcftools index -f -t "$genotyped_raw"
 
-# Prevent loss of real calls from rna6:
-# if HC emits missing GT (./.) in DNA/RNA sample, keep original sample field from merged_vcf.
-python3 - "$merged_vcf" "$genotyped_raw" "$genotyped_safe" "$normal_name" "$dna_name" "$rna_name" <<'PY'
+# Build final 2-sample VCF: DNA_NORMAL + TUMOR.
+# TUMOR is composed from source-aware DNA/RNA calls with fallback to merged_vcf to avoid erasing real calls.
+python3 - "$merged_vcf" "$genotyped_raw" "$out_genotyped" "$normal_name" "$dna_name" "$rna_name" "$tumor_name" <<'PY'
 import gzip
 import sys
 
-merged, genotyped, out, normal_name, dna_name, rna_name = sys.argv[1:7]
+merged, genotyped, out, normal_name, dna_name, rna_name, tumor_name = sys.argv[1:8]
 want = [normal_name, dna_name, rna_name]
 
 def op(path, mode):
@@ -181,6 +181,18 @@ def gt_missing(sample_value, fmt):
     vals = sample_value.split(":")
     gt = vals[i] if i < len(vals) else "."
     return gt in ("", ".", "./.", ".|.")
+
+def parse_info(info):
+    out = {}
+    if info in ("", "."):
+        return out
+    for tok in info.split(";"):
+        if "=" in tok:
+            k, v = tok.split("=", 1)
+            out[k] = v
+        else:
+            out[tok] = True
+    return out
 
 def header_and_samples(path):
     fh = op(path, "rt")
@@ -204,12 +216,19 @@ gfh, ghdr, gs = header_and_samples(genotyped)
 midx = {s: 9 + ms.index(s) for s in want if s in ms}
 gidx = {s: 9 + gs.index(s) for s in want if s in gs}
 
-restored = 0
 total = 0
+source_rna = 0
+source_dna = 0
+source_backup = 0
 mline = next_var(mfh)
 with op(out, "wt") as ofh:
     for h in ghdr:
-        ofh.write(h)
+        if h.startswith("#CHROM"):
+            cols = h.rstrip("\n").split("\t")
+            newh = cols[:9] + [normal_name, tumor_name]
+            ofh.write("\t".join(newh) + "\n")
+        else:
+            ofh.write(h)
     while True:
         gline = next_var(gfh)
         if gline is None:
@@ -230,39 +249,78 @@ with op(out, "wt") as ofh:
                 mc = cand
             break
 
+        gfmt = gc[8]
+        dna_g = gc[gidx[dna_name]] if dna_name in gidx and gidx[dna_name] < len(gc) else "./."
+        rna_g = gc[gidx[rna_name]] if rna_name in gidx and gidx[rna_name] < len(gc) else "./."
+        norm_g = gc[gidx[normal_name]] if normal_name in gidx and gidx[normal_name] < len(gc) else "./."
+
+        dna_m = "./."
+        rna_m = "./."
+        norm_m = "./."
+        source_set = ""
         if mc is not None:
-            gfmt = gc[8]
             mfmt = mc[8]
-            for s in (dna_name, rna_name, normal_name):
-                if s not in gidx or s not in midx:
-                    continue
-                gi = gidx[s]
-                mi = midx[s]
-                if gi >= len(gc) or mi >= len(mc):
-                    continue
-                if gt_missing(gc[gi], gfmt) and not gt_missing(mc[mi], mfmt):
-                    gc[gi] = mc[mi]
-                    restored += 1
+            source_set = str(parse_info(mc[7]).get("SOURCE_SET", ""))
+            if dna_name in midx and midx[dna_name] < len(mc):
+                dna_m = mc[midx[dna_name]]
+            if rna_name in midx and midx[rna_name] < len(mc):
+                rna_m = mc[midx[rna_name]]
+            if normal_name in midx and midx[normal_name] < len(mc):
+                norm_m = mc[midx[normal_name]]
 
-        ofh.write("\t".join(gc) + "\n")
+            # If genotyped normal is missing but merged normal had a call, keep merged.
+            if gt_missing(norm_g, gfmt) and not gt_missing(norm_m, mfmt):
+                norm_g = norm_m
 
-print(f"[info] kept original sample fields for missing HC calls: restored={restored} records={total}", file=sys.stderr)
+        # Decide tumor source by SOURCE_SET with non-destructive fallbacks.
+        src_upper = source_set.upper()
+        if "RNA_EDIT" in src_upper:
+            if not gt_missing(rna_g, gfmt):
+                tumor_g = rna_g; source_rna += 1
+            elif not gt_missing(dna_g, gfmt):
+                tumor_g = dna_g; source_dna += 1
+            elif not gt_missing(rna_m, gfmt):
+                tumor_g = rna_m; source_backup += 1
+            elif not gt_missing(dna_m, gfmt):
+                tumor_g = dna_m; source_backup += 1
+            else:
+                tumor_g = "./."
+        else:
+            if not gt_missing(dna_g, gfmt):
+                tumor_g = dna_g; source_dna += 1
+            elif not gt_missing(rna_g, gfmt):
+                tumor_g = rna_g; source_rna += 1
+            elif not gt_missing(dna_m, gfmt):
+                tumor_g = dna_m; source_backup += 1
+            elif not gt_missing(rna_m, gfmt):
+                tumor_g = rna_m; source_backup += 1
+            else:
+                tumor_g = "./."
+
+        out_cols = gc[:9] + [norm_g, tumor_g]
+        ofh.write("\t".join(out_cols) + "\n")
+
+print(
+    f"[info] tumor-compose: records={total} from_dna={source_dna} from_rna={source_rna} from_backup={source_backup}",
+    file=sys.stderr,
+)
 PY
 
-bcftools +fill-tags "$genotyped_safe" -Oz -o "$out_genotyped" -- -t AN,AC,AF
+bcftools +fill-tags "$out_genotyped" -Oz -o "${tmpdir}/genotyped.filled.vcf.gz" -- -t AN,AC,AF
+mv "${tmpdir}/genotyped.filled.vcf.gz" "$out_genotyped"
 bcftools index -f -t "$out_genotyped"
 
 echo "[info] Wrote genotyped: $out_genotyped"
 
 # 3) Read-backed phasing
-pass1="${tmpdir}/pass1.${dna_name}.vcf.gz"
+pass1="${tmpdir}/pass1.${tumor_name}.vcf.gz"
 
-echo "[info] Phasing ${dna_name} (read-backed)..."
-whatshap phase --reference "$fasta" --sample "$dna_name" --ignore-read-groups --output /dev/stdout "$out_genotyped" "$dna_bam" | bgzip -c > "$pass1"
+echo "[info] Phasing ${tumor_name} with DNA BAM (read-backed)..."
+whatshap phase --reference "$fasta" --sample "$tumor_name" --ignore-read-groups --output /dev/stdout "$out_genotyped" "$dna_bam" | bgzip -c > "$pass1"
 bcftools index -f -t "$pass1"
 
-echo "[info] Phasing ${rna_name} (read-backed)..."
-whatshap phase --reference "$fasta" --sample "$rna_name" --ignore-read-groups --output /dev/stdout "$pass1" "$rna_bam" | bgzip -c > "$out_phased"
+echo "[info] Phasing ${tumor_name} with RNA BAM (read-backed)..."
+whatshap phase --reference "$fasta" --sample "$tumor_name" --ignore-read-groups --output /dev/stdout "$pass1" "$rna_bam" | bgzip -c > "$out_phased"
 bcftools index -f -t "$out_phased"
 
 echo "[info] Wrote phased: $out_phased"
