@@ -8,11 +8,14 @@ OUTDIR ?=
 MAX_DISTANCE ?= 33
 MIN_CLUSTER_SIZE ?= 2
 MIN_ALT_COUNT ?= 10
+WINDOW ?= 33
+OUTFILE ?=
 
 SAMPLE_FLAG := $(if $(SAMPLE),-s $(SAMPLE),)
 FORCE_FLAG := $(if $(filter 1 true yes,$(FORCE)),-f,)
 SKIP_RUNNING_FLAG := $(if $(filter 1 true yes,$(SKIP_RUNNING)),--skip-running,)
 OUTDIR_FLAG := $(if $(OUTDIR),-o $(OUTDIR),)
+OUTFILE_FLAG := $(if $(OUTFILE),-o $(OUTFILE),)
 
 check-config:
 	@if [[ -z "$(CONFIG)" ]]; then echo "Set CONFIG=/path/to/CONFIG"; exit 1; fi
@@ -67,6 +70,9 @@ run_dna_only: check-config
 
 run_research_rna_clusters: check-config
 	cd research && bash run_rna_edit_cluster_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) --max-distance "$(MAX_DISTANCE)" --min-cluster-size "$(MIN_CLUSTER_SIZE)" --min-alt-count "$(MIN_ALT_COUNT)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+
+run_research_samecopy_stats: check-config
+	cd research && bash run_samecopy_stats_job.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTFILE_FLAG) --window "$(WINDOW)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
 check_outputs: check-config
 	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) -m "$(MODE)"

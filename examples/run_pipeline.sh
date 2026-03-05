@@ -17,6 +17,7 @@ Usage:
   $0 dna-only [PATIENT] [-f]
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
+  $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
   $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
   $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
@@ -40,6 +41,7 @@ Examples:
   $0 step gdna2 01-CH-L
   $0 research rna-clusters --outdir /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/editing_clusters33
   $0 research rna-clusters Pat96 --max-distance 33 --min-alt-count 10
+  $0 research samecopy-stats --outfile /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/samecopy_stats_with_rna.tsv
   $0 check
   $0 check 01-CH-L rna
   $0 check-step rna5
@@ -91,6 +93,18 @@ run_research_rna_clusters() {
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_rna_clusters CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" MAX_DISTANCE="$max_distance" MIN_CLUSTER_SIZE="$min_cluster_size" MIN_ALT_COUNT="$min_alt_count" $force_arg $skip_running_arg
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_rna_clusters CONFIG="$CONFIG" OUTDIR="$outdir" MAX_DISTANCE="$max_distance" MIN_CLUSTER_SIZE="$min_cluster_size" MIN_ALT_COUNT="$min_alt_count" $force_arg $skip_running_arg
+  fi
+}
+
+run_research_samecopy_stats() {
+  local sample="${1:-}"
+  local outfile="${2:-}"
+  local window="${3:-33}"
+
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_samecopy_stats CONFIG="$CONFIG" SAMPLE="$sample" OUTFILE="$outfile" WINDOW="$window" $force_arg $skip_running_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_samecopy_stats CONFIG="$CONFIG" OUTFILE="$outfile" WINDOW="$window" $force_arg $skip_running_arg
   fi
 }
 
@@ -523,6 +537,23 @@ case "$cmd" in
           esac
         done
         run_research_rna_clusters "$sample" "$outdir" "$max_distance" "$min_cluster_size" "$min_alt_count"
+        ;;
+      samecopy-stats)
+        sample=""
+        outfile=""
+        window="33"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --outfile|-o) outfile="${2:-}"; shift 2 ;;
+            --window) window="${2:-}"; shift 2 ;;
+            *) echo "Unknown research option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_research_samecopy_stats "$sample" "$outfile" "$window"
         ;;
       *)
         echo "Unknown research task: $task" >&2
