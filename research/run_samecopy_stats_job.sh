@@ -63,6 +63,22 @@ src_rna_ext="${source_rna_mutect2_vcf_extension:-${out_rna_label}_vs_{patient}_$
 merged_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-4.7_DNAt_DNAn_RNAt_merged_phased.vcf.gz}}"
 tumor_col_label="${out_dna_label:-TUMOR}"
 
+sanitize_mutect2_suffix() {
+  local s="$1"
+  # remove accidental trailing template braces from bad configs
+  s="${s%\}}"
+  # if duplicated tail is present, keep only first full extension occurrence
+  if [[ "$s" == *".mutect2.filtered.vcf.gz"* ]]; then
+    s="${s%%.mutect2.filtered.vcf.gz*}.mutect2.filtered.vcf.gz"
+  elif [[ "$s" == *".mutect2.filtered.vcf"* ]]; then
+    s="${s%%.mutect2.filtered.vcf*}.mutect2.filtered.vcf"
+  fi
+  printf '%s\n' "$s"
+}
+
+src_dna_ext="$(sanitize_mutect2_suffix "$src_dna_ext")"
+src_rna_ext="$(sanitize_mutect2_suffix "$src_rna_ext")"
+
 logroot="${vcfdir}/research_samecopy_stats_with_rna.logs_and_reports"
 logdir="${logroot}/logs"
 repdir="${logroot}/reports"
