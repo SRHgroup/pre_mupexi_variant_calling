@@ -3,6 +3,14 @@ import argparse
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+
+def is_canonical(chrom):
+    s = str(chrom).replace('chr', '')
+    if s in ('X', 'Y'):
+        return True
+    return s.isdigit() and 1 <= int(s) <= 22
 
 
 def build_chr_order(chrs):
@@ -26,6 +34,7 @@ def main():
     ap.add_argument('--clusters', required=True)
     ap.add_argument('--out-prefix', required=True)
     ap.add_argument('--top-clusters', type=int, default=20)
+    ap.add_argument('--canonical-only', action='store_true', default=True)
     args = ap.parse_args()
 
     v = pd.read_csv(args.variants, sep='\t')
@@ -33,27 +42,38 @@ def main():
     if v.empty:
         raise SystemExit('No variants to plot.')
 
+    if args.canonical_only:
+        v = v[v['chrom'].map(is_canonical)].copy()
+        c = c[c['chrom'].map(is_canonical)].copy()
+        if v.empty:
+            raise SystemExit('No canonical-chromosome variants to plot.')
+
     v['pos'] = pd.to_numeric(v['pos'])
     v['rna_dp'] = pd.to_numeric(v['rna_dp'], errors='coerce')
     chr_order = build_chr_order(v['chrom'].dropna().unique())
-    chr_rank = {ch: i for i, ch in enumerate(chr_order)}
     patients = sorted(v['patient'].dropna().unique())
     p_rank = {p: i for i, p in enumerate(patients)}
 
     # Numeric pseudo-genomic axis by chr blocks.
     offsets = {}
+    bounds = []
     cur = 0
+    chr_gap = 20_000_000
     for ch in chr_order:
         max_pos = v.loc[v['chrom'] == ch, 'pos'].max()
+        start = cur
         offsets[ch] = cur
-        cur += int(max_pos) + 1_000_000
+        cur += int(max_pos) + chr_gap
+        bounds.append((ch, start, cur))
 
     v['gpos'] = v.apply(lambda r: offsets.get(r['chrom'], 0) + r['pos'], axis=1)
     v['patient_idx'] = v['patient'].map(p_rank)
+    v['known_db_hit'] = v['known_db'].fillna('').astype(str).map(lambda x: x not in ('', '.'))
 
     color_map = {'ADAR': '#1f77b4', 'APOBEC3': '#d62728', 'OTHER': '#7f7f7f'}
 
-    fig, (ax_top, ax) = plt.subplots(2, 1, figsize=(16, 9), gridspec_kw={'height_ratios': [1, 4]}, sharex=True)
+    fig_h = max(5.0, min(7.5, 3.6 + 0.08 * len(patients)))
+    fig, (ax_top, ax) = plt.subplots(2, 1, figsize=(16, fig_h), gridspec_kw={'height_ratios': [1, 3]}, sharex=True)
 
     # Top: depth density-ish trend via binned mean DP.
     bins = 300
@@ -66,9 +86,15 @@ def main():
     ax_top.set_ylabel('Mean RNA DP')
     ax_top.set_title('RNA-editing Variant Landscape Across Patients')
 
-    # Bottom: points by patient and signature.
+    # Bottom: points by signature color and known-db shape.
     for sig, sub in v.groupby('signature'):
-        ax.scatter(sub['gpos'], sub['patient_idx'], s=16, alpha=0.8, c=color_map.get(sig, '#333333'), label=sig)
+        cval = color_map.get(sig, '#333333')
+        sub_known = sub[sub['known_db_hit']]
+        sub_novel = sub[~sub['known_db_hit']]
+        if not sub_novel.empty:
+            ax.scatter(sub_novel['gpos'], sub_novel['patient_idx'], s=10, alpha=0.85, c=cval, marker='o')
+        if not sub_known.empty:
+            ax.scatter(sub_known['gpos'], sub_known['patient_idx'], s=14, alpha=0.9, c=cval, marker='s', edgecolors='black', linewidths=0.2)
 
     # Highlight top clusters by size.
     if not c.empty:
@@ -81,11 +107,32 @@ def main():
                 continue
             ax.plot([x0, x1], [y, y], color='black', linewidth=2, alpha=0.45)
 
+    # Visual chromosome separation.
+    for i, (_, start, end) in enumerate(bounds):
+        if i % 2 == 1:
+            ax.axvspan(start, end, color='#f3f3f3', alpha=0.35, zorder=0)
+            ax_top.axvspan(start, end, color='#f3f3f3', alpha=0.35, zorder=0)
+        if i > 0:
+            ax.axvline(start, color='black', alpha=0.18, linewidth=0.8)
+            ax_top.axvline(start, color='black', alpha=0.18, linewidth=0.8)
+
     ax.set_yticks(range(len(patients)))
     ax.set_yticklabels(patients)
+    ax.set_ylim(-0.5, max(0.5, len(patients) - 0.5))
     ax.set_ylabel('Patient')
     ax.set_xlabel('Genomic Position (chromosome-concatenated)')
-    ax.legend(loc='upper right', ncol=3, frameon=False)
+    sig_handles = [
+        Line2D([], [], marker='o', linestyle='None', color=color_map['ADAR'], label='ADAR', markersize=5),
+        Line2D([], [], marker='o', linestyle='None', color=color_map['APOBEC3'], label='APOBEC3', markersize=5),
+        Line2D([], [], marker='o', linestyle='None', color=color_map['OTHER'], label='OTHER', markersize=5),
+    ]
+    shape_handles = [
+        Line2D([], [], marker='o', linestyle='None', color='black', label='No KNOWN_RNAEDIT_DB', markersize=4),
+        Line2D([], [], marker='s', linestyle='None', color='black', label='KNOWN_RNAEDIT_DB hit', markersize=5),
+    ]
+    leg1 = ax.legend(handles=sig_handles, loc='upper right', ncol=3, frameon=False, title='Signature')
+    ax.add_artist(leg1)
+    ax.legend(handles=shape_handles, loc='lower right', frameon=False, title='Database')
 
     # Chromosome tick labels
     xticks = []
