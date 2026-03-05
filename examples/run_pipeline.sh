@@ -16,6 +16,7 @@ Usage:
   $0 germline [PATIENT] [-f]
   $0 dna-only [PATIENT] [-f]
   $0 all [PATIENT] [-f]
+  $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
   $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
@@ -37,6 +38,8 @@ Examples:
   $0 step rna7.0 01-CH-L -f
   $0 step rna7 01-CH-L -f
   $0 step gdna2 01-CH-L
+  $0 research rna-clusters --outdir /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/editing_clusters33
+  $0 research rna-clusters Pat96 --max-distance 33 --min-alt-count 10
   $0 check
   $0 check 01-CH-L rna
   $0 check-step rna5
@@ -74,6 +77,20 @@ run_make() {
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" "$target" CONFIG="$CONFIG" SAMPLE="$sample" $force_arg $skip_running_arg
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" "$target" CONFIG="$CONFIG" $force_arg $skip_running_arg
+  fi
+}
+
+run_research_rna_clusters() {
+  local sample="${1:-}"
+  local outdir="${2:-}"
+  local max_distance="${3:-33}"
+  local min_cluster_size="${4:-2}"
+  local min_alt_count="${5:-10}"
+
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_rna_clusters CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" MAX_DISTANCE="$max_distance" MIN_CLUSTER_SIZE="$min_cluster_size" MIN_ALT_COUNT="$min_alt_count" $force_arg $skip_running_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_rna_clusters CONFIG="$CONFIG" OUTDIR="$outdir" MAX_DISTANCE="$max_distance" MIN_CLUSTER_SIZE="$min_cluster_size" MIN_ALT_COUNT="$min_alt_count" $force_arg $skip_running_arg
   fi
 }
 
@@ -482,6 +499,37 @@ case "$cmd" in
   germline)  run_make run_all_germline "${1:-}" ;;
   dna-only)  run_make run_dna_only "${1:-}" ;;
   all)       run_make run_all "${1:-}" ;;
+  research)
+    task="${1:-}"
+    shift || true
+    case "$task" in
+      rna-clusters)
+        sample=""
+        outdir=""
+        max_distance="33"
+        min_cluster_size="2"
+        min_alt_count="10"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --outdir|-o) outdir="${2:-}"; shift 2 ;;
+            --max-distance) max_distance="${2:-}"; shift 2 ;;
+            --min-cluster-size) min_cluster_size="${2:-}"; shift 2 ;;
+            --min-alt-count) min_alt_count="${2:-}"; shift 2 ;;
+            *) echo "Unknown research option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_research_rna_clusters "$sample" "$outdir" "$max_distance" "$min_cluster_size" "$min_alt_count"
+        ;;
+      *)
+        echo "Unknown research task: $task" >&2
+        exit 1
+        ;;
+    esac
+    ;;
   step)
     step_name="${1:-}"
     sample="${2:-}"
