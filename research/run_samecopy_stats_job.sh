@@ -152,6 +152,15 @@ python3 "${repo_dir}/research/vcf_samecopy_stats_with_rna.py" \\
   --window "${window}" \\
   --outfile "${outfile}" \\
   ${sample:+--patient "${sample}"}
+
+if [ ! -s "${outfile}" ]; then
+  echo "ERROR: samecopy output missing or empty: ${outfile}" >&2
+  exit 2
+fi
+if ! awk 'NR>1{ok=1; exit 0} END{exit ok?0:1}' "${outfile}"; then
+  echo "ERROR: samecopy output has header only (no patient rows): ${outfile}" >&2
+  exit 3
+fi
 SCRIPT
 chmod +x "$runscript"
 
@@ -165,4 +174,5 @@ qsub_opts+=(-e "${repdir}/${prefix}.${tag}.e\$PBS_JOBID")
 jobid="$(qsub "${qsub_opts[@]}" "$runscript")"
 printf '%s\n' "$jobid" > "$marker"
 echo "[submit] ${prefix}.${tag}: jobid=${jobid}"
+echo "[info] samecopy output target: ${outfile}"
 echo ".. logs and reports saved in ${logroot}"
