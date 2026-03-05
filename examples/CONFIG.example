@@ -105,6 +105,7 @@ mupexi2_repo="/home/projects/SRHgroup/apps/mupexi2"
 mupexi_outdir="/path/to/project/mupexi2"
 mupexi_netmhc_config="/home/projects/SRHgroup/apps/netMHCpan/4.0a/config.computerome.ini"
 fus_dir="${datadir}/arriba"
+hladir="${datadir}/hla"
 
 # Sample names in merged phased VCF
 mupexi_tumor_sample="TUMOR"
@@ -117,7 +118,11 @@ mupexi_enable_germlines="true"
 mupexi_enable_superpeptides="true"
 mupexi_enable_rna_edit="true"
 
-# Patient-specific HLA / expression / optional fusion are expected to be provided per run,
+# HLA is read per patient from hladir (legacy suffix logic compatible).
+# Default suffix uses output_extension_14 when present.
+# mupexi_hla_extension="${output_extension_14}"
+#
+# Patient-specific expression / optional fusion are expected to be provided per run,
 # e.g.:
 #   ./run_pipeline.sh mupexi Pat11 --hla "HLA-A26:01,..." --expr /path/to/Patient_11.expr.tsv
 # Optional convenience (cohort mode) if you maintain maps:

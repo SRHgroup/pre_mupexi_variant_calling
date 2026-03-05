@@ -44,6 +44,7 @@ source "$config"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${mupexi2_repo:?CONFIG must define mupexi2_repo}"
 : "${mupexi_netmhc_config:?CONFIG must define mupexi_netmhc_config}"
+: "${hladir:?CONFIG must define hladir}"
 
 if [ -z "$outdir" ]; then
   outdir="${mupexi_outdir:-${vcfdir}/mupexi2}"
@@ -62,6 +63,7 @@ enable_germlines="${mupexi_enable_germlines:-true}"
 enable_superpeptides="${mupexi_enable_superpeptides:-true}"
 enable_rna_edit="${mupexi_enable_rna_edit:-true}"
 phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}"
+hld_ext="${mupexi_hla_extension:-${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}}"
 [ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
 
 resolve_patient_placeholder() {
@@ -93,6 +95,59 @@ lookup_map_value() {
   local patient="$2"
   [ -f "$map_file" ] || return 1
   awk -F'\t' -v p="$patient" '$1==p {print $2; exit}' "$map_file"
+}
+
+find_normal_sample_name() {
+  local patient="$1"
+  local out=""
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in [[:space:]]*'#'*) continue ;; esac
+    sid="$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')"
+    base="$(sample_base_name "$sid")"
+    if [ "$base" != "$patient" ]; then
+      continue
+    fi
+    if [[ "$sid" == *"_${dna_normal_label:-DNA_NORMAL}" ]] || [[ "$sid" == *"_${out_dna_normal_label:-DNA_NORMAL}" ]] || [[ "$sid" == *"_DNA_NORMAL" ]] || [[ "$sid" == *"_N" ]]; then
+      out="$sid"
+      break
+    fi
+  done < "$samples"
+  printf '%s\n' "$out"
+}
+
+extract_hla_from_file() {
+  local path="$1"
+  [ -f "$path" ] || return 1
+  awk '
+    BEGIN { OFS=""; n=0 }
+    {
+      line=$0
+      while (match(line, /HLA-[A-Za-z0-9]+\*[0-9]+:[0-9]+/)) {
+        h=substr(line, RSTART, RLENGTH)
+        gsub(/\*/, ":", h)
+        if (!(h in seen)) { seen[h]=1; arr[++n]=h }
+        line=substr(line, RSTART+RLENGTH)
+      }
+      while (match(line, /HLA-[A-Za-z0-9]+:[0-9]+:[0-9]+/)) {
+        h=substr(line, RSTART, RLENGTH)
+        if (!(h in seen)) { seen[h]=1; arr[++n]=h }
+        line=substr(line, RSTART+RLENGTH)
+      }
+      while (match(line, /HLA-[A-Za-z0-9]+:[0-9]+/)) {
+        h=substr(line, RSTART, RLENGTH)
+        if (!(h in seen)) { seen[h]=1; arr[++n]=h }
+        line=substr(line, RSTART+RLENGTH)
+      }
+    }
+    END {
+      for (i=1;i<=n;i++) {
+        if (i>1) printf ","
+        printf "%s", arr[i]
+      }
+      printf "\n"
+    }
+  ' "$path"
 }
 
 pbs_state_for_jobid() {
@@ -146,13 +201,40 @@ while IFS= read -r line; do
   hla=""
   if [ -n "$sample" ] && [ -n "$cli_hla" ]; then
     hla="$cli_hla"
-  elif [ -n "${mupexi_hla_map_tsv:-}" ]; then
-    hla="$(lookup_map_value "$mupexi_hla_map_tsv" "$patient" || true)"
-  elif [ -n "${mupexi_hla:-}" ]; then
-    hla="${mupexi_hla:-}"
+  else
+    normal_name="$(find_normal_sample_name "$patient")"
+    hla_file=""
+    if [ -n "$normal_name" ]; then
+      cand1="${hladir}/${normal_name}_${hld_ext}"
+      if [ -f "$cand1" ]; then
+        hla_file="$cand1"
+      fi
+    fi
+    # Legacy fallback logic:
+    #   name -> name without last char + "1_N", and special H1 -> H2_N case.
+    if [ -z "$hla_file" ]; then
+      base="${patient%?}"
+      cand2="${hladir}/${base}1_N_${hld_ext}"
+      if [ -f "$cand2" ]; then
+        hla_file="$cand2"
+      fi
+    fi
+    if [ -z "$hla_file" ] && [[ "$patient" =~ ^(H1)$ ]]; then
+      base="${patient%?}"
+      cand3="${hladir}/${base}2_N_${hld_ext}"
+      if [ -f "$cand3" ]; then
+        hla_file="$cand3"
+      fi
+    fi
+    # Optional map fallback if explicitly configured.
+    if [ -z "$hla_file" ] && [ -n "${mupexi_hla_map_tsv:-}" ]; then
+      hla="$(lookup_map_value "$mupexi_hla_map_tsv" "$patient" || true)"
+    elif [ -n "$hla_file" ]; then
+      hla="$(extract_hla_from_file "$hla_file" || true)"
+    fi
   fi
   if [ -z "$hla" ]; then
-    echo "[skip] ${patient}: missing HLA string (pass --hla for single sample, or set mupexi_hla(_map_tsv) in CONFIG)"
+    echo "[skip] ${patient}: missing HLA (expected in ${hladir} with suffix ${hld_ext}; optional override --hla)"
     continue
   fi
 
