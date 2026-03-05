@@ -116,7 +116,7 @@ hc_genotype_union () {
   local bam="$1"
   local out="$2"
 
-  gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$intervals_bed" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --active-probability-threshold 0.0 --annotations-to-exclude TandemRepeat --native-pair-hmm-threads "$threads" -O "$out"
+  gatk --java-options "-Xmx16g" HaplotypeCaller -R "$fasta" -I "$bam" -L "$intervals_bed" --alleles "$union_sites_vcf" --output-mode EMIT_ALL_ACTIVE_SITES --disable-tool-default-annotations --annotations-to-exclude TandemRepeat --active-probability-threshold 0.0 --native-pair-hmm-threads "$threads" -O "$out"
 }
 
 dna_raw="${tmpdir}/dna.raw.vcf.gz"

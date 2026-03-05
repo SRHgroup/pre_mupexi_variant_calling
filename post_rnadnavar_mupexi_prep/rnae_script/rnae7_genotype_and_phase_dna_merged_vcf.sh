@@ -103,6 +103,7 @@ gatk --java-options "-Xmx16g" HaplotypeCaller \
   -R "$fasta" -I "$dna_bam" -L "$intervals_bed" \
   --alleles "$union_sites_vcf" \
   --output-mode EMIT_ALL_ACTIVE_SITES \
+  --disable-tool-default-annotations \
   --active-probability-threshold 0.0 \
   --annotations-to-exclude TandemRepeat \
   --native-pair-hmm-threads "$threads" \
