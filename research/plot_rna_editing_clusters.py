@@ -17,7 +17,9 @@ def expanded_copy_rows(df):
     rows = []
     for _, r in df.iterrows():
         gt = str(r.get('rna_gt', ''))
+        ps = str(r.get('ps', ''))
         copies = []
+        phased = False
         if '|' in gt:
             parts = gt.split('|')
             if len(parts) >= 2:
@@ -28,6 +30,7 @@ def expanded_copy_rows(df):
                     copies.append(2)
                 if not copies:
                     copies = [1, 2]
+                phased = True if ps not in ('', '.', 'nan', 'None') else False
             else:
                 copies = [1, 2]
         else:
@@ -36,6 +39,7 @@ def expanded_copy_rows(df):
         for cp in copies:
             rr = r.copy()
             rr['copy'] = cp
+            rr['is_phased'] = phased
             rows.append(rr)
     return pd.DataFrame(rows)
 
@@ -97,13 +101,14 @@ def main():
     v['known_db_hit'] = v['known_db'].fillna('').astype(str).map(lambda x: x not in ('', '.'))
     vx = expanded_copy_rows(v)
     vx['patient_idx'] = vx['patient'].map(p_rank)
-    vx['copy_row'] = vx['patient_idx'] * 2 + vx['copy'].map({1: 0, 2: 1})
-    copy_x_offset = 250000
+    copy_track_gap = 3
+    vx['copy_row'] = vx['patient_idx'] * copy_track_gap + vx['copy'].map({1: 0, 2: 1})
+    copy_x_offset = 600000
     vx['gpos_copy'] = vx['gpos'] + vx['copy'].map({1: -copy_x_offset, 2: copy_x_offset})
 
     color_map = {'ADAR': '#1f77b4', 'APOBEC3': '#d62728', 'OTHER': '#7f7f7f'}
 
-    fig_h = max(5.0, min(7.5, 3.6 + 0.08 * len(patients)))
+    fig_h = max(5.5, min(10.5, 4.0 + 0.14 * len(patients)))
     fig, (ax_top, ax) = plt.subplots(2, 1, figsize=(16, fig_h), gridspec_kw={'height_ratios': [1, 3]}, sharex=True)
 
     # Top: depth density-ish trend via binned mean DP.
@@ -120,12 +125,38 @@ def main():
     # Bottom: points by signature color and known-db shape.
     for sig, sub in vx.groupby('signature'):
         cval = color_map.get(sig, '#333333')
-        sub_known = sub[sub['known_db_hit']]
-        sub_novel = sub[~sub['known_db_hit']]
-        if not sub_novel.empty:
-            ax.scatter(sub_novel['gpos_copy'], sub_novel['copy_row'], s=9, alpha=0.85, c=cval, marker='o')
-        if not sub_known.empty:
-            ax.scatter(sub_known['gpos_copy'], sub_known['copy_row'], s=12, alpha=0.9, c=cval, marker='s', edgecolors='black', linewidths=0.2)
+        phased = sub[sub['is_phased']]
+        unphased = sub[~sub['is_phased']]
+        for part, alpha, hollow in ((phased, 0.9, False), (unphased, 0.35, True)):
+            if part.empty:
+                continue
+            sub_known = part[part['known_db_hit']]
+            sub_novel = part[~part['known_db_hit']]
+            if not sub_novel.empty:
+                ax.scatter(
+                    sub_novel['gpos_copy'], sub_novel['copy_row'],
+                    s=8, alpha=alpha,
+                    c='none' if hollow else cval,
+                    edgecolors=cval if hollow else 'none',
+                    marker='o', linewidths=0.5 if hollow else 0.2
+                )
+            if not sub_known.empty:
+                ax.scatter(
+                    sub_known['gpos_copy'], sub_known['copy_row'],
+                    s=11, alpha=alpha,
+                    c='none' if hollow else cval,
+                    edgecolors='black' if not hollow else cval,
+                    marker='s', linewidths=0.6 if hollow else 0.25
+                )
+
+    # Draw PS connectors to make haplotype blocks visually explicit.
+    psub = vx[(vx['is_phased']) & (vx['ps'].notna()) & (vx['ps'].astype(str) != '') & (vx['ps'].astype(str) != '.')]
+    if not psub.empty:
+        for (_, _, _, _), g in psub.groupby(['patient', 'chrom', 'copy', 'ps']):
+            if len(g) < 2:
+                continue
+            g = g.sort_values('gpos_copy')
+            ax.plot(g['gpos_copy'], g['copy_row'], color='#444444', linewidth=0.8, alpha=0.35)
 
     # Highlight top clusters by size.
     if not c.empty:
@@ -136,8 +167,8 @@ def main():
             pidx = p_rank.get(r['patient'], None)
             if pidx is None:
                 continue
-            y1 = pidx * 2
-            y2 = pidx * 2 + 1
+            y1 = pidx * copy_track_gap
+            y2 = pidx * copy_track_gap + 1
             ax.plot([x0 - copy_x_offset, x1 - copy_x_offset], [y1, y1], color='black', linewidth=1.8, alpha=0.35)
             ax.plot([x0 + copy_x_offset, x1 + copy_x_offset], [y2, y2], color='black', linewidth=1.8, alpha=0.35)
 
@@ -153,11 +184,14 @@ def main():
     yticks = []
     ylabels = []
     for i, p in enumerate(patients):
-        yticks.extend([i * 2, i * 2 + 1])
+        yticks.extend([i * copy_track_gap, i * copy_track_gap + 1])
         ylabels.extend([f'{p} copy1', f'{p} copy2'])
+        # subtle separator between patients
+        if i > 0:
+            ax.axhline(i * copy_track_gap - 1, color='black', alpha=0.08, linewidth=0.8)
     ax.set_yticks(yticks)
     ax.set_yticklabels(ylabels, fontsize=8)
-    ax.set_ylim(-0.7, max(1.3, len(yticks) - 0.3))
+    ax.set_ylim(-0.8, max(1.8, len(patients) * copy_track_gap - 0.2))
     ax.set_ylabel('Patient / Copy')
     ax.set_xlabel('Genomic Position (chromosome-concatenated)')
     sig_handles = [
@@ -169,9 +203,15 @@ def main():
         Line2D([], [], marker='o', linestyle='None', color='black', label='No KNOWN_RNAEDIT_DB', markersize=4),
         Line2D([], [], marker='s', linestyle='None', color='black', label='KNOWN_RNAEDIT_DB hit', markersize=5),
     ]
+    phase_handles = [
+        Line2D([], [], marker='o', linestyle='None', color='black', label='Phased', markersize=4),
+        Line2D([], [], marker='o', linestyle='None', markerfacecolor='none', color='black', label='Unphased (duplicated)', markersize=4),
+    ]
     leg1 = ax.legend(handles=sig_handles, loc='upper right', ncol=3, frameon=False, title='Signature')
     ax.add_artist(leg1)
-    ax.legend(handles=shape_handles, loc='lower right', frameon=False, title='Database')
+    leg2 = ax.legend(handles=shape_handles, loc='lower right', frameon=False, title='Database')
+    ax.add_artist(leg2)
+    ax.legend(handles=phase_handles, loc='center right', frameon=False, title='Phasing')
 
     # Chromosome tick labels
     xticks = []
