@@ -48,6 +48,7 @@ mkdir -p "$outdir"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd "$script_dir/.." && pwd)"
+research_python_modules="${research_python_modules:-tools ngs anaconda3/2025.06-1}"
 
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
@@ -139,6 +140,7 @@ if [ -n "\${PIPELINE_DEFAULTS:-}" ] && [ -f "\$PIPELINE_DEFAULTS" ]; then
   # shellcheck disable=SC1090
   source "\$PIPELINE_DEFAULTS"
 fi
+module load ${research_python_modules}
 
 python3 "${repo_dir}/research/extract_rna_editing_clusters.py" \\
   --input "${patient}=${vcf}" \\

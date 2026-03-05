@@ -129,3 +129,6 @@ mupexi_expression_tsv_template="/path/to/kallisto/{patient}_expression.tsv"
 # Provide standard arriba TSV (not fusion_discarded).
 mupexi_fusion_arriba_template="/path/to/arriba/{patient}.fusion_arriba.tsv"
 # mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv"
+
+# Research plotting/extraction python env used in qsub jobs (pandas/matplotlib).
+research_python_modules="tools ngs anaconda3/2025.06-1"
