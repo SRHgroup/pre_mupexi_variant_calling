@@ -148,4 +148,7 @@ mupexi_qsub_walltime="24:00:00"
 # Optional fusion map override:
 # mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv" # patient<TAB>fusion_arriba_path
 
+# Samecopy/RNA-edit research VEP source (per-patient files like Pat11_vep.vep).
+# samecopy_vep_dir="${datadir}/mupexi2"
+
 # Module stacks for research/MuPeXI jobs are defined in pipeline_defaults/toolchain.defaults.sh.

@@ -9,6 +9,13 @@ from bisect import bisect_left
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
+ALLOWED_PROTEIN_CODING_CONSEQUENCES = {
+    "missense_variant",
+    "inframe_insertion",
+    "inframe_deletion",
+    "frameshift_variant",
+}
+
 
 def open_text(path: str):
     return gzip.open(path, "rt") if path.endswith(".gz") else open(path, "r")
@@ -23,6 +30,81 @@ def count_vcf_records(path: str) -> int:
     with open_text(path) as fh:
         for line in fh:
             if line and not line.startswith("#"):
+                n += 1
+    return n
+
+
+def normalize_chrom(chrom: str) -> str:
+    c = str(chrom).strip()
+    if c.lower().startswith("chr"):
+        c = c[3:]
+    return c
+
+
+def parse_vep_location(loc: str) -> Tuple[Optional[str], Optional[int]]:
+    s = str(loc).strip()
+    if ":" not in s:
+        return None, None
+    chrom, rest = s.split(":", 1)
+    pos_s = rest.split("-", 1)[0]
+    try:
+        pos = int(pos_s)
+    except Exception:
+        return None, None
+    return normalize_chrom(chrom), pos
+
+
+def load_vep_allowed_variant_keys(path: str) -> set:
+    allowed = set()
+    with open_text(path) as fh:
+        for line in fh:
+            if not line or line.startswith("#"):
+                continue
+            cols = line.rstrip("\n").split("\t")
+            if len(cols) < 7:
+                continue
+            chrom, pos = parse_vep_location(cols[1])
+            if chrom is None or pos is None:
+                continue
+            allele = cols[2].strip()
+            consequence = cols[6].strip()
+            if not allele or not consequence:
+                continue
+            # VEP can provide multiple terms separated by comma and/or '&'
+            terms = [t for t in re.split(r"[,&]", consequence) if t]
+            if not any(t in ALLOWED_PROTEIN_CODING_CONSEQUENCES for t in terms):
+                continue
+            # If BIOTYPE is present in EXTRA, require protein_coding.
+            extra = cols[13] if len(cols) > 13 else ""
+            m = re.search(r"(?:^|;)BIOTYPE=([^;]+)", extra)
+            if m and m.group(1) != "protein_coding":
+                continue
+            allowed.add((chrom, pos, allele))
+    return allowed
+
+
+def variant_in_allowed_set(chrom: str, pos: int, alt: str, allowed_keys: set) -> bool:
+    c = normalize_chrom(chrom)
+    for a in str(alt).split(","):
+        aa = a.strip()
+        if aa and (c, pos, aa) in allowed_keys:
+            return True
+    return False
+
+
+def count_vcf_records_with_allowed(path: str, allowed_keys: set) -> int:
+    n = 0
+    with open_text(path) as fh:
+        for line in fh:
+            if not line or line.startswith("#"):
+                continue
+            toks = line.rstrip("\n").split("\t")
+            if len(toks) < 5:
+                continue
+            chrom = toks[0]
+            pos = int(toks[1])
+            alt = toks[4]
+            if variant_in_allowed_set(chrom, pos, alt, allowed_keys):
                 n += 1
     return n
 
@@ -209,7 +291,7 @@ def resolve_src_suffix(template: str, patient: str) -> str:
     return out.rstrip("}")
 
 
-def parse_merged(merged_vcf: str, tumor_col: int):
+def parse_merged(merged_vcf: str, tumor_col: int, allowed_somatic_rna_keys: Optional[set] = None):
     by_source: Dict[str, Dict[str, List[VarRec]]] = {
         "GERMLINE": {},
         "SOMATIC": {},
@@ -255,6 +337,10 @@ def parse_merged(merged_vcf: str, tumor_col: int):
             if source not in by_source:
                 counts["merged_other_total"] += 1
                 continue
+            if source in ("SOMATIC", "RNA_EDIT") and allowed_somatic_rna_keys is not None:
+                alt = toks[4]
+                if not variant_in_allowed_set(chrom, pos, alt, allowed_somatic_rna_keys):
+                    continue
 
             fmt = toks[8]
             sample = toks[tumor_col]
@@ -367,6 +453,8 @@ def main():
     ap.add_argument("--outfile", required=True)
     ap.add_argument("--patient", default="")
     ap.add_argument("--tumor-col-label", default="TUMOR")
+    ap.add_argument("--vep-dir", default="", help="Dir with per-patient VEP files: {patient}_vep.vep")
+    ap.add_argument("--vep-suffix", default="_vep.vep", help="Per-patient VEP suffix")
     args = ap.parse_args()
 
     labels = [
@@ -435,6 +523,17 @@ def main():
         out.write("\t".join(cols) + "\n")
         for i, patient in enumerate(patients, 1):
             print(f"[{i}/{len(patients)}] {patient}", file=sys.stderr)
+            vep_path = ""
+            allowed_keys = None
+            if args.vep_dir:
+                vep_path = os.path.join(args.vep_dir, f"{patient}{args.vep_suffix}")
+                if not file_nonempty(vep_path):
+                    print(f"[skip] {patient}: missing VEP file for coding filter: {vep_path}", file=sys.stderr)
+                    continue
+                allowed_keys = load_vep_allowed_variant_keys(vep_path)
+                if not allowed_keys:
+                    print(f"[skip] {patient}: no allowed coding SOMATIC/RNA variants in VEP: {vep_path}", file=sys.stderr)
+                    continue
             germ = os.path.join(
                 args.vcfdir,
                 f"{patient}_{args.out_normal_label}",
@@ -482,8 +581,12 @@ def main():
                 continue
 
             germ_total = count_vcf_records(germ)
-            som_total = count_vcf_records(dna_src)
-            rna_total = count_vcf_records(rna_src)
+            if allowed_keys is not None:
+                som_total = count_vcf_records_with_allowed(dna_src, allowed_keys)
+                rna_total = count_vcf_records_with_allowed(rna_src, allowed_keys)
+            else:
+                som_total = count_vcf_records(dna_src)
+                rna_total = count_vcf_records(rna_src)
 
             tumor_col = 9
             with open_text(merged) as fh:
@@ -493,7 +596,7 @@ def main():
                         tumor_col = choose_tumor_col(toks[9:], args.tumor_col_label)
                         break
 
-            by_source, by_pos, mc = parse_merged(merged, tumor_col)
+            by_source, by_pos, mc = parse_merged(merged, tumor_col, allowed_keys)
 
             gs = adjacency_counts(by_source["GERMLINE"], by_pos["SOMATIC"], by_source["SOMATIC"], args.window)
             sg = adjacency_counts(by_source["SOMATIC"], by_pos["GERMLINE"], by_source["GERMLINE"], args.window)

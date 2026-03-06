@@ -56,6 +56,7 @@ research_python_modules="${research_python_modules:-tools ngs anaconda3/2025.06-
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 out_dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
+vep_dir="${samecopy_vep_dir:-${rna_edit_vep_dir:-${mupexi_outdir:-${datadir:-}/mupexi2}}}"
 
 germline_ext="${samecopy_germline_vcf_extension:-${ndna_vcf:-${gdna4_vcf_extension:-${gdna3_vcf_extension:-${output_extension_30:-${output_extension_202:-2.0.2.Filtered.Selected.HaplotypeCaller.vcf}}}}}}"
 src_dna_ext="${source_dna_mutect2_vcf_extension:-${out_dna_label}_vs_{patient}_${out_normal_label}.mutect2.filtered.vcf.gz}"
@@ -149,6 +150,7 @@ python3 "${repo_dir}/research/vcf_samecopy_stats_with_rna.py" \\
   --source-rna-ext "${src_rna_ext}" \\
   --merged-ext "${merged_ext}" \\
   --tumor-col-label "${tumor_col_label}" \\
+  --vep-dir "${vep_dir}" \\
   --window "${window}" \\
   --outfile "${outfile}" \\
   ${sample:+--patient "${sample}"}
