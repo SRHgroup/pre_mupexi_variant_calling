@@ -136,15 +136,31 @@ def main():
                 cid.loc[hit] = str(r['cluster_id'])
             v.loc[mask, 'cluster_id'] = cid
 
-    # Build cluster color map (nearby clusters cycle through distinct colors).
+    # Build cluster color map with high contrast: adjacent clusters get distant palette colors.
     cluster_color_map = {}
     if not c.empty:
         c_work = c.copy()
         c_work['gstart'] = c_work.apply(lambda r: offsets.get(r['chrom'], 0) + int(r['start']), axis=1)
         c_work = c_work.sort_values(['patient', 'gstart', 'end'])
-        palette = list(plt.get_cmap('tab20').colors) + list(plt.get_cmap('tab20b').colors)
+        palette = (
+            list(plt.get_cmap('tab20').colors) +
+            list(plt.get_cmap('Dark2').colors) +
+            list(plt.get_cmap('Set1').colors) +
+            list(plt.get_cmap('Accent').colors)
+        )
+        # Deduplicate identical tuples while preserving order.
+        seen_colors = set()
+        palette_unique = []
+        for col in palette:
+            if col not in seen_colors:
+                palette_unique.append(col)
+                seen_colors.add(col)
+        palette = palette_unique
+        # Jump through palette with a coprime step to maximize contrast between nearby clusters.
+        step = 7
+        ncol = len(palette)
         for i, cid in enumerate(c_work['cluster_id'].astype(str)):
-            cluster_color_map[cid] = palette[i % len(palette)]
+            cluster_color_map[cid] = palette[(i * step) % ncol]
 
     vx = expanded_copy_rows(v)
     vx['patient_idx'] = vx['patient'].map(p_rank)
@@ -188,7 +204,7 @@ def main():
                     ax.scatter(
                         sub_novel['gpos_copy'], sub_novel['copy_row_plot'],
                         s=9,
-                        alpha=0.30,
+                        alpha=0.15,
                         marker=marker,
                         facecolors='none' if hollow else cval,
                         edgecolors=cval if hollow else 'black',
@@ -257,7 +273,7 @@ def main():
     ]
     shape_handles = [
         Line2D([], [], marker='o', linestyle='None', color='black', alpha=1.0, label='KNOWN_RNAEDIT_DB hit', markersize=5),
-        Line2D([], [], marker='o', linestyle='None', color='black', alpha=0.30, label='No KNOWN_RNAEDIT_DB', markersize=5),
+        Line2D([], [], marker='o', linestyle='None', color='black', alpha=0.15, label='No KNOWN_RNAEDIT_DB', markersize=5),
     ]
     phase_handles = [
         Line2D([], [], marker='o', linestyle='None', color='black', label='Phased', markersize=4),
