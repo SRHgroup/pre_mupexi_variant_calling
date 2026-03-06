@@ -13,6 +13,10 @@ OUTFILE ?=
 HLA ?=
 EXPR ?=
 FUSION ?=
+MUPEXI_NODES ?=
+MUPEXI_PPN ?=
+MUPEXI_MEM ?=
+MUPEXI_WALLTIME ?=
 
 SAMPLE_FLAG := $(if $(SAMPLE),-s $(SAMPLE),)
 FORCE_FLAG := $(if $(filter 1 true yes,$(FORCE)),-f,)
@@ -78,7 +82,7 @@ run_research_samecopy_stats: check-config
 	cd research && bash run_samecopy_stats_job.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTFILE_FLAG) --window "$(WINDOW)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
 run_mupexi: check-config
-	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(if $(MUPEXI_NODES),--nodes "$(MUPEXI_NODES)",) $(if $(MUPEXI_PPN),--ppn "$(MUPEXI_PPN)",) $(if $(MUPEXI_MEM),--mem "$(MUPEXI_MEM)",) $(if $(MUPEXI_WALLTIME),--walltime "$(MUPEXI_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
 check_outputs: check-config
 	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) -m "$(MODE)"

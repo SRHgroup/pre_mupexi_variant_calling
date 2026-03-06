@@ -126,6 +126,11 @@ mupexi_parallel_k="true"
 mupexi_enable_germlines="true"
 mupexi_enable_superpeptides="true"
 mupexi_enable_rna_edit="true"
+# MuPeXI qsub resources (overridable via run_pipeline mupexi --nodes/--ppn/--mem/--walltime)
+mupexi_qsub_nodes="1"
+mupexi_qsub_ppn="4"
+mupexi_qsub_mem="24gb"
+mupexi_qsub_walltime="24:00:00"
 
 # HLA is read per patient from hladir (legacy suffix logic compatible).
 # Primary expected file pattern:

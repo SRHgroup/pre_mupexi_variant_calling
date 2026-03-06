@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [-f] [--skip-running]
+  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
 USAGE
 }
 
@@ -17,6 +17,10 @@ skip_running=0
 cli_hla=""
 cli_expr=""
 cli_fusion=""
+cli_nodes=""
+cli_ppn=""
+cli_mem=""
+cli_walltime=""
 
 while [ $# -gt 0 ]; do
   case "${1:-}" in
@@ -27,6 +31,10 @@ while [ $# -gt 0 ]; do
     --hla) cli_hla="$2"; shift 2 ;;
     --expr) cli_expr="$2"; shift 2 ;;
     --fusion) cli_fusion="$2"; shift 2 ;;
+    --nodes) cli_nodes="$2"; shift 2 ;;
+    --ppn) cli_ppn="$2"; shift 2 ;;
+    --mem) cli_mem="$2"; shift 2 ;;
+    --walltime) cli_walltime="$2"; shift 2 ;;
     -f|--force) force=1; shift ;;
     --skip-running) skip_running=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -67,6 +75,10 @@ hld_ext="${mupexi_hla_extension:-${output_extension_14:-1.4.RunStatBootstrapMean
 hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
 expr_dir="${kaldir:-}"
 expr_ext="${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}"
+q_nodes="${cli_nodes:-${mupexi_qsub_nodes:-1}}"
+q_ppn="${cli_ppn:-${mupexi_qsub_ppn:-4}}"
+q_mem="${cli_mem:-${mupexi_qsub_mem:-24gb}}"
+q_walltime="${cli_walltime:-${mupexi_qsub_walltime:-24:00:00}}"
 [ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
 
 resolve_patient_placeholder() {
@@ -335,6 +347,7 @@ SCRIPT
   qsub_opts=()
   [ -n "${qsub_group:-}" ] && qsub_opts+=(-W "group_list=${qsub_group}")
   [ -n "${qsub_account:-}" ] && qsub_opts+=(-A "${qsub_account}")
+  qsub_opts+=(-l "nodes=${q_nodes}:ppn=${q_ppn},mem=${q_mem},walltime=${q_walltime}")
   qsub_opts+=(-N "${prefix}.${patient}")
   qsub_opts+=(-o "${repdir}/${prefix}.${patient}.o\$PBS_JOBID")
   qsub_opts+=(-e "${repdir}/${prefix}.${patient}.e\$PBS_JOBID")

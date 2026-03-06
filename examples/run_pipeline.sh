@@ -15,7 +15,7 @@ Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
   $0 dna-only [PATIENT] [-f]
-  $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [-f] [--skip-running]
+  $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
@@ -36,6 +36,7 @@ Examples:
   $0 dna-only 01-CH-L
   $0 mupexi 01-CH-L
   $0 mupexi 01-CH-L --run-fusions
+  $0 mupexi 01-CH-L --ppn 8 --mem 48gb --walltime 24:00:00
   $0 mupexi Pat11 --hla HLA-A26:01,HLA-A24:02,HLA-B27:02,HLA-B15:09,HLA-C02:02,HLA-C07:04 --expr /path/to/Patient_11.expr.tsv
   $0 all 01-CH-L
   $0 step rna4 01-CH-L -f
@@ -120,20 +121,32 @@ run_mupexi() {
   local hla="${4:-}"
   local expr="${5:-}"
   local fusion="${6:-}"
+  local nodes="${7:-}"
+  local ppn="${8:-}"
+  local mem="${9:-}"
+  local walltime="${10:-}"
   local fusion_arg=""
   local hla_arg=""
   local expr_arg=""
   local fusion_path_arg=""
+  local nodes_arg=""
+  local ppn_arg=""
+  local mem_arg=""
+  local walltime_arg=""
   if [ "$run_fusions" = "1" ]; then
     fusion_arg="RUN_FUSIONS=1"
   fi
   if [ -n "$hla" ]; then hla_arg="HLA=$hla"; fi
   if [ -n "$expr" ]; then expr_arg="EXPR=$expr"; fi
   if [ -n "$fusion" ]; then fusion_path_arg="FUSION=$fusion"; fi
+  if [ -n "$nodes" ]; then nodes_arg="MUPEXI_NODES=$nodes"; fi
+  if [ -n "$ppn" ]; then ppn_arg="MUPEXI_PPN=$ppn"; fi
+  if [ -n "$mem" ]; then mem_arg="MUPEXI_MEM=$mem"; fi
+  if [ -n "$walltime" ]; then walltime_arg="MUPEXI_WALLTIME=$walltime"; fi
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $fusion_arg $hla_arg $expr_arg $fusion_path_arg $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $fusion_arg $hla_arg $expr_arg $fusion_path_arg $nodes_arg $ppn_arg $mem_arg $walltime_arg $force_arg $skip_running_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" OUTDIR="$outdir" $fusion_arg $hla_arg $expr_arg $fusion_path_arg $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" OUTDIR="$outdir" $fusion_arg $hla_arg $expr_arg $fusion_path_arg $nodes_arg $ppn_arg $mem_arg $walltime_arg $force_arg $skip_running_arg
   fi
 }
 
@@ -548,6 +561,10 @@ case "$cmd" in
     hla=""
     expr=""
     fusion=""
+    mupexi_nodes=""
+    mupexi_ppn=""
+    mupexi_mem=""
+    mupexi_walltime=""
     if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
       sample="$1"
       shift
@@ -559,10 +576,14 @@ case "$cmd" in
         --hla) hla="${2:-}"; shift 2 ;;
         --expr) expr="${2:-}"; shift 2 ;;
         --fusion) fusion="${2:-}"; shift 2 ;;
+        --nodes) mupexi_nodes="${2:-}"; shift 2 ;;
+        --ppn) mupexi_ppn="${2:-}"; shift 2 ;;
+        --mem) mupexi_mem="${2:-}"; shift 2 ;;
+        --walltime) mupexi_walltime="${2:-}"; shift 2 ;;
         *) echo "Unknown mupexi option: $1" >&2; exit 1 ;;
       esac
     done
-    run_mupexi "$sample" "$outdir" "$run_fusions" "$hla" "$expr" "$fusion"
+    run_mupexi "$sample" "$outdir" "$run_fusions" "$hla" "$expr" "$fusion" "$mupexi_nodes" "$mupexi_ppn" "$mupexi_mem" "$mupexi_walltime"
     ;;
   all)       run_make run_all "${1:-}" ;;
   research)
