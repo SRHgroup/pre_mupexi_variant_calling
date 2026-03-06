@@ -214,6 +214,7 @@ def parse_merged(merged_vcf: str, tumor_col: int):
         "GERMLINE": {},
         "SOMATIC": {},
         "RNA_EDIT": {},
+        "RNA_EDIT_KNOWN": {},
     }
     counts = {
         "merged_total": 0,
@@ -295,6 +296,7 @@ def parse_merged(merged_vcf: str, tumor_col: int):
                 known_db = str(info_map.get("KNOWN_RNAEDIT_DB", ""))
                 if known_db not in ("", "."):
                     counts["merged_rna_edit_known_db_total"] += 1
+                    by_source["RNA_EDIT_KNOWN"].setdefault(chrom, []).append(rec)
             if phased_gt:
                 counts[f"merged_{low}_gt_phased"] += 1
             if unphased_gt:
@@ -407,8 +409,6 @@ def main():
         "merged_somatic_het_alt",
         "merged_rna_edit_hom_alt",
         "merged_rna_edit_het_alt",
-        "somatic_lost_due_to_merge",
-        "rna_lost_due_to_merge",
         "germline_hom_adj_somatic_any",
         "germline_het_samecopy_with_somatic",
         "germline_het_samecopy_with_somatic_phasedcis",
@@ -497,10 +497,11 @@ def main():
 
             gs = adjacency_counts(by_source["GERMLINE"], by_pos["SOMATIC"], by_source["SOMATIC"], args.window)
             sg = adjacency_counts(by_source["SOMATIC"], by_pos["GERMLINE"], by_source["GERMLINE"], args.window)
-            gr = adjacency_counts(by_source["GERMLINE"], by_pos["RNA_EDIT"], by_source["RNA_EDIT"], args.window)
-            rg = adjacency_counts(by_source["RNA_EDIT"], by_pos["GERMLINE"], by_source["GERMLINE"], args.window)
-            sr = adjacency_counts(by_source["SOMATIC"], by_pos["RNA_EDIT"], by_source["RNA_EDIT"], args.window)
-            rs = adjacency_counts(by_source["RNA_EDIT"], by_pos["SOMATIC"], by_source["SOMATIC"], args.window)
+            # For RNA-involving samecopy/phasing metrics, use only KNOWN_RNAEDIT_DB RNA variants.
+            gr = adjacency_counts(by_source["GERMLINE"], by_pos["RNA_EDIT_KNOWN"], by_source["RNA_EDIT_KNOWN"], args.window)
+            rg = adjacency_counts(by_source["RNA_EDIT_KNOWN"], by_pos["GERMLINE"], by_source["GERMLINE"], args.window)
+            sr = adjacency_counts(by_source["SOMATIC"], by_pos["RNA_EDIT_KNOWN"], by_source["RNA_EDIT_KNOWN"], args.window)
+            rs = adjacency_counts(by_source["RNA_EDIT_KNOWN"], by_pos["SOMATIC"], by_source["SOMATIC"], args.window)
 
             row = {
                 "patient": patient,
@@ -508,8 +509,6 @@ def main():
                 "somatic_filtered_total": som_total,
                 "rna_filtered_total": rna_total,
                 **mc,
-                "somatic_lost_due_to_merge": max(som_total - mc["merged_somatic_total"], 0),
-                "rna_lost_due_to_merge": max(rna_total - mc["merged_rna_edit_total"], 0),
                 "germline_hom_adj_somatic_any": gs[0],
                 "germline_het_samecopy_with_somatic": gs[1],
                 "germline_het_samecopy_with_somatic_phasedcis": gs[2],
