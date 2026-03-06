@@ -48,6 +48,10 @@ done
 # shellcheck disable=SC1090
 source "$config"
 
+# Compatibility/fallback config keys
+mupexi2_repo="${mupexi2_repo:-${mupexi_repo:-${mupexi_repo_dir:-/home/projects/SRHgroup/apps/mupexi2}}}"
+mupexi_netmhc_config="${mupexi_netmhc_config:-${netmhc_config:-${mupexi_netmhcpan_config:-}}}"
+
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${mupexi2_repo:?CONFIG must define mupexi2_repo}"
