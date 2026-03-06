@@ -66,12 +66,12 @@ def write_empty_plot(out_prefix, reason):
     ax.axis('off')
     ax.text(0.5, 0.5, f'No variants to plot\n{reason}', ha='center', va='center', fontsize=12)
     out_png = f"{out_prefix}.png"
-    out_pdf = f"{out_prefix}.pdf"
+    out_svg = f"{out_prefix}.svg"
     os.makedirs(os.path.dirname(out_png) or '.', exist_ok=True)
     plt.tight_layout()
     plt.savefig(out_png, dpi=180)
-    plt.savefig(out_pdf)
-    print(f"[warn] empty plot written: {out_png}, {out_pdf} ({reason}; check extract filters like --min-alt-count)")
+    plt.savefig(out_svg)
+    print(f"[warn] empty plot written: {out_png}, {out_svg} ({reason}; check extract filters like --min-alt-count)")
 
 
 def main():
@@ -319,11 +319,11 @@ def main():
 
     plt.tight_layout(rect=(0, 0, 1, 0.92))
     out_png = f"{args.out_prefix}.png"
-    out_pdf = f"{args.out_prefix}.pdf"
+    out_svg = f"{args.out_prefix}.svg"
     os.makedirs(os.path.dirname(out_png) or '.', exist_ok=True)
     plt.savefig(out_png, dpi=180)
-    plt.savefig(out_pdf)
-    print(f"[done] plots: {out_png}, {out_pdf}")
+    plt.savefig(out_svg)
+    print(f"[done] plots: {out_png}, {out_svg}")
 
 
 if __name__ == '__main__':
