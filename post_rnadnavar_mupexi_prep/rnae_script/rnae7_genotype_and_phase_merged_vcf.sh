@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# rnae7: compose final DNA_NORMAL+TUMOR VCF from merged VCF and phase with whatshap.
+# rnae7: compose final 2-sample VCF from merged VCF and phase with whatshap.
 # Sample-name aware (supports TUMOR/TUMOUR and configurable output names).
 
 threads=8
@@ -16,7 +16,7 @@ out_phased=""
 normal_name="DNA_NORMAL"
 dna_name="DNA_TUMOR"
 rna_name="RNA_TUMOR"
-tumor_name="TUMOR"
+tumor_name=""
 genotyper_mode="${rna7_genotyper_mode:-${RNA7_GENOTYPER_MODE:-auto}}"
 
 usage() {
@@ -30,6 +30,7 @@ Optional sample names (must match merged VCF sample columns):
   --normal-name  (default: DNA_NORMAL)
   --dna-name     (default: DNA_TUMOR)
   --rna-name     (default: RNA_TUMOR)
+  --tumor-name   (default: same as --dna-name)
 USAGE
 }
 
@@ -66,10 +67,15 @@ while [[ $# -gt 0 ]]; do
     --normal-name) normal_name="$2"; shift 2;;
     --dna-name) dna_name="$2"; shift 2;;
     --rna-name) rna_name="$2"; shift 2;;
+    --tumor-name) tumor_name="$2"; shift 2;;
     -h|--help) usage; exit 0;;
     *) die "Unknown arg: $1";;
   esac
 done
+
+if [ -z "$tumor_name" ]; then
+  tumor_name="$dna_name"
+fi
 
 [[ -n "$merged_vcf" ]] || die "Missing --merged"
 [[ -n "$dna_bam" ]] || die "Missing --dna-bam"
@@ -193,8 +199,8 @@ case "$genotyper_mode" in
     ;;
 esac
 
-# Build final 2-sample VCF: DNA_NORMAL + TUMOR.
-# TUMOR is composed from source-aware DNA/RNA calls with fallback to merged_vcf to avoid erasing real calls.
+# Build final 2-sample VCF: normal + configured tumor signal sample label.
+# Tumor is composed from source-aware DNA/RNA calls with fallback to merged_vcf to avoid erasing real calls.
 python3 - "$merged_vcf" "$genotyped_raw" "$out_genotyped" "$normal_name" "$dna_name" "$rna_name" "$tumor_name" <<'PY'
 import gzip
 import sys

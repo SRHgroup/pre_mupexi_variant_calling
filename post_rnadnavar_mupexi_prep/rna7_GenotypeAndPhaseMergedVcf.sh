@@ -210,6 +210,7 @@ SCRIPT
     printf 'out_dna_normal_label=%q\n' "${out_dna_normal_label:-DNA_NORMAL}"
     printf 'out_dna_tumor_label=%q\n' "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
     printf 'out_rna_tumor_label=%q\n' "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
+    printf 'rna7_signal_sample_label=%q\n' "${rna7_signal_sample_label:-${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}}"
     cat <<'SCRIPT'
 if [ ! -f "$merged_vcf" ]; then
   echo "ERROR: missing merged VCF (run rna6 first): $merged_vcf" >&2
@@ -235,7 +236,8 @@ bash "$rnae_scripts/rnae7_genotype_and_phase_merged_vcf.sh" \
   --threads 8 \
   --normal-name "$out_dna_normal_label" \
   --dna-name "$out_dna_tumor_label" \
-  --rna-name "$out_rna_tumor_label" 2>&1 | tee "$run_log"
+  --rna-name "$out_rna_tumor_label" \
+  --tumor-name "$rna7_signal_sample_label" 2>&1 | tee "$run_log"
 SCRIPT
   } > "$runscript"
   chmod +x "$runscript"
