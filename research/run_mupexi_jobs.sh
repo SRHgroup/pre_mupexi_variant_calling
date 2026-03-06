@@ -66,7 +66,7 @@ out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 tumor_sample_name="${mupexi_tumor_sample:-${rna7_signal_sample_label:-TUMOR}}"
 normal_sample_name="${mupexi_normal_sample:-DNA_NORMAL}"
 peptide_lengths="${mupexi_peptide_lengths:-9-11}"
-parallel_k="${mupexi_parallel_k:-true}"
+parallel_k_cfg="${mupexi_parallel_k:-auto}"
 enable_germlines="${mupexi_enable_germlines:-true}"
 enable_superpeptides="${mupexi_enable_superpeptides:-true}"
 enable_rna_edit="${mupexi_enable_rna_edit:-true}"
@@ -80,6 +80,52 @@ q_ppn="${cli_ppn:-${mupexi_qsub_ppn:-4}}"
 q_mem="${cli_mem:-${mupexi_qsub_mem:-24gb}}"
 q_walltime="${cli_walltime:-${mupexi_qsub_walltime:-24:00:00}}"
 [ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
+
+count_k_values() {
+  local spec="$1"
+  awk -v s="$spec" '
+    BEGIN{
+      n=split(s,a,",")
+      for(i=1;i<=n;i++){
+        gsub(/^[[:space:]]+|[[:space:]]+$/,"",a[i])
+        if(a[i]=="") continue
+        if(a[i] ~ /^[0-9]+-[0-9]+$/){
+          split(a[i],r,"-")
+          lo=r[1]+0; hi=r[2]+0
+          if(lo>hi){ t=lo; lo=hi; hi=t }
+          for(k=lo;k<=hi;k++) seen[k]=1
+        } else if(a[i] ~ /^[0-9]+$/){
+          seen[a[i]+0]=1
+        }
+      }
+      c=0
+      for(k in seen) c++
+      if(c<1) c=1
+      print c
+    }'
+}
+
+k_count="$(count_k_values "$peptide_lengths")"
+parallel_k="$k_count"
+case "${parallel_k_cfg}" in
+  ""|auto|AUTO|true|TRUE|yes|YES|on|ON)
+    parallel_k="$k_count"
+    ;;
+  false|FALSE|no|NO|off|OFF|0)
+    parallel_k="0"
+    ;;
+  *)
+    if [[ "$parallel_k_cfg" =~ ^[0-9]+$ ]]; then
+      if [ "$parallel_k_cfg" -lt "$k_count" ]; then
+        parallel_k="$k_count"
+      else
+        parallel_k="$parallel_k_cfg"
+      fi
+    else
+      parallel_k="$k_count"
+    fi
+    ;;
+esac
 
 resolve_patient_placeholder() {
   local template="$1"

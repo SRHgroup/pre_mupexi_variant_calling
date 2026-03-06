@@ -122,7 +122,11 @@ mupexi_normal_sample="DNA_NORMAL"
 
 # MuPeXI behavior
 mupexi_peptide_lengths="9-11"
-mupexi_parallel_k="true"
+# parallel-k workers:
+#   auto/true -> number of unique K values from mupexi_peptide_lengths (e.g. 9-11 -> 3)
+#   numeric   -> enforced to be at least that unique-K count
+#   false/0   -> disable parallel-k
+mupexi_parallel_k="auto"
 mupexi_enable_germlines="true"
 mupexi_enable_superpeptides="true"
 mupexi_enable_rna_edit="true"
