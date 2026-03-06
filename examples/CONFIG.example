@@ -135,12 +135,10 @@ mupexi_enable_rna_edit="true"
 # Default suffix uses output_extension_14 when present.
 # mupexi_hla_extension="${output_extension_14}"
 #
-# Patient-specific expression / optional fusion are expected to be provided per run,
-# e.g.:
-#   ./run_pipeline.sh mupexi Pat11 --hla "HLA-A26:01,..." --expr /path/to/Patient_11.expr.tsv
-# Optional convenience (cohort mode) if you maintain maps:
-# mupexi_hla_map_tsv="/path/to/mupexi_hla_map.tsv"                     # patient<TAB>HLA_STRING
-# mupexi_expression_map_tsv="/path/to/mupexi_expression_map.tsv"       # patient<TAB>expr_path
+# Expression defaults are resolved from existing expression pipeline outputs:
+#   ${kaldir}/${patient}_${output_extension_14}
+# If the file is missing, MuPeXI still runs (without -e).
+# Optional fusion map override:
 # mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv" # patient<TAB>fusion_arriba_path
 
 # Module stacks for research/MuPeXI jobs are defined in pipeline_defaults/toolchain.defaults.sh.

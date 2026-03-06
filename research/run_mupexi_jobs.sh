@@ -65,6 +65,8 @@ enable_rna_edit="${mupexi_enable_rna_edit:-true}"
 phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}"
 hld_ext="${mupexi_hla_extension:-${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}}"
 hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
+expr_dir="${kaldir:-}"
+expr_ext="${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}"
 [ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
 
 resolve_patient_placeholder() {
@@ -189,14 +191,14 @@ while IFS= read -r line; do
   expr=""
   if [ -n "$sample" ] && [ -n "$cli_expr" ]; then
     expr="$cli_expr"
-  elif [ -n "${mupexi_expression_map_tsv:-}" ]; then
-    expr="$(lookup_map_value "$mupexi_expression_map_tsv" "$patient" || true)"
-  elif [ -n "${mupexi_expression_tsv_template:-}" ]; then
-    expr="$(resolve_patient_placeholder "$mupexi_expression_tsv_template" "$patient")"
+  elif [ -n "$expr_dir" ]; then
+    expr="${expr_dir}/${patient}_${expr_ext}"
   fi
-  if [ -z "$expr" ] || [ ! -f "$expr" ]; then
-    echo "[skip] ${patient}: missing expression file (pass --expr for single sample, or set mupexi_expression_* in CONFIG)"
-    continue
+  if [ -n "$expr" ] && [ ! -f "$expr" ]; then
+    echo "[warn] ${patient}: expression file not found, running MuPeXI without -e: $expr"
+    expr=""
+  elif [ -z "$expr" ]; then
+    echo "[warn] ${patient}: no expression configured/found, running MuPeXI without -e"
   fi
 
   hla=""
@@ -244,9 +246,8 @@ while IFS= read -r line; do
     continue
   fi
 
-  fusion_arg=""
+  fusion_path=""
   if [ "$run_fusions" = "1" ]; then
-    fusion_path=""
     if [ -n "$sample" ] && [ -n "$cli_fusion" ]; then
       fusion_path="$cli_fusion"
     elif [ -n "${mupexi_fusion_arriba_map_tsv:-}" ]; then
@@ -265,10 +266,9 @@ while IFS= read -r line; do
         fi
       done
     fi
-    if [ -n "$fusion_path" ] && [ -f "$fusion_path" ]; then
-      fusion_arg="--fusion ${fusion_path}"
-    else
+    if [ -n "$fusion_path" ] && [ ! -f "$fusion_path" ]; then
       echo "[warn] ${patient}: --run-fusions requested but fusion_arriba file missing; running without -z"
+      fusion_path=""
     fi
   fi
 
@@ -303,23 +303,32 @@ module load ${mupexi_modules:-tools ngs anaconda3/2025.06-1 netmhcpan/4.0a perl/
 
 export PYTHONPATH="${mupexi2_repo}/src:\${PYTHONPATH:-}"
 
-python3 -m mupexi2.cli \\
-  -v "${vcf}" \\
-  --vcf-type merged \\
-  --germlines "${enable_germlines}" \\
-  --superpeptides "${enable_superpeptides}" \\
-  --rna-edit "${enable_rna_edit}" \\
-  --tumor-sample "${tumor_sample_name}" \\
-  --normal-sample "${normal_sample_name}" \\
-  --parallel-k "${parallel_k}" \\
-  -l "${peptide_lengths}" \\
-  -a "${hla}" \\
-  -t -f -n \\
-  -c "${mupexi_netmhc_config}" \\
-  -p "${patient}" \\
-  -d "${outdir}" \\
-  -e "${expr}" \\
-  ${fusion_arg}
+cmd=(
+  python3 -m mupexi2.cli
+  -v "${vcf}"
+  --vcf-type merged
+  --germlines "${enable_germlines}"
+  --superpeptides "${enable_superpeptides}"
+  --rna-edit "${enable_rna_edit}"
+  --tumor-sample "${tumor_sample_name}"
+  --normal-sample "${normal_sample_name}"
+  --parallel-k "${parallel_k}"
+  -l "${peptide_lengths}"
+  -a "${hla}"
+  -t -f -n
+  -c "${mupexi_netmhc_config}"
+  -p "${patient}"
+  -d "${outdir}"
+)
+
+if [ -n "${expr}" ]; then
+  cmd+=(-e "${expr}")
+fi
+if [ -n "${fusion_path}" ]; then
+  cmd+=(--fusion "${fusion_path}")
+fi
+
+"\${cmd[@]}"
 SCRIPT
   chmod +x "$runscript"
 
