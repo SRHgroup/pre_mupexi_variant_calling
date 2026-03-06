@@ -477,6 +477,7 @@ def main():
         "germline_selected_total",
         "somatic_filtered_total",
         "rna_filtered_total",
+        "rna_filtered_total_with_noncoding",
         "merged_total",
         "merged_germline_total",
         "merged_somatic_total",
@@ -581,6 +582,7 @@ def main():
                 continue
 
             germ_total = count_vcf_records(germ)
+            rna_total_with_noncoding = count_vcf_records(rna_src)
             if allowed_keys is not None:
                 som_total = count_vcf_records_with_allowed(dna_src, allowed_keys)
                 rna_total = count_vcf_records_with_allowed(rna_src, allowed_keys)
@@ -611,6 +613,7 @@ def main():
                 "germline_selected_total": germ_total,
                 "somatic_filtered_total": som_total,
                 "rna_filtered_total": rna_total,
+                "rna_filtered_total_with_noncoding": rna_total_with_noncoding,
                 **mc,
                 "germline_hom_adj_somatic_any": gs[0],
                 "germline_het_samecopy_with_somatic": gs[1],
