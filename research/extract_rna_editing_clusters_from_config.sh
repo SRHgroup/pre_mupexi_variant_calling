@@ -39,6 +39,7 @@ out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}"
 signal_sample_label="${rna7_signal_sample_label:-TUMOR}"
+vep_dir="${rna_edit_vep_dir:-${mupexi_outdir:-${datadir%/}/mupexi2}}"
 [ -n "$phased_ext" ] || { echo "ERROR: phased extension not found in CONFIG (rna7_phased_vcf_extension or phased_vcf_extension)" >&2; exit 1; }
 
 mkdir -p "$outdir"
@@ -84,6 +85,7 @@ python3 "$(dirname "$0")/extract_rna_editing_clusters.py" \
   --rna-sample "${signal_sample_label}" \
   --tumor-label "${signal_sample_label}" \
   --tumor-label "${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}" \
-  --normal-label "${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
+  --normal-label "${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}" \
+  --vep-dir "${vep_dir}"
 
 echo "[done] wrote: ${outdir}/rna_edit_variants.tsv and ${outdir}/rna_edit_clusters.tsv"

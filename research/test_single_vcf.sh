@@ -7,7 +7,7 @@ Usage:
   bash research/test_single_vcf.sh \
     -i /path/to/phased.vcf.gz \
     -p SAMPLE_ID \
-    [-o OUTDIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [--rna-label LABEL] [--tumor-label LABEL]
+    [-o OUTDIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [--rna-label LABEL] [--tumor-label LABEL] [--vep-dir DIR]
 
 Example:
   bash research/test_single_vcf.sh \
@@ -23,6 +23,7 @@ min_cluster_size=2
 min_alt_count=10
 rna_label="RNA_TUMOUR"
 tumor_label="TUMOR"
+vep_dir=""
 
 while :; do
   case ${1:-} in
@@ -34,6 +35,7 @@ while :; do
     --min-alt-count) min_alt_count="$2"; shift 2 ;;
     --rna-label) rna_label="$2"; shift 2 ;;
     --tumor-label) tumor_label="$2"; shift 2 ;;
+    --vep-dir) vep_dir="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) break ;;
   esac
@@ -53,7 +55,8 @@ python3 "$(dirname "$0")/extract_rna_editing_clusters.py" \
   --min-cluster-size "$min_cluster_size" \
   --min-alt-count "$min_alt_count" \
   --rna-label "$rna_label" \
-  --tumor-label "$tumor_label"
+  --tumor-label "$tumor_label" \
+  --vep-dir "$vep_dir"
 
 python3 "$(dirname "$0")/plot_rna_editing_clusters.py" \
   --variants "${outdir}/rna_edit_variants.tsv" \

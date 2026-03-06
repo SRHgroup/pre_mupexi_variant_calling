@@ -208,6 +208,48 @@ def build_clusters(variants, max_distance, min_size):
     return clusters
 
 
+def normalize_chrom(chrom):
+    c = str(chrom).strip()
+    if c.lower().startswith('chr'):
+        c = c[3:]
+    return c
+
+
+def parse_vep_location(loc):
+    s = str(loc).strip()
+    if ':' not in s:
+        return None, None
+    chrom, rest = s.split(':', 1)
+    pos_s = rest.split('-', 1)[0]
+    try:
+        pos = int(pos_s)
+    except Exception:
+        return None, None
+    return normalize_chrom(chrom), pos
+
+
+def load_vep_consequence_map(path):
+    cons = defaultdict(set)
+    if not path or not os.path.exists(path):
+        return cons
+    with open_text(path) as fh:
+        for line in fh:
+            if not line or line.startswith('#'):
+                continue
+            cols = line.rstrip('\n').split('\t')
+            if len(cols) < 7:
+                continue
+            chrom, pos = parse_vep_location(cols[1])
+            if chrom is None or pos is None:
+                continue
+            allele = cols[2].strip()
+            consequence = cols[6].strip()
+            if not allele or not consequence or consequence == '.':
+                continue
+            cons[(chrom, pos, allele)].add(consequence)
+    return cons
+
+
 def make_cluster_row(cid, patient, chrom, rows):
     positions = [r['pos'] for r in rows]
     sig = Counter(r['signature'] for r in rows)
@@ -246,6 +288,8 @@ def main():
     ap.add_argument('--rna-label', action='append', default=['RNA_TUMOR'])
     ap.add_argument('--tumor-label', action='append', default=['TUMOR', 'DNA_TUMOR', 'DNA_TUMOUR'])
     ap.add_argument('--normal-label', action='append', default=['DNA_NORMAL'])
+    ap.add_argument('--vep-dir', default='', help='Optional dir with per-patient VEP files: {patient}_vep.vep')
+    ap.add_argument('--vep-suffix', default='_vep.vep', help='VEP filename suffix, default: _vep.vep')
     args = ap.parse_args()
 
     pairs = []
@@ -260,6 +304,14 @@ def main():
         if not os.path.exists(vcf):
             print(f'[warn] missing input, skip: {patient} {vcf}')
             continue
+
+        vep_map = {}
+        if args.vep_dir:
+            vep_path = os.path.join(args.vep_dir, f"{patient}{args.vep_suffix}")
+            if os.path.exists(vep_path):
+                vep_map = load_vep_consequence_map(vep_path)
+            else:
+                print(f'[warn] no VEP file for {patient}: {vep_path}')
 
         with open_text(vcf) as fh:
             header_samples = None
@@ -340,6 +392,7 @@ def main():
                     'pos': pos,
                     'ref': ref,
                     'alt': alt,
+                    'Consequence': "|".join(sorted(vep_map.get((normalize_chrom(chrom), pos, alt), set()))),
                     'signature': infer_signature(info_map),
                     'rna_sample': current_sample_name,
                     'rna_gt': gt,
@@ -361,7 +414,7 @@ def main():
     os.makedirs(os.path.dirname(args.out_clusters) or '.', exist_ok=True)
 
     v_fields = [
-        'patient', 'chrom', 'pos', 'ref', 'alt', 'signature', 'rna_sample', 'rna_gt', 'rna_ad', 'rna_alt_count', 'rna_af', 'rna_dp',
+        'patient', 'chrom', 'pos', 'ref', 'alt', 'Consequence', 'signature', 'rna_sample', 'rna_gt', 'rna_ad', 'rna_alt_count', 'rna_af', 'rna_dp',
         'ps', 'pid', 'gene', 'transcript', 'source_set', 'known_db'
     ]
     with open(args.out_variants, 'w', newline='') as outv:
