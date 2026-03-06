@@ -122,17 +122,15 @@ mupexi_normal_sample="DNA_NORMAL"
 
 # MuPeXI behavior
 mupexi_peptide_lengths="9-11"
-# parallel-k workers:
-#   auto/true -> number of unique K values from mupexi_peptide_lengths (e.g. 9-11 -> 3)
-#   numeric   -> enforced to be at least that unique-K count
-#   false/0   -> disable parallel-k
-mupexi_parallel_k="auto"
+# Keep MuPeXI default behavior unless you explicitly disable it.
+mupexi_parallel_k="true"
 mupexi_enable_germlines="true"
 mupexi_enable_superpeptides="true"
 mupexi_enable_rna_edit="true"
 # MuPeXI qsub resources (overridable via run_pipeline mupexi --nodes/--ppn/--mem/--walltime)
 mupexi_qsub_nodes="1"
-mupexi_qsub_ppn="4"
+# If unset, ppn defaults to count of unique K values from mupexi_peptide_lengths (e.g. 9-11 -> 3).
+# mupexi_qsub_ppn="3"
 mupexi_qsub_mem="24gb"
 mupexi_qsub_walltime="24:00:00"
 
