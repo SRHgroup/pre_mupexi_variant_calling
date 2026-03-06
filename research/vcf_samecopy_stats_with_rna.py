@@ -220,6 +220,9 @@ def parse_merged(merged_vcf: str, tumor_col: int):
         "merged_germline_total": 0,
         "merged_somatic_total": 0,
         "merged_rna_edit_total": 0,
+        "merged_rna_edit_adar_total": 0,
+        "merged_rna_edit_apobec3_total": 0,
+        "merged_rna_edit_known_db_total": 0,
         "merged_other_total": 0,
         "merged_germline_gt_phased": 0,
         "merged_germline_gt_unphased": 0,
@@ -283,6 +286,15 @@ def parse_merged(merged_vcf: str, tumor_col: int):
 
             low = source.lower()
             counts[f"merged_{low}_total"] += 1
+            if source == "RNA_EDIT":
+                edit_sig = str(info_map.get("EDIT_SIG", "")).upper()
+                if "ADAR" in edit_sig:
+                    counts["merged_rna_edit_adar_total"] += 1
+                if "APOBEC3" in edit_sig:
+                    counts["merged_rna_edit_apobec3_total"] += 1
+                known_db = str(info_map.get("KNOWN_RNAEDIT_DB", ""))
+                if known_db not in ("", "."):
+                    counts["merged_rna_edit_known_db_total"] += 1
             if phased_gt:
                 counts[f"merged_{low}_gt_phased"] += 1
             if unphased_gt:
@@ -379,6 +391,9 @@ def main():
         "merged_germline_total",
         "merged_somatic_total",
         "merged_rna_edit_total",
+        "merged_rna_edit_adar_total",
+        "merged_rna_edit_apobec3_total",
+        "merged_rna_edit_known_db_total",
         "merged_other_total",
         "merged_germline_gt_phased",
         "merged_germline_gt_unphased",
