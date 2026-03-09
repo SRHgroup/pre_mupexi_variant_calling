@@ -11,29 +11,28 @@ This repository contains two coordinated modules:
 - `post_rnadnavar_mupexi_prep/rnae_script/`: RNA helper scripts (`rnae1..rnae7`)
 - `germline_calling/`: gDNA step scripts + `run_all.sh`
 - `germline_calling/scripts/`: helper python
-- `examples/CONFIG.example`
-- `examples/SAMPLES.example`
-- `bin/check_outputs.sh`
-- `run_all_end_to_end.sh`
-- `Makefile`
+- `examples/CONFIG.example`: example of a CONFIG file, which you write in run_pipeline wrapper, it should have the paths to references, desired file extensions and your data folder structure. 
+- `examples/SAMPLES.example`:example of a sample sheet, that you also feed to a run_pipeline wrapper. 
+- `bin/check_outputs.sh`: commands that print you a input/output status for a step you want to run.
+- `run_all_end_to_end.sh`: run whole rna/gdna end-to-end (works partially at the moment)
 
 ## Step names
 
 RNA:
-1. `rna1_OnlyRnaVcf.sh`
-2. `rna2_FilterEditSignature.sh`
-3. `rna3_AnnotateKnownSites.sh`
-4. `rna4_SummariseRnaMetrics.sh`
-5. `rna5_FilterByAfDpAr.sh`
-6. `rna6_MergeDnaRnaVcfs.sh`
-7. `rna7.0_FixRnaBamReadGroups.sh` (required before `rna7`)
-8. `rna7_GenotypeAndPhaseMergedVcf.sh`
+1. `rna1_OnlyRnaVcf.sh` # remove mutations from RNA vcf that exists in DNA-tumor VCF.
+2. `rna2_FilterEditSignature.sh` # only keep mutations that follow ADAR and APOBEC3 signature. Adds the specific field in INFO.
+3. `rna3_AnnotateKnownSites.sh` # Annotate a specific KNOWN_DB field in the INFO, inditating whether cancer RNA-editing databases have this event. These are be default the only variants later passed to neoantigen preiction.
+4. `rna4_SummariseRnaMetrics.sh` # A step needded specifically to default rnadnavar RNA VCF, as it has separate sample tracks for readgroups, which we summarise into one.
+5. `rna5_FilterByAfDpAr.sh` # Add optionally QC filters to remove potential artefacts.
+6. `rna6_MergeDnaRnaVcfs.sh` # Merge with VCF containing somatic and germline variants.
+7. `rna7.0_FixRnaBamReadGroups.sh` (required before `rna7`) # similar to rna4, removes read group tag from reads in RNA BAM, so the phaser can connect reads in BAM with. Make sure you use both BAM files afer GATK preprocessing for both DNA and RNA. 
+8. `rna7_GenotypeAndPhaseMergedVcf.sh` # standardises and phases all calls from every sourse of variants into MuPeXi2-ready format. 
 
 gDNA:
-1. `gdna1_HaplotypeCaller.sh`
-2. `gdna2_FilterGermline.sh`
-3. `gdna3_SelectVariants.sh`
-4. `gdna4_FilterGermlineByAdjacency.sh`
+1. `gdna1_HaplotypeCaller.sh` # runs germline variant calling
+2. `gdna2_FilterGermline.sh` # applies basic QC filter labels
+3. `gdna3_SelectVariants.sh` # removes low QC entries 
+4. `gdna4_FilterGermlineByAdjacency.sh` # for a given k and somatic/rna-editing VCF preserved only variants adjacent to at least one cancer mutation. Optional but reccomended, as raw germline calls are huge.
 
 ## Dependency model
 
@@ -68,7 +67,7 @@ Edit `CONFIG` and set at minimum:
 
 Labels:
 - default: `DNA_TUMOR`, `RNA_TUMOR`
-- UK spelling supported via label vars in `CONFIG`
+- UK spelling supported via label vars in `CONFIG`. Make sure you use UK or US spelling everywhere, and save your mental health.
 
 ## Run
 
@@ -110,11 +109,11 @@ bash bin/check_outputs.sh -c /path/to/CONFIG -m rna
 bash bin/check_outputs.sh -c /path/to/CONFIG -m germline
 ```
 
-If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can check one step per patient with YES/NO:
+If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can check one step per patient or forthe whole cohort:
 
 ```bash
-./run_pipeline.sh check-step rna5
-./run_pipeline.sh check-step gdna4 01-CH-L
+./run_pipeline.sh check-step rna5 # runs rna5 script for the whole cohort
+./run_pipeline.sh check-step gdna4 SampleX # runs germline variant calling only for SampleX
 ```
 
 ## Notes
@@ -122,35 +121,4 @@ If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can chec
 - Scripts precheck inputs before `qsub`; broken/missing inputs are reported immediately.
 - Duplicate submission guard is enabled per step/sample using stored job IDs + `qstat`.
 - `rna7` requires the SM-fixed RNA BAM from `rna7.0` and will fail/skip if that file is missing.
-- Dataset-specific `CONFIG` files should stay outside git-tracked repo content.
 
-## Research Utilities: RNA-Editing Clusters
-
-`research/` contains scripts to find clustered RNA-editing variants from merged+phased VCFs and plot multi-patient landscapes.
-
-Extract from project `CONFIG`:
-
-```bash
-bash research/extract_rna_editing_clusters_from_config.sh \
-  -c /path/to/CONFIG \
-  -o research/output \
-  --max-distance 500 \
-  --min-cluster-size 2
-```
-
-Outputs:
-- `research/output/rna_edit_variants.tsv`
-- `research/output/rna_edit_clusters.tsv`
-
-Plot:
-
-```bash
-python3 research/plot_rna_editing_clusters.py \
-  --variants research/output/rna_edit_variants.tsv \
-  --clusters research/output/rna_edit_clusters.tsv \
-  --out-prefix research/output/rna_edit_cluster_landscape
-```
-
-Outputs:
-- `research/output/rna_edit_cluster_landscape.png`
-- `research/output/rna_edit_cluster_landscape.pdf`
