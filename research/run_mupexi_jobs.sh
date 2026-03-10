@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
+  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [--fusion-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
 USAGE
 }
 
@@ -12,6 +12,7 @@ config=""
 sample=""
 outdir=""
 run_fusions=0
+fusion_only=0
 force=0
 skip_running=0
 cli_hla=""
@@ -28,6 +29,7 @@ while [ $# -gt 0 ]; do
     -s|--sample) sample="$2"; shift 2 ;;
     -o|--outdir) outdir="$2"; shift 2 ;;
     --run-fusions) run_fusions=1; shift ;;
+    --fusion-only) fusion_only=1; run_fusions=1; shift ;;
     --hla) cli_hla="$2"; shift 2 ;;
     --expr) cli_expr="$2"; shift 2 ;;
     --fusion) cli_fusion="$2"; shift 2 ;;
@@ -82,7 +84,15 @@ expr_ext="${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}"
 q_nodes="${cli_nodes:-${mupexi_qsub_nodes:-1}}"
 q_mem="${cli_mem:-${mupexi_qsub_mem:-24gb}}"
 q_walltime="${cli_walltime:-${mupexi_qsub_walltime:-24:00:00}}"
-[ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
+if [ "$fusion_only" != "1" ]; then
+  [ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
+fi
+if [ "$fusion_only" = "1" ]; then
+  # Force mutation sources off for fusion-only runs.
+  enable_germlines="false"
+  enable_superpeptides="false"
+  enable_rna_edit="false"
+fi
 
 count_k_values() {
   local spec="$1"
@@ -228,10 +238,13 @@ while IFS= read -r line; do
     continue
   fi
 
-  vcf="${vcfdir}/${patient}_${out_rna_label}_vs_${patient}_${out_normal_label}/${patient}_${phased_ext}"
-  if [ ! -f "$vcf" ]; then
-    echo "[skip] ${patient}: missing phased VCF: $vcf"
-    continue
+  vcf=""
+  if [ "$fusion_only" != "1" ]; then
+    vcf="${vcfdir}/${patient}_${out_rna_label}_vs_${patient}_${out_normal_label}/${patient}_${phased_ext}"
+    if [ ! -f "$vcf" ]; then
+      echo "[skip] ${patient}: missing phased VCF: $vcf"
+      continue
+    fi
   fi
 
   expr=""
@@ -303,9 +316,13 @@ while IFS= read -r line; do
     elif [ -n "${fus_dir:-}" ]; then
       for p in \
         "${fus_dir}/${patient}.fusion_arriba.tsv" \
+        "${fus_dir}/${patient}.fusions_arriba.tsv" \
         "${fus_dir}/${patient}_fusion_arriba.tsv" \
+        "${fus_dir}/${patient}_fusions_arriba.tsv" \
         "${fus_dir}/${patient}/fusion_arriba.tsv" \
-        "${fus_dir}/${patient}/${patient}.fusion_arriba.tsv"; do
+        "${fus_dir}/${patient}/fusions_arriba.tsv" \
+        "${fus_dir}/${patient}/${patient}.fusion_arriba.tsv" \
+        "${fus_dir}/${patient}/${patient}.fusions_arriba.tsv"; do
         if [ -f "$p" ]; then
           fusion_path="$p"
           break
@@ -313,8 +330,17 @@ while IFS= read -r line; do
       done
     fi
     if [ -n "$fusion_path" ] && [ ! -f "$fusion_path" ]; then
-      echo "[warn] ${patient}: --run-fusions requested but fusion_arriba file missing; running without -z"
-      fusion_path=""
+      if [ "$fusion_only" = "1" ]; then
+        echo "[skip] ${patient}: --fusion-only requested but fusion_arriba file missing"
+        continue
+      else
+        echo "[warn] ${patient}: --run-fusions requested but fusion_arriba file missing; running without -z"
+        fusion_path=""
+      fi
+    fi
+    if [ "$fusion_only" = "1" ] && [ -z "$fusion_path" ]; then
+      echo "[skip] ${patient}: --fusion-only requested but no fusion file resolved"
+      continue
     fi
   fi
 
@@ -351,13 +377,9 @@ export PYTHONPATH="${mupexi2_repo}/src:\${PYTHONPATH:-}"
 
 cmd=(
   python3 -m mupexi2.cli
-  -v "${vcf}"
-  --vcf-type merged
   --germlines "${enable_germlines}"
   --superpeptides "${enable_superpeptides}"
   --rna-edit "${enable_rna_edit}"
-  --tumor-sample "${tumor_sample_name}"
-  --normal-sample "${normal_sample_name}"
   --parallel-k "${parallel_k}"
   -l "${peptide_lengths}"
   -a "${hla}"
@@ -366,6 +388,15 @@ cmd=(
   -p "${patient}"
   -d "${outdir}"
 )
+
+if [ "$fusion_only" != "1" ]; then
+  cmd+=(
+    -v "${vcf}"
+    --vcf-type merged
+    --tumor-sample "${tumor_sample_name}"
+    --normal-sample "${normal_sample_name}"
+  )
+fi
 
 if [ -n "${expr}" ]; then
   cmd+=(-e "${expr}")
