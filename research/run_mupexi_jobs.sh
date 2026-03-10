@@ -81,6 +81,7 @@ hld_ext="${mupexi_hla_extension:-${output_extension_14:-1.4.RunStatBootstrapMean
 hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
 expr_dir="${kaldir:-}"
 expr_ext="${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}"
+fus_dir="${fus_dir:-${fusdir:-}}"
 q_nodes="${cli_nodes:-${mupexi_qsub_nodes:-1}}"
 q_mem="${cli_mem:-${mupexi_qsub_mem:-24gb}}"
 q_walltime="${cli_walltime:-${mupexi_qsub_walltime:-24:00:00}}"
