@@ -113,6 +113,8 @@ dna_only_genotyper_mode="safe"
 mupexi2_repo="/home/projects/SRHgroup/apps/mupexi2"
 mupexi_outdir="/path/to/project/mupexi2"
 mupexi_netmhc_config="/home/projects/SRHgroup/apps/netMHCpan/4.0a/config.computerome.ini"
+# Mosdepth reports root used by research run_mosdepth_overlap
+mosdepthdir="/path/to/project/reports/mosdepth"
 fus_dir="${datadir}/arriba"
 hladir="${datadir}/hla"
 

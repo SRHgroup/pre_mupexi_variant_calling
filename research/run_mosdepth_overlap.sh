@@ -31,11 +31,17 @@ done
 source "$config"
 
 : "${samples:?CONFIG must define samples}"
-: "${datadir:?CONFIG must define datadir}"
+if [ -z "${mosdepthdir:-}" ]; then
+  if [ -n "${datadir:-}" ]; then
+    mosdepthdir="${datadir%/}/reports/mosdepth"
+  else
+    echo "ERROR: CONFIG must define mosdepthdir (or datadir for fallback)" >&2
+    exit 1
+  fi
+fi
 
-mosdepth_dir="${datadir%/}/reports/mosdepth"
 if [ -z "$outdir" ]; then
-  outdir="${mosdepth_dir}/overlap_plots"
+  outdir="${mosdepthdir%/}/overlap_plots"
 fi
 mkdir -p "$outdir"
 
@@ -45,7 +51,7 @@ rna_tumor="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 
 python3 "$(dirname "$0")/plot_mosdepth_overlap.py" \
   --samples "$samples" \
-  --mosdepth-dir "$mosdepth_dir" \
+  --mosdepth-dir "$mosdepthdir" \
   --dna-normal-label "$dna_normal" \
   --dna-tumor-label "$dna_tumor" \
   --rna-tumor-label "$rna_tumor" \
