@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash research/run_mosdepth_overlap.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--depth-threshold N] [-f] [--skip-running]
+  bash research/run_mosdepth_overlap.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--depth-threshold N] [--region-bin-size N] [-f] [--skip-running]
 USAGE
 }
 
@@ -12,6 +12,7 @@ config=""
 sample=""
 outdir=""
 depth_threshold="10"
+region_bin_size="250000"
 force=0
 skip_running=0
 
@@ -21,6 +22,7 @@ while [ $# -gt 0 ]; do
     -s|--sample) sample="$2"; shift 2 ;;
     -o|--outdir) outdir="$2"; shift 2 ;;
     --depth-threshold) depth_threshold="$2"; shift 2 ;;
+    --region-bin-size) region_bin_size="$2"; shift 2 ;;
     -f|--force) force=1; shift ;;
     --skip-running) skip_running=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -63,13 +65,15 @@ research_python_modules="${research_python_modules:-tools ngs anaconda3/2025.06-
 
 summary_tsv="${outdir}/mosdepth_overlap_summary.tsv"
 categories_tsv="${outdir}/mosdepth_overlap_categories.tsv"
+bins_tsv="${outdir}/mosdepth_overlap_bins.tsv"
+worst_bins_tsv="${outdir}/mosdepth_overlap_worst_bins.tsv"
 missing_tsv="${outdir}/mosdepth_overlap_missing_inputs.tsv"
 stacked_png="${outdir}/mosdepth_overlap_stacked.png"
 stacked_svg="${outdir}/mosdepth_overlap_stacked.svg"
 jaccard_png="${outdir}/mosdepth_overlap_jaccard_heatmap.png"
 jaccard_svg="${outdir}/mosdepth_overlap_jaccard_heatmap.svg"
 
-if [ "$force" != "1" ] && [ -s "$summary_tsv" ] && [ -s "$categories_tsv" ] && [ -s "$stacked_png" ] && [ -s "$stacked_svg" ] && [ -s "$jaccard_png" ] && [ -s "$jaccard_svg" ]; then
+if [ "$force" != "1" ] && [ -s "$summary_tsv" ] && [ -s "$categories_tsv" ] && [ -s "$bins_tsv" ] && [ -s "$worst_bins_tsv" ] && [ -s "$stacked_png" ] && [ -s "$stacked_svg" ] && [ -s "$jaccard_png" ] && [ -s "$jaccard_svg" ]; then
   echo "[skip] mosdepth overlap outputs already exist in ${outdir} (use -f to overwrite)"
   exit 0
 fi
@@ -135,6 +139,7 @@ python3 "${script_dir}/plot_mosdepth_overlap.py" \\
   --dna-tumor-label "${dna_tumor}" \\
   --rna-tumor-label "${rna_tumor}" \\
   --depth-threshold "${depth_threshold}" \\
+  --region-bin-size "${region_bin_size}" \\
   --outdir "${outdir}" \\
   ${sample:+--patient "${sample}"}
 
@@ -145,6 +150,14 @@ fi
 if [ ! -s "${categories_tsv}" ]; then
   echo "ERROR: category output missing/empty: ${categories_tsv}" >&2
   exit 3
+fi
+if [ ! -s "${bins_tsv}" ]; then
+  echo "ERROR: binned overlap output missing/empty: ${bins_tsv}" >&2
+  exit 4
+fi
+if [ ! -s "${worst_bins_tsv}" ]; then
+  echo "ERROR: sorted worst-bin output missing/empty: ${worst_bins_tsv}" >&2
+  exit 5
 fi
 SCRIPT
 chmod +x "$runscript"

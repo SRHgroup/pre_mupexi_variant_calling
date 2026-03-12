@@ -21,7 +21,7 @@ Usage:
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
-  $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N]
+  $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
   $0 step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
   $0 check-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT]
@@ -112,11 +112,12 @@ run_research_mosdepth_overlap() {
   local sample="${1:-}"
   local outdir="${2:-}"
   local depth_threshold="${3:-10}"
+  local region_bin_size="${4:-250000}"
 
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_mosdepth_overlap CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" DEPTH_THRESHOLD="$depth_threshold" $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_mosdepth_overlap CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" DEPTH_THRESHOLD="$depth_threshold" REGION_BIN_SIZE="$region_bin_size" $force_arg $skip_running_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_mosdepth_overlap CONFIG="$CONFIG" OUTDIR="$outdir" DEPTH_THRESHOLD="$depth_threshold" $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_mosdepth_overlap CONFIG="$CONFIG" OUTDIR="$outdir" DEPTH_THRESHOLD="$depth_threshold" REGION_BIN_SIZE="$region_bin_size" $force_arg $skip_running_arg
   fi
 }
 
@@ -631,6 +632,7 @@ case "$cmd" in
         sample=""
         outdir=""
         depth_threshold="10"
+        region_bin_size="250000"
         if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
           sample="$1"
           shift
@@ -639,10 +641,11 @@ case "$cmd" in
           case "${1:-}" in
             --outdir|-o) outdir="${2:-}"; shift 2 ;;
             --depth-threshold) depth_threshold="${2:-}"; shift 2 ;;
+            --region-bin-size) region_bin_size="${2:-}"; shift 2 ;;
             *) echo "Unknown research option: $1" >&2; exit 1 ;;
           esac
         done
-        run_research_mosdepth_overlap "$sample" "$outdir" "$depth_threshold"
+        run_research_mosdepth_overlap "$sample" "$outdir" "$depth_threshold" "$region_bin_size"
         ;;
       *)
         echo "Unknown research task: $task" >&2

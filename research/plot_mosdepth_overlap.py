@@ -44,6 +44,25 @@ STACK_COLORS = {
 }
 
 
+def chrom_sort_key(chrom: str) -> Tuple[int, int, str]:
+    s = str(chrom)
+    if s.startswith("chr"):
+        s = s[3:]
+    if s.isdigit():
+        return (0, int(s), str(chrom))
+    if s == "X":
+        return (1, 23, str(chrom))
+    if s == "Y":
+        return (1, 24, str(chrom))
+    if s in ("M", "MT"):
+        return (2, 25, str(chrom))
+    return (3, 999, str(chrom))
+
+
+def safe_name(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", str(text))
+
+
 def sample_base_name(value: str, labels: List[str]) -> str:
     out = value
     for label in labels:
@@ -101,7 +120,8 @@ def compute_patient_overlap(
     dna_tumor_label: str,
     rna_tumor_label: str,
     depth_threshold: float,
-) -> Tuple[Dict[str, float], pd.DataFrame]:
+    region_bin_size: int,
+) -> Tuple[Dict[str, float], pd.DataFrame, pd.DataFrame]:
     dn_path = os.path.join(
         mosdepth_dir,
         f"{patient}_{dna_normal_label}",
@@ -153,6 +173,22 @@ def compute_patient_overlap(
     by_cat["fraction_all"] = by_cat["n_intervals"] / max(n_intervals, 1)
     by_cat["fraction_covered"] = by_cat["n_intervals"] / max(covered_any, 1)
 
+    merged["bin_start"] = (merged["start"] // region_bin_size) * region_bin_size
+    by_bin = (
+        merged.groupby(["chrom", "bin_start"], as_index=False)
+        .agg(
+            n_intervals=("mask", "size"),
+            frac_any=("mask", lambda s: float((s > 0).mean())),
+            frac_all_three=("mask", lambda s: float((s == 7).mean())),
+            frac_discordant=("mask", lambda s: float(((s > 0) & (s < 7)).mean())),
+            mean_cov_dna_normal=("cov_dn", "mean"),
+            mean_cov_dna_tumor=("cov_dt", "mean"),
+            mean_cov_rna_tumor=("cov_rt", "mean"),
+        )
+        .copy()
+    )
+    by_bin["patient"] = patient
+
     counts_by_mask = merged["mask"].value_counts().to_dict()
     row: Dict[str, float] = {
         "patient": patient,
@@ -175,7 +211,7 @@ def compute_patient_overlap(
     for mask, label in CATEGORY_LABELS.items():
         row[f"count_{label.lower()}"] = int(counts_by_mask.get(mask, 0))
 
-    return row, by_cat
+    return row, by_cat, by_bin
 
 
 def plot_stacked_overlap(categories_df: pd.DataFrame, out_png: str, out_svg: str) -> None:
@@ -187,6 +223,7 @@ def plot_stacked_overlap(categories_df: pd.DataFrame, out_png: str, out_svg: str
         plt.tight_layout()
         fig.savefig(out_png, dpi=200)
         fig.savefig(out_svg)
+        plt.close(fig)
         return
 
     pivot = (
@@ -215,6 +252,7 @@ def plot_stacked_overlap(categories_df: pd.DataFrame, out_png: str, out_svg: str
     plt.tight_layout()
     fig.savefig(out_png, dpi=220)
     fig.savefig(out_svg)
+    plt.close(fig)
 
 
 def plot_jaccard_heatmap(summary_df: pd.DataFrame, out_png: str, out_svg: str) -> None:
@@ -236,6 +274,108 @@ def plot_jaccard_heatmap(summary_df: pd.DataFrame, out_png: str, out_svg: str) -
     plt.tight_layout()
     fig.savefig(out_png, dpi=220)
     fig.savefig(out_svg)
+    plt.close(fig)
+
+
+def plot_chromosome_profiles(bin_df: pd.DataFrame, outdir: str, region_bin_size: int) -> List[str]:
+    produced: List[str] = []
+    chroms = sorted(bin_df["chrom"].dropna().unique(), key=chrom_sort_key)
+    for chrom in chroms:
+        sub = bin_df[bin_df["chrom"] == chrom].copy()
+        if sub.empty:
+            continue
+        agg = (
+            sub.groupby("bin_start", as_index=False)
+            .agg(
+                frac_any=("frac_any", "mean"),
+                frac_all_three=("frac_all_three", "mean"),
+                frac_discordant=("frac_discordant", "mean"),
+            )
+            .sort_values("bin_start")
+        )
+        if agg.empty:
+            continue
+
+        x = (agg["bin_start"].to_numpy(dtype=float) + (region_bin_size / 2.0)) / 1e6
+        fig, ax = plt.subplots(figsize=(14, 4))
+        ax.plot(x, agg["frac_all_three"], color="#1F4E79", linewidth=1.6, label="All three overlap")
+        ax.plot(x, agg["frac_discordant"], color="#C43C39", linewidth=1.3, label="Discordant overlap")
+        ax.plot(x, agg["frac_any"], color="#2E8B57", linewidth=1.0, linestyle="--", label="Any covered")
+        ax.set_ylim(0, 1)
+        ax.set_xlabel(f"{chrom} position (Mb)")
+        ax.set_ylabel("Fraction of intervals")
+        ax.set_title(f"Cohort overlap profile by bin ({chrom})")
+        ax.grid(alpha=0.2, linewidth=0.5)
+        ax.legend(loc="upper right", fontsize=8, frameon=False)
+        plt.tight_layout()
+
+        base = os.path.join(outdir, f"mosdepth_overlap_{safe_name(chrom)}_cohort_profile")
+        out_png = f"{base}.png"
+        out_svg = f"{base}.svg"
+        fig.savefig(out_png, dpi=220)
+        fig.savefig(out_svg)
+        plt.close(fig)
+        produced.extend([out_png, out_svg])
+    return produced
+
+
+def plot_chromosome_heatmaps(bin_df: pd.DataFrame, outdir: str, region_bin_size: int) -> List[str]:
+    produced: List[str] = []
+    chroms = sorted(bin_df["chrom"].dropna().unique(), key=chrom_sort_key)
+    metric_defs = [
+        ("frac_all_three", "all_three_overlap", "viridis_r", "Lower is worse overlap"),
+        ("frac_discordant", "discordant_overlap", "magma", "Higher is worse overlap"),
+    ]
+
+    for chrom in chroms:
+        sub = bin_df[bin_df["chrom"] == chrom].copy()
+        if sub.empty:
+            continue
+        patients = sorted(sub["patient"].dropna().unique())
+        bins_sorted = sorted(sub["bin_start"].dropna().unique())
+        if not patients or not bins_sorted:
+            continue
+
+        for metric, metric_slug, cmap, subtitle in metric_defs:
+            piv = (
+                sub.pivot_table(index="patient", columns="bin_start", values=metric, aggfunc="mean")
+                .reindex(index=patients, columns=bins_sorted)
+                .copy()
+            )
+            if piv.empty:
+                continue
+
+            h = max(4.5, 0.28 * len(patients) + 1.8)
+            w = max(10.0, min(20.0, 0.06 * len(bins_sorted) + 6.0))
+            fig, ax = plt.subplots(figsize=(w, h))
+            im = ax.imshow(piv.to_numpy(dtype=float), aspect="auto", vmin=0, vmax=1, cmap=cmap)
+            ax.set_yticks(np.arange(len(patients)))
+            ax.set_yticklabels(patients, fontsize=7)
+
+            n_bins = len(bins_sorted)
+            if n_bins <= 16:
+                tick_idx = np.arange(n_bins)
+            else:
+                tick_idx = np.linspace(0, n_bins - 1, num=16, dtype=int)
+            tick_bins = [bins_sorted[i] for i in tick_idx]
+            tick_labels = [f"{(b + (region_bin_size / 2.0)) / 1e6:.1f}" for b in tick_bins]
+            ax.set_xticks(tick_idx)
+            ax.set_xticklabels(tick_labels, rotation=45, ha="right", fontsize=7)
+            ax.set_xlabel(f"{chrom} position (Mb)")
+            ax.set_title(f"{chrom}: {metric_slug} by patient and bin ({subtitle})", fontsize=10)
+
+            cbar = plt.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
+            cbar.set_label("Fraction (0-1)")
+            plt.tight_layout()
+
+            base = os.path.join(outdir, f"mosdepth_overlap_{safe_name(chrom)}_{metric_slug}_heatmap")
+            out_png = f"{base}.png"
+            out_svg = f"{base}.svg"
+            fig.savefig(out_png, dpi=220)
+            fig.savefig(out_svg)
+            plt.close(fig)
+            produced.extend([out_png, out_svg])
+    return produced
 
 
 def main() -> None:
@@ -246,6 +386,7 @@ def main() -> None:
     ap.add_argument("--dna-tumor-label", default="DNA_TUMOR")
     ap.add_argument("--rna-tumor-label", default="RNA_TUMOR")
     ap.add_argument("--depth-threshold", type=float, default=10.0, help="Coverage threshold for overlap")
+    ap.add_argument("--region-bin-size", type=int, default=250000, help="Genomic bin size for chromosome-level overlap plots")
     ap.add_argument("--patient", default="", help="Optional single patient")
     ap.add_argument("--outdir", required=True, help="Output directory")
     args = ap.parse_args()
@@ -268,20 +409,23 @@ def main() -> None:
 
     summary_rows: List[Dict[str, float]] = []
     category_rows: List[pd.DataFrame] = []
+    bin_rows: List[pd.DataFrame] = []
     missing_rows: List[Dict[str, str]] = []
 
     for patient in patients:
         try:
-            row, by_cat = compute_patient_overlap(
+            row, by_cat, by_bin = compute_patient_overlap(
                 patient=patient,
                 mosdepth_dir=args.mosdepth_dir,
                 dna_normal_label=args.dna_normal_label,
                 dna_tumor_label=args.dna_tumor_label,
                 rna_tumor_label=args.rna_tumor_label,
                 depth_threshold=args.depth_threshold,
+                region_bin_size=args.region_bin_size,
             )
             summary_rows.append(row)
             category_rows.append(by_cat)
+            bin_rows.append(by_bin)
             print(f"[ok] {patient}")
         except FileNotFoundError as e:
             missing_rows.append({"patient": patient, "missing_file": str(e)})
@@ -292,12 +436,21 @@ def main() -> None:
 
     summary_df = pd.DataFrame(summary_rows).sort_values("patient").reset_index(drop=True)
     categories_df = pd.concat(category_rows, ignore_index=True)
+    bins_df = pd.concat(bin_rows, ignore_index=True)
 
     summary_tsv = os.path.join(args.outdir, "mosdepth_overlap_summary.tsv")
     categories_tsv = os.path.join(args.outdir, "mosdepth_overlap_categories.tsv")
+    bins_tsv = os.path.join(args.outdir, "mosdepth_overlap_bins.tsv")
+    worst_bins_tsv = os.path.join(args.outdir, "mosdepth_overlap_worst_bins.tsv")
     missing_tsv = os.path.join(args.outdir, "mosdepth_overlap_missing_inputs.tsv")
     summary_df.to_csv(summary_tsv, sep="\t", index=False)
     categories_df.to_csv(categories_tsv, sep="\t", index=False)
+    bins_df.to_csv(bins_tsv, sep="\t", index=False)
+    worst_bins_df = bins_df.sort_values(
+        ["frac_discordant", "frac_all_three", "patient", "chrom", "bin_start"],
+        ascending=[False, True, True, True, True],
+    ).copy()
+    worst_bins_df.to_csv(worst_bins_tsv, sep="\t", index=False)
     pd.DataFrame(missing_rows).to_csv(missing_tsv, sep="\t", index=False)
 
     stacked_png = os.path.join(args.outdir, "mosdepth_overlap_stacked.png")
@@ -307,11 +460,17 @@ def main() -> None:
 
     plot_stacked_overlap(categories_df, stacked_png, stacked_svg)
     plot_jaccard_heatmap(summary_df, jaccard_png, jaccard_svg)
+    chrom_profile_files = plot_chromosome_profiles(bins_df, args.outdir, args.region_bin_size)
+    chrom_heatmap_files = plot_chromosome_heatmaps(bins_df, args.outdir, args.region_bin_size)
 
     print(f"[done] summary: {summary_tsv}")
     print(f"[done] categories: {categories_tsv}")
+    print(f"[done] bins: {bins_tsv}")
+    print(f"[done] worst bins: {worst_bins_tsv}")
     print(f"[done] missing: {missing_tsv}")
     print(f"[done] plots: {stacked_png}, {stacked_svg}, {jaccard_png}, {jaccard_svg}")
+    print(f"[done] chromosome cohort profiles: {len(chrom_profile_files)} files")
+    print(f"[done] chromosome heatmaps: {len(chrom_heatmap_files)} files")
 
 
 if __name__ == "__main__":
