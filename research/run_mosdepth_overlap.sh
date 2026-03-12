@@ -27,6 +27,12 @@ done
 [ -n "$config" ] || { usage; exit 1; }
 [ -f "$config" ] || { echo "ERROR: config not found: $config" >&2; exit 1; }
 
+# Optional shared toolchain defaults (set by run_pipeline wrappers)
+if [ -n "${PIPELINE_DEFAULTS:-}" ] && [ -f "$PIPELINE_DEFAULTS" ]; then
+  # shellcheck disable=SC1090
+  source "$PIPELINE_DEFAULTS"
+fi
+
 # shellcheck disable=SC1090
 source "$config"
 
@@ -48,6 +54,7 @@ mkdir -p "$outdir"
 dna_normal="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 dna_tumor="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
 rna_tumor="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
+module load ${research_python_modules:-tools ngs anaconda3/2025.06-1}
 
 python3 "$(dirname "$0")/plot_mosdepth_overlap.py" \
   --samples "$samples" \
