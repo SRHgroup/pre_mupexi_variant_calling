@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import glob
 import os
 import re
 from typing import Dict, List, Tuple
@@ -44,17 +45,29 @@ STACK_COLORS = {
 }
 
 
-def chrom_sort_key(chrom: str) -> Tuple[int, int, str]:
+def normalize_chrom(chrom: str) -> str:
     s = str(chrom)
     if s.startswith("chr"):
         s = s[3:]
+    return s
+
+
+def is_canonical_chrom(chrom: str) -> bool:
+    s = normalize_chrom(chrom).upper()
+    if s in {"X", "Y", "M", "MT"}:
+        return True
+    return s.isdigit() and 1 <= int(s) <= 22
+
+
+def chrom_sort_key(chrom: str) -> Tuple[int, int, str]:
+    s = normalize_chrom(chrom)
     if s.isdigit():
         return (0, int(s), str(chrom))
-    if s == "X":
+    if s.upper() == "X":
         return (1, 23, str(chrom))
-    if s == "Y":
+    if s.upper() == "Y":
         return (1, 24, str(chrom))
-    if s in ("M", "MT"):
+    if s.upper() in ("M", "MT"):
         return (2, 25, str(chrom))
     return (3, 999, str(chrom))
 
@@ -113,6 +126,26 @@ def safe_jaccard(a: pd.Series, b: pd.Series) -> float:
     return float((a & b).sum() / union)
 
 
+def clear_chromosome_plot_outputs(outdir: str) -> int:
+    patterns = [
+        "mosdepth_overlap_*_cohort_profile.png",
+        "mosdepth_overlap_*_cohort_profile.svg",
+        "mosdepth_overlap_*_all_three_overlap_heatmap.png",
+        "mosdepth_overlap_*_all_three_overlap_heatmap.svg",
+        "mosdepth_overlap_*_discordant_overlap_heatmap.png",
+        "mosdepth_overlap_*_discordant_overlap_heatmap.svg",
+    ]
+    removed = 0
+    for pattern in patterns:
+        for path in glob.glob(os.path.join(outdir, pattern)):
+            try:
+                os.remove(path)
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
 def compute_patient_overlap(
     patient: str,
     mosdepth_dir: str,
@@ -149,6 +182,9 @@ def compute_patient_overlap(
     merged = dn.merge(dt, on=["chrom", "start", "end"], how="inner").merge(
         rt, on=["chrom", "start", "end"], how="inner"
     )
+    merged = merged[merged["chrom"].map(is_canonical_chrom)].copy()
+    if merged.empty:
+        raise ValueError(f"{patient}: no canonical chromosomes found in merged mosdepth intervals")
     merged["width"] = merged["end"] - merged["start"]
 
     merged["dn_ok"] = merged["cov_dn"] >= depth_threshold
@@ -430,6 +466,9 @@ def main() -> None:
         except FileNotFoundError as e:
             missing_rows.append({"patient": patient, "missing_file": str(e)})
             print(f"[skip] {patient}: missing {e}")
+        except ValueError as e:
+            missing_rows.append({"patient": patient, "missing_file": str(e)})
+            print(f"[skip] {patient}: {e}")
 
     if not summary_rows:
         raise SystemExit("ERROR: no patients processed successfully (all missing mosdepth inputs?)")
@@ -460,6 +499,7 @@ def main() -> None:
 
     plot_stacked_overlap(categories_df, stacked_png, stacked_svg)
     plot_jaccard_heatmap(summary_df, jaccard_png, jaccard_svg)
+    removed_plots = clear_chromosome_plot_outputs(args.outdir)
     chrom_profile_files = plot_chromosome_profiles(bins_df, args.outdir, args.region_bin_size)
     chrom_heatmap_files = plot_chromosome_heatmaps(bins_df, args.outdir, args.region_bin_size)
 
@@ -469,6 +509,7 @@ def main() -> None:
     print(f"[done] worst bins: {worst_bins_tsv}")
     print(f"[done] missing: {missing_tsv}")
     print(f"[done] plots: {stacked_png}, {stacked_svg}, {jaccard_png}, {jaccard_svg}")
+    print(f"[done] removed stale chromosome plot files: {removed_plots}")
     print(f"[done] chromosome cohort profiles: {len(chrom_profile_files)} files")
     print(f"[done] chromosome heatmaps: {len(chrom_heatmap_files)} files")
 
