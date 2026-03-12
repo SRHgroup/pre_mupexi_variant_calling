@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash research/run_mosdepth_overlap_from_config.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--depth-threshold N]
+  bash research/run_mosdepth_overlap.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--depth-threshold N]
 USAGE
 }
 
