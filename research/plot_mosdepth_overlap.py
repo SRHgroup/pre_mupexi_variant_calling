@@ -134,6 +134,10 @@ def clear_chromosome_plot_outputs(outdir: str) -> int:
         "mosdepth_overlap_*_all_three_overlap_heatmap.svg",
         "mosdepth_overlap_*_discordant_overlap_heatmap.png",
         "mosdepth_overlap_*_discordant_overlap_heatmap.svg",
+        "mosdepth_overlap_*_coverage_density_lines.png",
+        "mosdepth_overlap_*_coverage_density_lines.svg",
+        "mosdepth_overlap_*_coverage_density_tracks.png",
+        "mosdepth_overlap_*_coverage_density_tracks.svg",
     ]
     removed = 0
     for pattern in patterns:
@@ -414,6 +418,92 @@ def plot_chromosome_heatmaps(bin_df: pd.DataFrame, outdir: str, region_bin_size:
     return produced
 
 
+def _normalized_log_density(values: np.ndarray) -> np.ndarray:
+    arr = np.log1p(np.maximum(values.astype(float), 0.0))
+    vmax = float(np.nanmax(arr)) if arr.size else 0.0
+    if not np.isfinite(vmax) or vmax <= 0:
+        return np.zeros_like(arr, dtype=float)
+    return arr / vmax
+
+
+def plot_chromosome_coverage_density(bin_df: pd.DataFrame, outdir: str, region_bin_size: int) -> List[str]:
+    produced: List[str] = []
+    chroms = sorted(bin_df["chrom"].dropna().unique(), key=chrom_sort_key)
+    colors = {
+        "DNA_NORMAL": "#4E79A7",
+        "DNA_TUMOR": "#E15759",
+        "RNA_TUMOR": "#59A14F",
+    }
+
+    for chrom in chroms:
+        sub = bin_df[bin_df["chrom"] == chrom].copy()
+        if sub.empty:
+            continue
+        agg = (
+            sub.groupby("bin_start", as_index=False)
+            .agg(
+                cov_dn=("mean_cov_dna_normal", "mean"),
+                cov_dt=("mean_cov_dna_tumor", "mean"),
+                cov_rt=("mean_cov_rna_tumor", "mean"),
+            )
+            .sort_values("bin_start")
+        )
+        if agg.empty:
+            continue
+
+        x = (agg["bin_start"].to_numpy(dtype=float) + (region_bin_size / 2.0)) / 1e6
+        dn = _normalized_log_density(agg["cov_dn"].to_numpy(dtype=float))
+        dt = _normalized_log_density(agg["cov_dt"].to_numpy(dtype=float))
+        rt = _normalized_log_density(agg["cov_rt"].to_numpy(dtype=float))
+
+        # 1) Single panel with 3 density lines
+        fig1, ax1 = plt.subplots(figsize=(14, 4))
+        ax1.plot(x, dn, color=colors["DNA_NORMAL"], linewidth=1.3, label="DNA_NORMAL")
+        ax1.plot(x, dt, color=colors["DNA_TUMOR"], linewidth=1.3, label="DNA_TUMOR")
+        ax1.plot(x, rt, color=colors["RNA_TUMOR"], linewidth=1.3, label="RNA_TUMOR")
+        ax1.set_ylim(0, 1.02)
+        ax1.set_xlabel(f"{chrom} position (Mb)")
+        ax1.set_ylabel("Normalized log-coverage density")
+        ax1.set_title(f"{chrom}: cohort coverage density (3 lines)")
+        ax1.grid(alpha=0.2, linewidth=0.5)
+        ax1.legend(loc="upper right", fontsize=8, frameon=False)
+        plt.tight_layout()
+        base1 = os.path.join(outdir, f"mosdepth_overlap_{safe_name(chrom)}_coverage_density_lines")
+        out1_png = f"{base1}.png"
+        out1_svg = f"{base1}.svg"
+        fig1.savefig(out1_png, dpi=220)
+        fig1.savefig(out1_svg)
+        plt.close(fig1)
+        produced.extend([out1_png, out1_svg])
+
+        # 2) IGV-like stacked tracks
+        fig2, ax2 = plt.subplots(figsize=(14, 4.8))
+        offset_dn, offset_dt, offset_rt = 0.0, 1.2, 2.4
+        ax2.fill_between(x, offset_dn, offset_dn + dn, color=colors["DNA_NORMAL"], alpha=0.75, linewidth=0)
+        ax2.fill_between(x, offset_dt, offset_dt + dt, color=colors["DNA_TUMOR"], alpha=0.75, linewidth=0)
+        ax2.fill_between(x, offset_rt, offset_rt + rt, color=colors["RNA_TUMOR"], alpha=0.75, linewidth=0)
+        ax2.plot(x, offset_dn + dn, color=colors["DNA_NORMAL"], linewidth=0.6)
+        ax2.plot(x, offset_dt + dt, color=colors["DNA_TUMOR"], linewidth=0.6)
+        ax2.plot(x, offset_rt + rt, color=colors["RNA_TUMOR"], linewidth=0.6)
+        ax2.set_yticks([offset_dn + 0.5, offset_dt + 0.5, offset_rt + 0.5])
+        ax2.set_yticklabels(["DNA_NORMAL", "DNA_TUMOR", "RNA_TUMOR"])
+        ax2.set_ylim(-0.05, 3.55)
+        ax2.set_xlabel(f"{chrom} position (Mb)")
+        ax2.set_ylabel("Track")
+        ax2.set_title(f"{chrom}: IGV-like stacked coverage density tracks")
+        ax2.grid(alpha=0.2, linewidth=0.5, axis="x")
+        plt.tight_layout()
+        base2 = os.path.join(outdir, f"mosdepth_overlap_{safe_name(chrom)}_coverage_density_tracks")
+        out2_png = f"{base2}.png"
+        out2_svg = f"{base2}.svg"
+        fig2.savefig(out2_png, dpi=220)
+        fig2.savefig(out2_svg)
+        plt.close(fig2)
+        produced.extend([out2_png, out2_svg])
+
+    return produced
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Plot overlap between DNA normal, DNA tumor, RNA tumor using mosdepth md.regions.bed.gz")
     ap.add_argument("--samples", required=True, help="SAMPLES.tsv path")
@@ -502,6 +592,7 @@ def main() -> None:
     removed_plots = clear_chromosome_plot_outputs(args.outdir)
     chrom_profile_files = plot_chromosome_profiles(bins_df, args.outdir, args.region_bin_size)
     chrom_heatmap_files = plot_chromosome_heatmaps(bins_df, args.outdir, args.region_bin_size)
+    chrom_density_files = plot_chromosome_coverage_density(bins_df, args.outdir, args.region_bin_size)
 
     print(f"[done] summary: {summary_tsv}")
     print(f"[done] categories: {categories_tsv}")
@@ -512,6 +603,7 @@ def main() -> None:
     print(f"[done] removed stale chromosome plot files: {removed_plots}")
     print(f"[done] chromosome cohort profiles: {len(chrom_profile_files)} files")
     print(f"[done] chromosome heatmaps: {len(chrom_heatmap_files)} files")
+    print(f"[done] chromosome coverage-density plots: {len(chrom_density_files)} files")
 
 
 if __name__ == "__main__":
