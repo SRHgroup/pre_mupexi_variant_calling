@@ -24,9 +24,11 @@ def parse_args():
     ap.add_argument(
         "--input",
         action="append",
-        required=True,
+        default=[],
         help="PATIENT=/path/to/patient_vep.vep or just /path/to/patient_vep.vep",
     )
+    ap.add_argument("--vep-dir", default="", help="Directory with per-patient VEP files named {patient}_vep.vep")
+    ap.add_argument("--patient", action="append", default=[], help="Optional patient id(s) when using --vep-dir")
     ap.add_argument("--outdir", required=True, help="Output directory")
     ap.add_argument(
         "--cohort-prefix",
@@ -255,6 +257,19 @@ def main():
     args = parse_args()
     os.makedirs(args.outdir, exist_ok=True)
 
+    inputs = list(args.input)
+    if args.vep_dir:
+        if args.patient:
+            for patient in args.patient:
+                inputs.append(f"{patient}={os.path.join(args.vep_dir, f'{patient}_vep.vep')}")
+        else:
+            for name in sorted(os.listdir(args.vep_dir)):
+                if re.search(r"_vep\.vep(\.gz)?$", name):
+                    patient = re.sub(r"_vep\.vep(\.gz)?$", "", name)
+                    inputs.append(f"{patient}={os.path.join(args.vep_dir, name)}")
+    if not inputs:
+        raise SystemExit("ERROR: provide --input and/or --vep-dir")
+
     summary_fieldnames = [
         "uploaded_variation",
         "chrom",
@@ -276,7 +291,7 @@ def main():
     cohort_keep = []
     cohort_blacklist = []
 
-    for item in args.input:
+    for item in inputs:
         patient, path = infer_patient(item)
         if not os.path.exists(path):
             print(f"[warn] missing VEP for {patient}: {path}")
@@ -307,7 +322,7 @@ def main():
         cohort_keep.extend([f"{patient}\t{x}" for x in keep_uploaded])
         cohort_blacklist.extend([f"{patient}\t{r['uploaded_variation']}" for r in summary_rows if r["keep"] != "1"])
 
-    if len(args.input) > 1 and cohort_summary:
+    if len(inputs) > 1 and cohort_summary:
         cohort_summary_path = os.path.join(args.outdir, f"{args.cohort_prefix}.vep.transcript_strand_summary.tsv")
         cohort_keep_path = os.path.join(args.outdir, f"{args.cohort_prefix}.vep.transcript_strand_keep.tsv")
         cohort_blacklist_path = os.path.join(args.outdir, f"{args.cohort_prefix}.vep.transcript_strand_blacklist.tsv")
