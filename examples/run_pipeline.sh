@@ -20,6 +20,7 @@ Usage:
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
   $0 research variant-table [PATIENT] [--outdir DIR] [-f] [--skip-running]
+  $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
   $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
@@ -52,6 +53,8 @@ Examples:
   $0 research samecopy-stats --outfile /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/samecopy_stats_with_rna.tsv
   $0 research variant-table
   $0 research variant-table Pat11 --outdir /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/variant_tables
+  $0 research strand-blacklist
+  $0 research strand-blacklist Pat11 --min-expected-frac 0.9
   $0 research run_mosdepth_overlap --depth-threshold 10 --region-bin-size 250000
   $0 check
   $0 check 01-CH-L rna
@@ -128,6 +131,21 @@ run_research_variant_table() {
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_variant_table CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $force_arg $skip_running_arg
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_variant_table CONFIG="$CONFIG" OUTDIR="$outdir" $force_arg $skip_running_arg
+  fi
+}
+
+run_research_strand_blacklist() {
+  local sample="${1:-}"
+  local outdir="${2:-}"
+  local protocol="${3:-}"
+  local min_mapq="${4:-20}"
+  local min_baseq="${5:-20}"
+  local min_expected_frac="${6:-0.8}"
+
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_strand_blacklist CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" PROTOCOL="$protocol" MIN_MAPQ="$min_mapq" MIN_BASEQ="$min_baseq" MIN_EXPECTED_FRAC="$min_expected_frac" $force_arg $skip_running_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_strand_blacklist CONFIG="$CONFIG" OUTDIR="$outdir" PROTOCOL="$protocol" MIN_MAPQ="$min_mapq" MIN_BASEQ="$min_baseq" MIN_EXPECTED_FRAC="$min_expected_frac" $force_arg $skip_running_arg
   fi
 }
 
@@ -679,6 +697,29 @@ case "$cmd" in
           esac
         done
         run_research_variant_table "$sample" "$outdir"
+        ;;
+      strand-blacklist)
+        sample=""
+        outdir=""
+        protocol=""
+        min_mapq="20"
+        min_baseq="20"
+        min_expected_frac="0.8"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --outdir|-o) outdir="${2:-}"; shift 2 ;;
+            --protocol) protocol="${2:-}"; shift 2 ;;
+            --min-mapq) min_mapq="${2:-}"; shift 2 ;;
+            --min-baseq) min_baseq="${2:-}"; shift 2 ;;
+            --min-expected-frac) min_expected_frac="${2:-}"; shift 2 ;;
+            *) echo "Unknown research option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_research_strand_blacklist "$sample" "$outdir" "$protocol" "$min_mapq" "$min_baseq" "$min_expected_frac"
         ;;
       run_mosdepth_overlap|mosdepth-overlap)
         sample=""
