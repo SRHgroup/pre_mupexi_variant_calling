@@ -84,6 +84,9 @@ run_research_rna_clusters: check-config
 run_research_samecopy_stats: check-config
 	cd research && bash run_samecopy_stats_job.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTFILE_FLAG) --window "$(WINDOW)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
+run_research_variant_table: check-config
+	cd research && bash run_variant_table_job.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+
 run_research_mosdepth_overlap: check-config
 	cd research && bash run_mosdepth_overlap.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) --depth-threshold "$(DEPTH_THRESHOLD)" --region-bin-size "$(REGION_BIN_SIZE)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
