@@ -74,6 +74,7 @@ for step in \
   rna3_AnnotateKnownSites.sh \
   rna4_SummariseRnaMetrics.sh \
   rna5_FilterByAfDpAr.sh \
+  rna5.1_FilterByStrandness.sh \
   rna6_MergeDnaRnaVcfs.sh \
   rna7.0_FixRnaBamReadGroups.sh \
   rna7_GenotypeAndPhaseMergedVcf.sh

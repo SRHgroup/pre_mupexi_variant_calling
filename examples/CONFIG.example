@@ -83,10 +83,20 @@ rna2_labeled_vcf_extension="rna2.filtered_edit_labeled.vcf.gz"
 rna3_knownsites_vcf_extension="rna3.filtered_edit_labeled.knownsites.vcf.gz"
 rna4_summarised_vcf_extension="rna4.filtered_edit_labeled.knownsites_summarised.vcf.gz"
 rna5_qced_vcf_extension="rna5.filtered_edit_labeled.knownsites_summarised_qced.vcf.gz"
+rna5_stranded_vcf_extension="rna5.1.filtered_edit_labeled.knownsites_summarised_qced_stranded.vcf.gz"
 rna6_merged_vcf_extension="rna6.DNAt_DNAn_RNAt_merged.vcf.gz"
 rna7_genotyped_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_genotyped.vcf.gz"
 rna7_phased_vcf_extension="rna7.DNAt_DNAn_RNAt_merged_phased.vcf.gz"
 rna7_signal_sample_label="TUMOR"
+
+# RNA strandedness filter (rna5.1)
+# Expected library orientation from RSeQC infer_experiment.py:
+#   fr-firststrand  -> dominant 1+-,1-+,2++,2--
+#   fr-secondstrand -> dominant 1++,1--,2+-,2-+
+rna_strand_protocol="fr-firststrand"
+rna_strand_min_mapq="20"
+rna_strand_min_baseq="20"
+rna_strand_min_expected_frac="0.8"
 
 # Required rna7.0 output suffix (rna7 consumes this BAM)
 rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"

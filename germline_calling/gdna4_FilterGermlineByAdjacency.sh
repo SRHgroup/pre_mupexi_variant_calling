@@ -105,6 +105,7 @@ detect_rna_vcf_for_patient() {
 
   # Default candidate order: prefer filtered RNA-editing sets, then source mutect2 RNA callset.
   for ext in \
+    "${rna5_stranded_vcf_extension:-}" \
     "${rna5_qced_vcf_extension:-}" \
     "${rna4_summarised_vcf_extension:-}" \
     "${rna3_knownsites_vcf_extension:-}" \

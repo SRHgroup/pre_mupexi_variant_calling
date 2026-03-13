@@ -49,6 +49,9 @@ runrna4: check-config
 runrna5: check-config
 	cd post_rnadnavar_mupexi_prep && bash rna5_FilterByAfDpAr.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
+runrna5.1: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna5.1_FilterByStrandness.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
 runrna6: check-config
 	cd post_rnadnavar_mupexi_prep && bash rna6_MergeDnaRnaVcfs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
@@ -109,6 +112,7 @@ run4.2: runrna2
 run4.3: runrna3
 run4.4: runrna4
 run4.5: runrna5
+run4.5.1: runrna5.1
 run4.6: runrna6
 run4.7.0: runrna7.0
 run4.7: runrna7

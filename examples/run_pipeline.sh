@@ -22,10 +22,10 @@ Usage:
   $0 research variant-table [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
-  $0 step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
+  $0 step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
-  $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
+  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
+  $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
   (append --skip-running to submit commands to avoid re-submitting active jobs)
@@ -44,6 +44,7 @@ Examples:
   $0 mupexi Pat11 --hla HLA-A26:01,HLA-A24:02,HLA-B27:02,HLA-B15:09,HLA-C02:02,HLA-C07:04 --expr /path/to/Patient_11.expr.tsv
   $0 all 01-CH-L
   $0 step rna4 01-CH-L -f
+  $0 step rna5.1 01-CH-L -f
   $0 step rna7 01-CH-L --skip-running
   $0 step rna7.0 01-CH-L -f
   $0 step rna7 01-CH-L -f
@@ -252,9 +253,10 @@ pick_first_existing() {
 step_expected_output() {
   local patient="$1"
   local step="$2"
-  local out_normal out_rna outdir germdir
+  local out_normal out_rna outdir germdir rna5_stranded_ext
   out_normal="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   out_rna="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
+  rna5_stranded_ext="${rna5_stranded_vcf_extension:-rna5.1.filtered_edit_labeled.knownsites_summarised_qced_stranded.vcf.gz}"
   outdir="${vcfdir}/${patient}_${out_rna}_vs_${patient}_${out_normal}"
   germdir="${vcfdir}/${patient}_${out_normal}"
   case "$step" in
@@ -267,6 +269,7 @@ step_expected_output() {
     rna3) printf '%s\n' "${outdir}/${patient}_${rna3_knownsites_vcf_extension}" ;;
     rna4) printf '%s\n' "${outdir}/${patient}_${rna4_summarised_vcf_extension}" ;;
     rna5) printf '%s\n' "${outdir}/${patient}_${rna5_qced_vcf_extension}" ;;
+    rna5.1) printf '%s\n' "${outdir}/${patient}_${rna5_stranded_ext}" ;;
     rna6) printf '%s\n' "${outdir}/${patient}_${rna6_merged_vcf_extension}" ;;
     rna7.0)
       rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
@@ -280,12 +283,13 @@ step_expected_output() {
 step_input_status() {
   local patient="$1"
   local step="$2"
-  local out_normal out_rna dna_label rna_dir_label outdir germdir
+  local out_normal out_rna dna_label rna_dir_label outdir germdir rna5_stranded_ext
   local rna_vcf_dir dna_vcf_dir srna_pref sdna_pref srna sdna
   out_normal="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   out_rna="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
   rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
+  rna5_stranded_ext="${rna5_stranded_vcf_extension:-rna5.1.filtered_edit_labeled.knownsites_summarised_qced_stranded.vcf.gz}"
   outdir="${vcfdir}/${patient}_${out_rna}_vs_${patient}_${out_normal}"
   germdir="${vcfdir}/${patient}_${out_normal}"
 
@@ -387,8 +391,24 @@ step_input_status() {
         printf 'NO_INPUT\t%s\n' "$in_rna5"
       fi
       ;;
+    rna5.1)
+      local in_rna51_vcf="${outdir}/${patient}_${rna5_qced_vcf_extension}"
+      local in_rna51_bam="${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna7_smfixed_bam_suffix}"
+      if [ -f "$in_rna51_vcf" ] && [ -s "$in_rna51_vcf" ] && [ -f "${GTF:-}" ] && [ -f "$in_rna51_bam" ] && [ -s "$in_rna51_bam" ]; then
+        printf 'INPUT_OK\tVCF:%s ; BAM:%s ; GTF:%s\n' "$in_rna51_vcf" "$in_rna51_bam" "$GTF"
+      elif [ ! -f "$in_rna51_vcf" ] || [ ! -s "$in_rna51_vcf" ]; then
+        printf 'NO_INPUT\tVCF:%s\n' "$in_rna51_vcf"
+      elif [ -z "${GTF:-}" ] || [ ! -f "$GTF" ]; then
+        printf 'NO_INPUT\tGTF:%s\n' "${GTF:-CONFIG:GTF missing}"
+      else
+        printf 'NO_INPUT\tBAM:%s\n' "$in_rna51_bam"
+      fi
+      ;;
     rna6)
-      local in_rna6="${outdir}/${patient}_${rna5_qced_vcf_extension}"
+      local in_rna6="${outdir}/${patient}_${rna5_stranded_ext}"
+      if [ ! -f "$in_rna6" ] || [ ! -s "$in_rna6" ]; then
+        in_rna6="${outdir}/${patient}_${rna5_qced_vcf_extension}"
+      fi
       if [ -f "$in_rna6" ] && [ -s "$in_rna6" ]; then
         printf 'INPUT_OK\t%s\n' "$in_rna6"
       else
@@ -427,6 +447,7 @@ step_prefix() {
     rna3) printf '%s\n' "rna3_AnnotateKnownSites" ;;
     rna4) printf '%s\n' "rna4_SummariseRnaMetrics" ;;
     rna5) printf '%s\n' "rna5_FilterByAfDpAr" ;;
+    rna5.1) printf '%s\n' "rna5.1_FilterByStrandness" ;;
     rna6) printf '%s\n' "rna6_MergeDnaRnaVcfs" ;;
     rna7.0) printf '%s\n' "rna7.0_FixRnaBamReadGroups" ;;
     rna7) printf '%s\n' "rna7_GenotypeAndPhaseMergedVcf" ;;
@@ -455,7 +476,7 @@ watch_step_outputs() {
   local selected="${2:-}"
   local interval="${3:-5}"
   case "$step" in
-    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
     *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
   esac
   [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
@@ -549,7 +570,7 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
@@ -750,7 +771,7 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     case "$step_name" in
-      rna1|rna2|rna3|rna4|rna5|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4)
+      rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4)
         run_make "run${step_name}" "$sample"
         ;;
       *)

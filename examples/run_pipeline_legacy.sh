@@ -24,10 +24,10 @@ Usage:
   $0 research variant-table [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
-  $0 step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
+  $0 step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT]
-  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
+  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT]
+  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
   (append --skip-running to submit commands to avoid re-submitting active jobs)
@@ -73,6 +73,7 @@ legacy_target() {
     4.3) printf '%s\n' "runrna3" ;;
     4.4) printf '%s\n' "runrna4" ;;
     4.5) printf '%s\n' "runrna5" ;;
+    4.5.1) printf '%s\n' "runrna5.1" ;;
     4.6) printf '%s\n' "runrna6" ;;
     4.7.0) printf '%s\n' "runrna7.0" ;;
     4.7) printf '%s\n' "runrna7" ;;
@@ -239,9 +240,10 @@ pick_first_existing() {
 legacy_step_expected_output() {
   local patient="$1"
   local step="$2"
-  local out_normal out_rna outdir germdir rna_dir_label
+  local out_normal out_rna outdir germdir rna_dir_label rna5_stranded_ext
   out_normal="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   out_rna="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
+  rna5_stranded_ext="${rna5_stranded_vcf_extension:-rna5.1.filtered_edit_labeled.knownsites_summarised_qced_stranded.vcf.gz}"
   outdir="${vcfdir}/${patient}_${out_rna}_vs_${patient}_${out_normal}"
   germdir="${vcfdir}/${patient}_${out_normal}"
   rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
@@ -256,6 +258,7 @@ legacy_step_expected_output() {
     4.3) printf '%s\n' "${outdir}/${patient}_${annot_vcf_extension}" ;;
     4.4) printf '%s\n' "${outdir}/${patient}_${rna_summarised_vcf_extension}" ;;
     4.5) printf '%s\n' "${outdir}/${patient}_${rna_vcf_knownsites_extension}" ;;
+    4.5.1) printf '%s\n' "${outdir}/${patient}_${rna5_stranded_ext}" ;;
     4.6) printf '%s\n' "${outdir}/${patient}_${merged_vcf_extension}" ;;
     4.7.0) printf '%s\n' "${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna_bam_smfixed_suffix}" ;;
     4.7) printf '%s\n' "${outdir}/${patient}_${phased_vcf_extension}" ;;
@@ -266,12 +269,13 @@ legacy_step_expected_output() {
 legacy_step_input_status() {
   local patient="$1"
   local step="$2"
-  local out_normal out_rna dna_label rna_dir_label outdir germdir
+  local out_normal out_rna dna_label rna_dir_label outdir germdir rna5_stranded_ext
   local rna_vcf_dir dna_vcf_dir srna_pref sdna_pref srna sdna
   out_normal="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
   out_rna="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
   dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
   rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
+  rna5_stranded_ext="${rna5_stranded_vcf_extension:-rna5.1.filtered_edit_labeled.knownsites_summarised_qced_stranded.vcf.gz}"
   outdir="${vcfdir}/${patient}_${out_rna}_vs_${patient}_${out_normal}"
   germdir="${vcfdir}/${patient}_${out_normal}"
 
@@ -373,8 +377,24 @@ legacy_step_input_status() {
         printf 'NO_INPUT\t%s\n' "$in_45"
       fi
       ;;
+    4.5.1)
+      local in_451_vcf="${outdir}/${patient}_${rna_vcf_knownsites_extension}"
+      local in_451_bam="${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna_bam_smfixed_suffix:-${rna7_smfixed_bam_suffix:-${rna_tumor_label:-RNA_TUMOR}.md.SMfixed.bam}}"
+      if [ -f "$in_451_vcf" ] && [ -s "$in_451_vcf" ] && [ -f "${GTF:-}" ] && [ -f "$in_451_bam" ] && [ -s "$in_451_bam" ]; then
+        printf 'INPUT_OK\tVCF:%s ; BAM:%s ; GTF:%s\n' "$in_451_vcf" "$in_451_bam" "$GTF"
+      elif [ ! -f "$in_451_vcf" ] || [ ! -s "$in_451_vcf" ]; then
+        printf 'NO_INPUT\tVCF:%s\n' "$in_451_vcf"
+      elif [ -z "${GTF:-}" ] || [ ! -f "$GTF" ]; then
+        printf 'NO_INPUT\tGTF:%s\n' "${GTF:-CONFIG:GTF missing}"
+      else
+        printf 'NO_INPUT\tBAM:%s\n' "$in_451_bam"
+      fi
+      ;;
     4.6)
-      local in_46="${outdir}/${patient}_${rna_vcf_knownsites_extension}"
+      local in_46="${outdir}/${patient}_${rna5_stranded_ext}"
+      if [ ! -f "$in_46" ] || [ ! -s "$in_46" ]; then
+        in_46="${outdir}/${patient}_${rna_vcf_knownsites_extension}"
+      fi
       if [ -f "$in_46" ] && [ -s "$in_46" ]; then
         printf 'INPUT_OK\t%s\n' "$in_46"
       else
@@ -413,6 +433,7 @@ legacy_step_prefix() {
     4.3) printf '%s\n' "4.3_AnnotateKnownSites" ;;
     4.4) printf '%s\n' "4.4_SummariseRnaMetrics" ;;
     4.5) printf '%s\n' "4.5_FilterByAfDpAr" ;;
+    4.5.1) printf '%s\n' "rna5.1_FilterByStrandness" ;;
     4.6) printf '%s\n' "4.6_MergeDnaRnaVcfs" ;;
     4.7.0) printf '%s\n' "4.7.0_FixRnaBamReadGroups" ;;
     4.7) printf '%s\n' "4.7.1_GenotypeAndPhaseMergedVcf" ;;
@@ -428,7 +449,7 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
@@ -486,7 +507,7 @@ watch_step_outputs() {
   local selected="${2:-}"
   local interval="${3:-5}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
     *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
   esac
   [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
@@ -723,7 +744,7 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     case "$step_name" in
-      4.1|4.2|4.3|4.4|4.5|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0)
+      4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0)
         target="$(legacy_target "$step_name")"
         run_make "$target" "$sample"
         ;;

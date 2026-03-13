@@ -35,6 +35,7 @@ pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain
 : "${rnae_scripts:?CONFIG must define rnae_scripts}"
 : "${rna5_qced_vcf_extension:?CONFIG must define rna5_qced_vcf_extension}"
 : "${rna6_merged_vcf_extension:?CONFIG must define rna6_merged_vcf_extension}"
+rna5_stranded_vcf_extension="${rna5_stranded_vcf_extension:-rna5.1.filtered_edit_labeled.knownsites_summarised_qced_stranded.vcf.gz}"
 
 # Germline VCF suffix to merge. Defaults to gdna4 output if not set.
 ndna_vcf="${ndna_vcf:-${gdna4_vcf_extension:-gdna4.Filtered.vcf}}"
@@ -172,7 +173,10 @@ while IFS= read -r line; do
   dna_dir="${vcfdir}/${name}_${dna_label}_vs_${name}_${out_normal_label}"
   germ_in="${germline_dir}/${name}_${ndna_vcf}"
   dna_tumour_vcf="${dna_dir}/${name}_${dna_label}_vs_${name}_${out_normal_label}.mutect2.filtered.vcf.gz"
-  rna_vcf="${outdir_only}/${name}_${rna5_qced_vcf_extension}"
+  rna_vcf="${outdir_only}/${name}_${rna5_stranded_vcf_extension}"
+  if [ ! -f "$rna_vcf" ]; then
+    rna_vcf="${outdir_only}/${name}_${rna5_qced_vcf_extension}"
+  fi
 
   merged_vcf="${outdir_only}/${name}_${rna6_merged_vcf_extension}"
   merge_log="${merged_vcf%.vcf.gz}.merge.log.txt"
