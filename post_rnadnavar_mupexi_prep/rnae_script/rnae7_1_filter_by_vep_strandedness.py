@@ -101,6 +101,10 @@ def join_values(values: Iterable[str]) -> str:
     return "|".join(clean) if clean else "NA"
 
 
+def rec_strand_status(decision: Dict[str, str]) -> str:
+    return str(decision.get("strand_status", "NA"))
+
+
 def fallback_uploaded_variation(chrom: str, pos: int, ref: str, alt: str) -> str:
     return f"{normalize_chrom(chrom)}_{pos}_{ref}/{alt}"
 
@@ -166,8 +170,7 @@ def summarize_vep(rows: Sequence[Dict[str, str]]) -> Dict[str, Dict[str, str]]:
                 "transcript_strand_set": "NA",
                 "transcript_space_change": "NA",
                 "edit_class": "NA",
-                "keep": "0",
-                "reason": "UNPARSEABLE_UPLOADED_VARIATION",
+                "strand_status": "UNPARSEABLE_UPLOADED_VARIATION",
             }
             continue
 
@@ -195,30 +198,22 @@ def summarize_vep(rows: Sequence[Dict[str, str]]) -> Dict[str, Dict[str, str]]:
                 locations.add(value)
 
         if not strand_set:
-            keep = False
-            reason = "MISSING_TRANSCRIPT_STRAND"
+            strand_status = "MISSING_TRANSCRIPT_STRAND"
             tx_change = "NA"
             edit_class = "NA"
         elif len(strand_set) > 1:
-            keep = False
-            reason = "AMBIGUOUS_TRANSCRIPT_STRAND"
+            strand_status = "AMBIGUOUS_TRANSCRIPT_STRAND"
             tx_change = "NA"
             edit_class = "NA"
         else:
             strand = next(iter(strand_set))
             tx_change = transcript_space_change(ref, alt, strand)
+            strand_status = "UNIQUE_TRANSCRIPT_STRAND"
             if tx_change is None:
-                keep = False
-                reason = "NON_SNV"
+                strand_status = "NON_SNV"
                 edit_class = "NA"
             else:
                 edit_class = classify_transcript_change(tx_change)
-                if edit_class in ("ADAR", "APOBEC3"):
-                    keep = True
-                    reason = "PASS"
-                else:
-                    keep = False
-                    reason = "NOT_TRANSCRIPT_CANONICAL_RNA_EDIT"
 
         summary[uploaded] = {
             "uploaded_variation": uploaded,
@@ -233,8 +228,7 @@ def summarize_vep(rows: Sequence[Dict[str, str]]) -> Dict[str, Dict[str, str]]:
             "transcript_strand_set": join_values(strand_set),
             "transcript_space_change": tx_change,
             "edit_class": edit_class,
-            "keep": "1" if keep else "0",
-            "reason": reason,
+            "strand_status": strand_status,
         }
 
     return summary
@@ -278,8 +272,136 @@ def main() -> None:
     blacklist_rows: List[Dict[str, str]] = []
     counts: Counter[str] = Counter()
 
+    def flush_position_group(records: Sequence[Dict[str, object]], fout: TextIO) -> None:
+        if not records:
+            return
+
+        counts["position_groups_total"] += 1
+        rna_edit_indices = [idx for idx, rec in enumerate(records) if rec["is_rna_edit"]]
+        if not rna_edit_indices:
+            for rec in records:
+                counts["total_records"] += 1
+                counts["non_rna_edit_records_retained"] += 1
+                fout.write(rec["line"])
+            return
+
+        counts["position_groups_with_rna_edit"] += 1
+        for _ in rna_edit_indices:
+            counts["rna_edit_records_total"] += 1
+
+        filtered_indices: Set[int] = set()
+        keep_reason_by_index: Dict[int, str] = {}
+        filter_reason_by_index: Dict[int, str] = {}
+
+        if len(rna_edit_indices) == 1:
+            keep_reason_by_index[rna_edit_indices[0]] = "SINGLETON_KEEP"
+        else:
+            counts["position_groups_with_multiple_rna_edit"] += 1
+            unique_indices = [
+                idx
+                for idx in rna_edit_indices
+                if rec_strand_status(records[idx]["decision"]) == "UNIQUE_TRANSCRIPT_STRAND"
+            ]
+            non_unique_indices = [idx for idx in rna_edit_indices if idx not in unique_indices]
+
+            if len(unique_indices) == 1 and non_unique_indices:
+                counts["resolved_position_conflict_groups"] += 1
+                keep_reason_by_index[unique_indices[0]] = "UNIQUE_STRAND_KEEP_IN_POSITION_CONFLICT"
+                for idx in non_unique_indices:
+                    filtered_indices.add(idx)
+                    filter_reason_by_index[idx] = "POSITION_CONFLICT_NONUNIQUE_STRAND"
+            else:
+                counts["unresolved_position_conflict_groups"] += 1
+                for idx in rna_edit_indices:
+                    keep_reason_by_index[idx] = "UNRESOLVED_POSITION_CONFLICT_KEEP_ALL"
+
+        for idx, rec in enumerate(records):
+            counts["total_records"] += 1
+            if not rec["is_rna_edit"]:
+                counts["non_rna_edit_records_retained"] += 1
+                fout.write(rec["line"])
+                continue
+
+            decision = rec["decision"]
+            row = {
+                "SAMPLE": args.patient or "NA",
+                "uploaded_variation": rec["uploaded"],
+                "chrom": rec["chrom"],
+                "pos": str(rec["pos"]),
+                "ref": rec["ref"],
+                "alt": rec["alt"],
+                "source_set": join_values(rec["source_tokens"]),
+                "filter": rec["filter"],
+                "edit_class": decision["edit_class"],
+                "transcript_strand_set": decision["transcript_strand_set"],
+                "transcript_space_change": decision["transcript_space_change"],
+                "strand_status": rec_strand_status(decision),
+                "position_group_size": str(len(rna_edit_indices)),
+                "reason": keep_reason_by_index.get(idx, filter_reason_by_index.get(idx, "NA")),
+            }
+
+            if idx in filtered_indices:
+                counts["rna_edit_records_filtered"] += 1
+                counts[f"reason::{row['reason']}"] += 1
+                blacklist_rows.append(row)
+            else:
+                counts["rna_edit_records_retained"] += 1
+                counts[f"reason::{row['reason']}"] += 1
+                keep_rows.append(row)
+                fout.write(rec["line"])
+
+    def fallback_decision(uploaded: str, chrom: str, pos: int, ref: str, alt: str) -> Dict[str, str]:
+        return {
+            "uploaded_variation": uploaded,
+            "chrom": chrom,
+            "pos": str(pos),
+            "ref": ref,
+            "alt": alt,
+            "location": f"{chrom}:{pos}",
+            "gene_symbol": "NA",
+            "consequence": "NA",
+            "feature_type": "NA",
+            "transcript_strand_set": "NA",
+            "transcript_space_change": "NA",
+            "edit_class": "NA",
+            "strand_status": "MISSING_VEP_ANNOTATION",
+        }
+
+    def build_record(line: str) -> Dict[str, object]:
+        cols = line.rstrip("\n").split("\t")
+        chrom = normalize_chrom(cols[0])
+        pos = int(cols[1])
+        ref = cols[3]
+        alt = cols[4]
+        if "," in alt:
+            raise SystemExit(
+                "ERROR: rna7.1 input contains multiallelic records. "
+                "Split the VCF first (bcftools norm -m -any)."
+            )
+        info_map = parse_info(cols[7])
+        source_tokens = {token.strip() for token in str(info_map.get("SOURCE_SET", "")).split(",") if token.strip()}
+        uploaded = fallback_uploaded_variation(chrom, pos, ref, alt)
+        decision = vep_summary.get(uploaded)
+        if decision is None:
+            decision = fallback_decision(uploaded, chrom, pos, ref, alt)
+        return {
+            "line": line,
+            "cols": cols,
+            "chrom": chrom,
+            "pos": pos,
+            "ref": ref,
+            "alt": alt,
+            "filter": cols[6],
+            "uploaded": uploaded,
+            "source_tokens": source_tokens,
+            "decision": decision,
+            "is_rna_edit": "RNA_EDIT" in source_tokens,
+        }
+
     with open_text(args.input) as fin, open(args.output, "w") as fout:
         inserted_note = False
+        current_key: Optional[Tuple[str, int]] = None
+        current_records: List[Dict[str, object]] = []
         for line in fin:
             if line.startswith("##"):
                 fout.write(line)
@@ -296,70 +418,14 @@ def main() -> None:
             cols = line.rstrip("\n").split("\t")
             if len(cols) < 8:
                 continue
+            key = (normalize_chrom(cols[0]), int(cols[1]))
+            if current_key is not None and key != current_key:
+                flush_position_group(current_records, fout)
+                current_records = []
+            current_key = key
+            current_records.append(build_record(line))
 
-            chrom = normalize_chrom(cols[0])
-            pos = int(cols[1])
-            ref = cols[3]
-            alt = cols[4]
-            if "," in alt:
-                raise SystemExit(
-                    "ERROR: rna7.1 input contains multiallelic records. "
-                    "Split the VCF first (bcftools norm -m -any)."
-                )
-
-            counts["total_records"] += 1
-            info_map = parse_info(cols[7])
-            source_tokens = {token.strip() for token in str(info_map.get("SOURCE_SET", "")).split(",") if token.strip()}
-            if "RNA_EDIT" not in source_tokens:
-                counts["non_rna_edit_records_retained"] += 1
-                fout.write(line)
-                continue
-
-            counts["rna_edit_records_total"] += 1
-            uploaded = fallback_uploaded_variation(chrom, pos, ref, alt)
-            decision = vep_summary.get(uploaded)
-            if decision is None:
-                decision = {
-                    "uploaded_variation": uploaded,
-                    "chrom": chrom,
-                    "pos": str(pos),
-                    "ref": ref,
-                    "alt": alt,
-                    "location": f"{chrom}:{pos}",
-                    "gene_symbol": "NA",
-                    "consequence": "NA",
-                    "feature_type": "NA",
-                    "transcript_strand_set": "NA",
-                    "transcript_space_change": "NA",
-                    "edit_class": "NA",
-                    "keep": "0",
-                    "reason": "MISSING_VEP_ANNOTATION",
-                }
-
-            row = {
-                "SAMPLE": args.patient or "NA",
-                "uploaded_variation": uploaded,
-                "chrom": chrom,
-                "pos": str(pos),
-                "ref": ref,
-                "alt": alt,
-                "source_set": join_values(source_tokens),
-                "filter": cols[6],
-                "edit_class": decision["edit_class"],
-                "transcript_strand_set": decision["transcript_strand_set"],
-                "transcript_space_change": decision["transcript_space_change"],
-                "reason": decision["reason"],
-            }
-
-            if decision["keep"] == "1":
-                counts["rna_edit_records_retained"] += 1
-                counts[f"reason::{decision['reason']}"] += 1
-                keep_rows.append(row)
-                fout.write(line)
-            else:
-                counts["rna_edit_records_filtered"] += 1
-                counts[f"reason::{decision['reason']}"] += 1
-                blacklist_rows.append(row)
+        flush_position_group(current_records, fout)
 
     fieldnames = [
         "SAMPLE",
@@ -373,6 +439,8 @@ def main() -> None:
         "edit_class",
         "transcript_strand_set",
         "transcript_space_change",
+        "strand_status",
+        "position_group_size",
         "reason",
     ]
     write_tsv(args.keep_tsv, keep_rows, fieldnames)
@@ -386,6 +454,11 @@ def main() -> None:
         ("note", PREFERRED_METHOD_NOTE),
         ("total_records", str(counts["total_records"])),
         ("non_rna_edit_records_retained", str(counts["non_rna_edit_records_retained"])),
+        ("position_groups_total", str(counts["position_groups_total"])),
+        ("position_groups_with_rna_edit", str(counts["position_groups_with_rna_edit"])),
+        ("position_groups_with_multiple_rna_edit", str(counts["position_groups_with_multiple_rna_edit"])),
+        ("resolved_position_conflict_groups", str(counts["resolved_position_conflict_groups"])),
+        ("unresolved_position_conflict_groups", str(counts["unresolved_position_conflict_groups"])),
         ("rna_edit_records_total", str(counts["rna_edit_records_total"])),
         ("rna_edit_records_retained", str(counts["rna_edit_records_retained"])),
         ("rna_edit_records_filtered", str(counts["rna_edit_records_filtered"])),
