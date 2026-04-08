@@ -22,10 +22,10 @@ Usage:
   $0 research variant-table [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
-  $0 step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
+  $0 step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|rna7.1|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT]
-  $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
+  $0 check-step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|rna7.1|gdna1|gdna2|gdna3|gdna4> [PATIENT]
+  $0 watch-step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|rna7.1|gdna1|gdna2|gdna3|gdna4> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
   (append --skip-running to submit commands to avoid re-submitting active jobs)
@@ -46,6 +46,7 @@ Examples:
   $0 step rna4 01-CH-L -f
   $0 step rna5.1 01-CH-L -f
   $0 step rna7 01-CH-L --skip-running
+  $0 step rna7.1 01-CH-L -f
   $0 step rna7.0 01-CH-L -f
   $0 step rna7 01-CH-L -f
   $0 step gdna2 01-CH-L
@@ -213,6 +214,16 @@ load_config() {
   : "${bamdir:?CONFIG must define bamdir}"
 }
 
+default_posthoc_vep_dir() {
+  if [ -n "${mupexi_outdir:-}" ]; then
+    printf '%s\n' "$mupexi_outdir"
+  elif [ -n "${datadir:-}" ]; then
+    printf '%s\n' "${datadir%/}/mupexi2"
+  else
+    printf '%s\n' ""
+  fi
+}
+
 sample_base_name() {
   local value="$1"
   local labels=(
@@ -276,6 +287,7 @@ step_expected_output() {
       printf '%s\n' "${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna7_smfixed_bam_suffix}"
       ;;
     rna7) printf '%s\n' "${outdir}/${patient}_${rna7_phased_vcf_extension}" ;;
+    rna7.1) printf '%s\n' "${outdir}/${patient}_${rna7_phased_vcf_extension%.vcf.gz}.rna7.1.strand_filter_stats.tsv" ;;
     *) return 1 ;;
   esac
 }
@@ -434,6 +446,24 @@ step_input_status() {
         printf 'NO_INPUT\tBAM:%s\n' "$in_rna7_2"
       fi
       ;;
+    rna7.1)
+      local in_rna71_vcf="${outdir}/${patient}_${rna7_phased_vcf_extension}"
+      local in_rna71_backup="${outdir}/${patient}_${rna7_phased_vcf_extension%.vcf.gz}.pre_rna7.1.vcf.gz"
+      local in_rna71_vep_dir="${rna7_posthoc_vep_dir:-${rna_edit_vep_dir:-$(default_posthoc_vep_dir)}}"
+      local in_rna71_vep
+      in_rna71_vep="$(pick_first_existing "${in_rna71_vep_dir}/${patient}_vep.vep" "${in_rna71_vep_dir}/${patient}_vep.vep.gz")" || in_rna71_vep=""
+      local in_rna71_source="${in_rna71_backup}"
+      if [ ! -f "$in_rna71_source" ] || [ ! -s "$in_rna71_source" ]; then
+        in_rna71_source="${in_rna71_vcf}"
+      fi
+      if [ -f "$in_rna71_source" ] && [ -s "$in_rna71_source" ] && [ -n "$in_rna71_vep" ]; then
+        printf 'INPUT_OK\tVCF:%s ; VEP:%s\n' "$in_rna71_source" "$in_rna71_vep"
+      elif [ ! -f "$in_rna71_source" ] || [ ! -s "$in_rna71_source" ]; then
+        printf 'NO_INPUT\tVCF:%s\n' "$in_rna71_source"
+      else
+        printf 'NO_INPUT\tVEP:%s/%s_vep.vep[.gz]\n' "$in_rna71_vep_dir" "$patient"
+      fi
+      ;;
     *)
       printf 'NO_INPUT\tunknown-step\n'
       ;;
@@ -451,6 +481,7 @@ step_prefix() {
     rna6) printf '%s\n' "rna6_MergeDnaRnaVcfs" ;;
     rna7.0) printf '%s\n' "rna7.0_FixRnaBamReadGroups" ;;
     rna7) printf '%s\n' "rna7_GenotypeAndPhaseMergedVcf" ;;
+    rna7.1) printf '%s\n' "rna7.1_FilterByStrandness" ;;
     gdna1) printf '%s\n' "gdna1_HaplotypeCaller" ;;
     gdna2) printf '%s\n' "gdna2_FilterGermline" ;;
     gdna3) printf '%s\n' "gdna3_SelectVariants" ;;
@@ -476,7 +507,7 @@ watch_step_outputs() {
   local selected="${2:-}"
   local interval="${3:-5}"
   case "$step" in
-    rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|rna7.1|gdna1|gdna2|gdna3|gdna4) ;;
     *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
   esac
   [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
@@ -570,7 +601,7 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4) ;;
+    rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|rna7.1|gdna1|gdna2|gdna3|gdna4) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
@@ -771,7 +802,7 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     case "$step_name" in
-      rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|gdna1|gdna2|gdna3|gdna4)
+      rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|rna7.1|gdna1|gdna2|gdna3|gdna4)
         run_make "run${step_name}" "$sample"
         ;;
       *)

@@ -24,10 +24,10 @@ Usage:
   $0 research variant-table [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
-  $0 step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
+  $0 step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
   $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT]
-  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
+  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0> [PATIENT]
+  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
   (append --skip-running to submit commands to avoid re-submitting active jobs)
@@ -77,6 +77,7 @@ legacy_target() {
     4.6) printf '%s\n' "runrna6" ;;
     4.7.0) printf '%s\n' "runrna7.0" ;;
     4.7) printf '%s\n' "runrna7" ;;
+    4.7.1) printf '%s\n' "runrna7.1" ;;
     2.0) printf '%s\n' "rungdna1" ;;
     2.0.1) printf '%s\n' "rungdna2" ;;
     2.0.2) printf '%s\n' "rungdna3" ;;
@@ -200,6 +201,16 @@ load_config() {
   : "${bamdir:?CONFIG must define bamdir}"
 }
 
+default_posthoc_vep_dir() {
+  if [ -n "${mupexi_outdir:-}" ]; then
+    printf '%s\n' "$mupexi_outdir"
+  elif [ -n "${datadir:-}" ]; then
+    printf '%s\n' "${datadir%/}/mupexi2"
+  else
+    printf '%s\n' ""
+  fi
+}
+
 sample_base_name() {
   local value="$1"
   local labels=(
@@ -262,6 +273,7 @@ legacy_step_expected_output() {
     4.6) printf '%s\n' "${outdir}/${patient}_${merged_vcf_extension}" ;;
     4.7.0) printf '%s\n' "${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna_bam_smfixed_suffix}" ;;
     4.7) printf '%s\n' "${outdir}/${patient}_${phased_vcf_extension}" ;;
+    4.7.1) printf '%s\n' "${outdir}/${patient}_${phased_vcf_extension%.vcf.gz}.rna7.1.strand_filter_stats.tsv" ;;
     *) return 1 ;;
   esac
 }
@@ -420,6 +432,24 @@ legacy_step_input_status() {
         printf 'NO_INPUT\tBAM:%s\n' "$in_47_2"
       fi
       ;;
+    4.7.1)
+      local in_471_vcf="${outdir}/${patient}_${phased_vcf_extension}"
+      local in_471_backup="${outdir}/${patient}_${phased_vcf_extension%.vcf.gz}.pre_rna7.1.vcf.gz"
+      local in_471_vep_dir="${rna7_posthoc_vep_dir:-${rna_edit_vep_dir:-$(default_posthoc_vep_dir)}}"
+      local in_471_vep
+      in_471_vep="$(pick_first_existing "${in_471_vep_dir}/${patient}_vep.vep" "${in_471_vep_dir}/${patient}_vep.vep.gz")" || in_471_vep=""
+      local in_471_source="${in_471_backup}"
+      if [ ! -f "$in_471_source" ] || [ ! -s "$in_471_source" ]; then
+        in_471_source="${in_471_vcf}"
+      fi
+      if [ -f "$in_471_source" ] && [ -s "$in_471_source" ] && [ -n "$in_471_vep" ]; then
+        printf 'INPUT_OK\tVCF:%s ; VEP:%s\n' "$in_471_source" "$in_471_vep"
+      elif [ ! -f "$in_471_source" ] || [ ! -s "$in_471_source" ]; then
+        printf 'NO_INPUT\tVCF:%s\n' "$in_471_source"
+      else
+        printf 'NO_INPUT\tVEP:%s/%s_vep.vep[.gz]\n' "$in_471_vep_dir" "$patient"
+      fi
+      ;;
     *)
       printf 'NO_INPUT\tunknown-step\n'
       ;;
@@ -437,6 +467,7 @@ legacy_step_prefix() {
     4.6) printf '%s\n' "4.6_MergeDnaRnaVcfs" ;;
     4.7.0) printf '%s\n' "4.7.0_FixRnaBamReadGroups" ;;
     4.7) printf '%s\n' "4.7.1_GenotypeAndPhaseMergedVcf" ;;
+    4.7.1) printf '%s\n' "rna7.1_FilterByStrandness" ;;
     2.0) printf '%s\n' "2.0_HaplotypeCaller" ;;
     2.0.1) printf '%s\n' "2.0.1_FilterGermline" ;;
     2.0.2) printf '%s\n' "2.0.2_SelectVariants" ;;
@@ -449,7 +480,7 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
@@ -507,7 +538,7 @@ watch_step_outputs() {
   local selected="${2:-}"
   local interval="${3:-5}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0) ;;
     *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
   esac
   [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
@@ -744,7 +775,7 @@ case "$cmd" in
     step_name="${1:-}"
     sample="${2:-}"
     case "$step_name" in
-      4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|2.0|2.0.1|2.0.2|3.0)
+      4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0)
         target="$(legacy_target "$step_name")"
         run_make "$target" "$sample"
         ;;

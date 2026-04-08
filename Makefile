@@ -61,6 +61,9 @@ runrna7.0: check-config
 runrna7: check-config
 	cd post_rnadnavar_mupexi_prep && bash rna7_GenotypeAndPhaseMergedVcf.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
+runrna7.1: check-config
+	cd post_rnadnavar_mupexi_prep && bash rna7.1_FilterByStrandness.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
+
 rungdna1: check-config
 	cd germline_calling && bash gdna1_HaplotypeCaller.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(FORCE_FLAG)
 
@@ -116,6 +119,7 @@ run4.5.1: runrna5.1
 run4.6: runrna6
 run4.7.0: runrna7.0
 run4.7: runrna7
+run4.7.1: runrna7.1
 run2.0: rungdna1
 run2.0.1: rungdna2
 run2.0.2: rungdna3
