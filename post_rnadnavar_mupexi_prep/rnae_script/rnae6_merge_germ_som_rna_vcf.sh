@@ -5,7 +5,7 @@ module load ngs tools htslib/1.23 bcftools/1.23 anaconda3/2025.06-1
 
 threads=4
 rna_keep_all=0
-rna_known_regex='REDIportal|RADAR|Asaoka'   # match within INFO/KNOWN_RNAEDIT_DB
+rna_known_regex='REDIportal|RADAR|Asaoka|APOBEC3_MOTIF'   # match within INFO/KNOWN_RNAEDIT_DB
 
 # Output sample names (can be overridden). Defaults use US spelling.
 out_normal="DNA_NORMAL"
@@ -27,7 +27,7 @@ Required:
 Options:
   -t INT                 threads (default: 4)
   --rna-keep-all         do NOT filter RNA to known sites (default: filter to known)
-  --rna-known-regex STR  regex used on INFO/KNOWN_RNAEDIT_DB (default: 'REDIportal|RADAR|Asaoka')
+  --rna-known-regex STR  regex used on INFO/KNOWN_RNAEDIT_DB (default: 'REDIportal|RADAR|Asaoka|APOBEC3_MOTIF')
   --out-normal STR      output sample name for DNA normal (default: DNA_NORMAL)
   --out-dna STR         output sample name for DNA tumour/tumor (default: DNA_TUMOR)
   --out-rna STR         output sample name for RNA tumour/tumor (default: RNA_TUMOR)

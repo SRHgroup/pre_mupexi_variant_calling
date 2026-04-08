@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-# rna3: annotate filtered RNA VCF with known RNA-editing sites database (INFO/KNOWN_RNAEDIT_DB).
+# rna3: annotate filtered RNA VCF with known RNA-editing sites database and APOBEC3 motif hits (INFO/KNOWN_RNAEDIT_DB).
 
 usage() {
   cat <<'USAGE'
@@ -33,6 +33,7 @@ pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain
 : "${samples:?CONFIG must define samples}"
 : "${vcfdir:?CONFIG must define vcfdir}"
 : "${knownsites:?CONFIG must define knownsites}"
+: "${FASTA:?CONFIG must define FASTA}"
 : "${rna2_labeled_vcf_extension:?CONFIG must define rna2_labeled_vcf_extension}"
 : "${rna3_knownsites_vcf_extension:?CONFIG must define rna3_knownsites_vcf_extension}"
 
@@ -144,6 +145,16 @@ while IFS= read -r line; do
     echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
     continue
   fi
+  if [ ! -f "$FASTA" ]; then
+    echo "[precheck] ${prefix}.${name}: missing reference FASTA: $FASTA" >&2
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
+  if [ ! -f "${FASTA}.fai" ]; then
+    echo "[precheck] ${prefix}.${name}: missing FASTA index: ${FASTA}.fai" >&2
+    echo "[skip] ${prefix}.${name}: not submitting qsub due to failed input precheck" >&2
+    continue
+  fi
 
   job_name="${prefix}.${name}"
   if [ "${SKIP_RUNNING:-0}" = "1" ]; then
@@ -184,6 +195,8 @@ SCRIPT
     printf 'annot_vcf=%q\n' "$annot_vcf"
     printf 'annot_log=%q\n' "$annot_log"
     printf 'knownsites=%q\n' "$knownsites"
+    printf 'fasta=%q\n' "$FASTA"
+    printf 'repo_root=%q\n' "$repo_root"
     cat <<'SCRIPT'
 mkdir -p "$outdir_only"
 
@@ -195,14 +208,29 @@ if [ ! -f "$knownsites" ]; then
   echo "ERROR: missing knownsites DB: $knownsites" >&2
   exit 1
 fi
+if [ ! -f "$fasta" ]; then
+  echo "ERROR: missing reference FASTA: $fasta" >&2
+  exit 1
+fi
+if [ ! -f "${fasta}.fai" ]; then
+  echo "ERROR: missing FASTA index: ${fasta}.fai" >&2
+  exit 1
+fi
 
 hdr_tmp=$(mktemp)
-trap 'rm -f "$hdr_tmp"' EXIT
+known_tmp=$(mktemp --suffix=.vcf.gz)
+trap 'rm -f "$hdr_tmp" "$known_tmp" "$known_tmp.tbi" "$known_tmp.csi"' EXIT
 cat > "$hdr_tmp" <<'HDR'
-##INFO=<ID=KNOWN_RNAEDIT_DB,Number=.,Type=String,Description="Known RNA-editing DB hit(s); merged sources keyed by CHROM,POS,REF,ALT">
+##INFO=<ID=KNOWN_RNAEDIT_DB,Number=.,Type=String,Description="Known RNA-editing DB hit(s) and motif-based label(s); merged sources keyed by CHROM,POS,REF,ALT">
 HDR
 
-bcftools annotate -a "$knownsites" -c CHROM,POS,REF,ALT,INFO/KNOWN_RNAEDIT_DB -h "$hdr_tmp" -Oz -o "$annot_vcf" "$in_vcf"
+bcftools annotate -a "$knownsites" -c CHROM,POS,REF,ALT,INFO/KNOWN_RNAEDIT_DB -h "$hdr_tmp" -Oz -o "$known_tmp" "$in_vcf"
+bcftools index -t "$known_tmp"
+
+python3 "${repo_root}/post_rnadnavar_mupexi_prep/rnae_script/rnae3_add_apobec3_motif.py" \
+  --input "$known_tmp" \
+  --output "$annot_vcf" \
+  --fasta "$fasta"
 bcftools index -t "$annot_vcf"
 
 in_total=$(bcftools view -H "$in_vcf" | wc -l)
@@ -212,6 +240,7 @@ out_hits=$(bcftools view -H -i 'INFO/KNOWN_RNAEDIT_DB!=""' "$annot_vcf" | wc -l)
 redi_hits=$(bcftools view -H -i 'INFO/KNOWN_RNAEDIT_DB~"REDIportal"' "$annot_vcf" | wc -l || true)
 radar_hits=$(bcftools view -H -i 'INFO/KNOWN_RNAEDIT_DB~"RADAR"' "$annot_vcf" | wc -l || true)
 asaoka_hits=$(bcftools view -H -i 'INFO/KNOWN_RNAEDIT_DB~"Asaoka"' "$annot_vcf" | wc -l || true)
+motif_hits=$(bcftools view -H -i 'INFO/KNOWN_RNAEDIT_DB~"APOBEC3_MOTIF"' "$annot_vcf" | wc -l || true)
 
 {
   printf "metric\tvalue\n"
@@ -221,8 +250,10 @@ asaoka_hits=$(bcftools view -H -i 'INFO/KNOWN_RNAEDIT_DB~"Asaoka"' "$annot_vcf" 
   printf "hits_REDIportal\t%s\n" "$redi_hits"
   printf "hits_RADAR\t%s\n" "$radar_hits"
   printf "hits_Asaoka_APOBEC\t%s\n" "$asaoka_hits"
+  printf "hits_APOBEC3_MOTIF\t%s\n" "$motif_hits"
   printf "input_vcf\t%s\n" "$in_vcf"
   printf "knownsites_db\t%s\n" "$knownsites"
+  printf "reference_fasta\t%s\n" "$fasta"
   printf "output_vcf\t%s\n" "$annot_vcf"
 } > "$annot_log"
 SCRIPT
