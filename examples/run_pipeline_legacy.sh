@@ -201,16 +201,6 @@ load_config() {
   : "${bamdir:?CONFIG must define bamdir}"
 }
 
-default_posthoc_vep_dir() {
-  if [ -n "${mupexi_outdir:-}" ]; then
-    printf '%s\n' "$mupexi_outdir"
-  elif [ -n "${datadir:-}" ]; then
-    printf '%s\n' "${datadir%/}/mupexi2"
-  else
-    printf '%s\n' ""
-  fi
-}
-
 sample_base_name() {
   local value="$1"
   local labels=(
@@ -435,19 +425,19 @@ legacy_step_input_status() {
     4.7.1)
       local in_471_vcf="${outdir}/${patient}_${phased_vcf_extension}"
       local in_471_backup="${outdir}/${patient}_${phased_vcf_extension%.vcf.gz}.pre_rna7.1.vcf.gz"
-      local in_471_vep_dir="${rna7_posthoc_vep_dir:-${rna_edit_vep_dir:-$(default_posthoc_vep_dir)}}"
-      local in_471_vep
-      in_471_vep="$(pick_first_existing "${in_471_vep_dir}/${patient}_vep.vep" "${in_471_vep_dir}/${patient}_vep.vep.gz")" || in_471_vep=""
+      local in_471_bam="${bamdir}/${patient}_${rna_tumor_label:-RNA_TUMOR}/${patient}_${rna_bam_smfixed_suffix:-${rna7_smfixed_bam_suffix:-${rna_tumor_label:-RNA_TUMOR}.md.SMfixed.bam}}"
       local in_471_source="${in_471_backup}"
       if [ ! -f "$in_471_source" ] || [ ! -s "$in_471_source" ]; then
         in_471_source="${in_471_vcf}"
       fi
-      if [ -f "$in_471_source" ] && [ -s "$in_471_source" ] && [ -n "$in_471_vep" ]; then
-        printf 'INPUT_OK\tVCF:%s ; VEP:%s\n' "$in_471_source" "$in_471_vep"
+      if [ -f "$in_471_source" ] && [ -s "$in_471_source" ] && [ -f "$in_471_bam" ] && [ -s "$in_471_bam" ] && [ -f "${GTF:-}" ]; then
+        printf 'INPUT_OK\tVCF:%s ; BAM:%s ; GTF:%s\n' "$in_471_source" "$in_471_bam" "$GTF"
       elif [ ! -f "$in_471_source" ] || [ ! -s "$in_471_source" ]; then
         printf 'NO_INPUT\tVCF:%s\n' "$in_471_source"
+      elif [ -z "${GTF:-}" ] || [ ! -f "$GTF" ]; then
+        printf 'NO_INPUT\tGTF:%s\n' "${GTF:-CONFIG:GTF missing}"
       else
-        printf 'NO_INPUT\tVEP:%s/%s_vep.vep[.gz]\n' "$in_471_vep_dir" "$patient"
+        printf 'NO_INPUT\tBAM:%s\n' "$in_471_bam"
       fi
       ;;
     *)

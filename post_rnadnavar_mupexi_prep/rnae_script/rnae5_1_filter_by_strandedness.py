@@ -298,6 +298,11 @@ def main() -> None:
     ap.add_argument("--support-tsv", default="")
     ap.add_argument("--blacklist-tsv", default="")
     ap.add_argument("--stats", default="")
+    ap.add_argument(
+        "--filter-source-set",
+        default="",
+        help="Optional SOURCE_SET token to restrict filtering to; non-matching records are preserved unchanged",
+    )
     args = ap.parse_args()
 
     protocol = protocol_alias(args.protocol)
@@ -307,6 +312,7 @@ def main() -> None:
     reason_counts: Counter[str] = Counter()
     input_records = 0
     kept_records = 0
+    preserved_nonmatching_records = 0
 
     with open_alignment(args.bam) as bam:
         contig_lookup = build_contig_lookup(bam.references)
@@ -339,6 +345,12 @@ def main() -> None:
                 ref = cols[3]
                 alt = cols[4]
                 info_map = parse_info(cols[7])
+                source_tokens = {token.strip() for token in str(info_map.get("SOURCE_SET", "")).split(",") if token.strip()}
+                if args.filter_source_set and args.filter_source_set not in source_tokens:
+                    fout.write(line)
+                    kept_records += 1
+                    preserved_nonmatching_records += 1
+                    continue
                 filter_value = cols[6] if cols[6] else "NA"
                 edit_sig = classify_edit_sig(info_map)
                 known_db = info_map.get("KNOWN_RNAEDIT_DB", "NA")
@@ -443,6 +455,7 @@ def main() -> None:
             fh.write("metric\tvalue\n")
             fh.write(f"input_records\t{input_records}\n")
             fh.write(f"kept_records\t{kept_records}\n")
+            fh.write(f"preserved_nonmatching_records\t{preserved_nonmatching_records}\n")
             fh.write(f"blacklisted_records\t{len(blacklist_rows)}\n")
             for reason, count in sorted(reason_counts.items()):
                 fh.write(f"reason_{reason}\t{count}\n")
