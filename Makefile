@@ -24,12 +24,19 @@ MUPEXI_NODES ?=
 MUPEXI_PPN ?=
 MUPEXI_MEM ?=
 MUPEXI_WALLTIME ?=
+EXECUTE ?=
+THREADS ?=
+CLEANUP_NODES ?=
+CLEANUP_PPN ?=
+CLEANUP_MEM ?=
+CLEANUP_WALLTIME ?=
 
 SAMPLE_FLAG := $(if $(SAMPLE),-s $(SAMPLE),)
 FORCE_FLAG := $(if $(filter 1 true yes,$(FORCE)),-f,)
 SKIP_RUNNING_FLAG := $(if $(filter 1 true yes,$(SKIP_RUNNING)),--skip-running,)
 OUTDIR_FLAG := $(if $(OUTDIR),-o $(OUTDIR),)
 OUTFILE_FLAG := $(if $(OUTFILE),-o $(OUTFILE),)
+EXECUTE_FLAG := $(if $(filter 1 true yes,$(EXECUTE)),--execute,)
 
 check-config:
 	@if [[ -z "$(CONFIG)" ]]; then echo "Set CONFIG=/path/to/CONFIG"; exit 1; fi
@@ -105,6 +112,9 @@ run_research_mosdepth_overlap: check-config
 
 run_mupexi: check-config
 	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(filter 1 true yes,$(FUSION_ONLY)),--fusion-only,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(if $(MUPEXI_NODES),--nodes "$(MUPEXI_NODES)",) $(if $(MUPEXI_PPN),--ppn "$(MUPEXI_PPN)",) $(if $(MUPEXI_MEM),--mem "$(MUPEXI_MEM)",) $(if $(MUPEXI_WALLTIME),--walltime "$(MUPEXI_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+
+run_cleanup_pre_mupexi: check-config
+	bash bin/run_cleanup_pre_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(EXECUTE_FLAG) $(if $(THREADS),--threads "$(THREADS)",) $(if $(CLEANUP_NODES),--nodes "$(CLEANUP_NODES)",) $(if $(CLEANUP_PPN),--ppn "$(CLEANUP_PPN)",) $(if $(CLEANUP_MEM),--mem "$(CLEANUP_MEM)",) $(if $(CLEANUP_WALLTIME),--walltime "$(CLEANUP_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
 check_outputs: check-config
 	bash bin/check_outputs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) -m "$(MODE)"
