@@ -15,6 +15,9 @@ samples="/path/to/SAMPLES.tsv"
 vcfdir="/path/to/project/variant_calling/mutect2"
 bamdir="/path/to/project/preprocessing/markduplicates"
 dna_bam_suffix="md.bam"
+# Optional upstream rnadnavar roots for cleanup; if unset, cleanup derives them as siblings of bamdir.
+# recaldir="/path/to/project/preprocessing/recalibrated"
+# stardir="/path/to/project/preprocessing/star"
 
 # Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"
@@ -145,6 +148,12 @@ mupexi_qsub_nodes="1"
 # mupexi_qsub_ppn="3"
 mupexi_qsub_mem="24gb"
 mupexi_qsub_walltime="24:00:00"
+
+# Cleanup qsub resources (overridable via run_pipeline cleanup --nodes/--ppn/--mem/--walltime)
+# cleanup_qsub_nodes="1"
+# cleanup_qsub_ppn="8"
+# cleanup_qsub_mem="32gb"
+# cleanup_qsub_walltime="24:00:00"
 
 # HLA is read per patient from hladir (legacy suffix logic compatible).
 # Primary expected file pattern:

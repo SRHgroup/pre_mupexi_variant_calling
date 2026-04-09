@@ -10,8 +10,10 @@ Policy:
   - keep the first Mutect2 filtered RNA and DNA VCFs used by rna1
   - keep the final phased merged VCF used by MuPeXI (rna7_phased_vcf_extension)
   - if RNA final VCF is absent but dna_only_phased_vcf_extension exists, keep that final VCF instead
-  - convert the pre-Mutect2 DNA normal, DNA tumor, and RNA tumor BAMs to CRAM
-  - delete other heavy BAM/CRAM/VCF intermediates inside the per-patient BAM/VCF directories
+  - convert the last available pre-Mutect2 DNA normal, DNA tumor, and RNA tumor BAMs to CRAM
+    (prefer recalibrated BAMs when present, otherwise fall back to markduplicates BAMs)
+  - delete other heavy BAM/CRAM/VCF intermediates inside the per-patient BAM/VCF directories,
+    including upstream recalibrated BAMs and STAR mapped BAM shards
 
 Default mode is dry-run. Use --execute to make changes.
 
@@ -158,6 +160,23 @@ resolve_bam_candidates() {
   fi
 }
 
+resolve_recal_bam_candidates() {
+  local patient="$1"
+  local sample_label="$2"
+  local alt_label
+
+  alt_label="$(flip_tumor_spelling "$sample_label")"
+  printf '%s\n' \
+    "${recaldir}/${patient}_${sample_label}/${patient}_${sample_label}.recal.bam" \
+    "${recaldir}/${patient}_${sample_label}/${patient}.recal.bam"
+
+  if [ "$alt_label" != "$sample_label" ]; then
+    printf '%s\n' \
+      "${recaldir}/${patient}_${alt_label}/${patient}_${alt_label}.recal.bam" \
+      "${recaldir}/${patient}_${alt_label}/${patient}.recal.bam"
+  fi
+}
+
 resolve_vcf_source_path() {
   local patient="$1"
   local kind="$2"
@@ -235,6 +254,22 @@ file_is_heavy_candidate() {
   esac
 }
 
+star_mapped_dirs() {
+  local patient="$1"
+  local sample_label="$2"
+  local alt_label
+
+  alt_label="$(flip_tumor_spelling "$sample_label")"
+  printf '%s\n' \
+    "${stardir}/${patient}/${patient}_${sample_label}/mapped" \
+    "${stardir}/${patient}_${sample_label}/mapped"
+  if [ "$alt_label" != "$sample_label" ]; then
+    printf '%s\n' \
+      "${stardir}/${patient}/${patient}_${alt_label}/mapped" \
+      "${stardir}/${patient}_${alt_label}/mapped"
+  fi
+}
+
 declare -a delete_paths=()
 declare -a keep_paths=()
 
@@ -261,19 +296,41 @@ add_keep_path() {
   fi
 }
 
-gather_delete_candidates() {
+add_delete_path() {
+  local path="$1"
+  [ -n "$path" ] || return 0
+  if ! array_contains "$path" "${delete_paths[@]:-}"; then
+    delete_paths+=("$path")
+  fi
+}
+
+gather_delete_candidates_from_dirs() {
   local dir path
   local -a dirs=("$@")
 
-  delete_paths=()
   for dir in "${dirs[@]}"; do
     [ -d "$dir" ] || continue
     while IFS= read -r path; do
       file_is_heavy_candidate "$path" || continue
       array_contains "$path" "${keep_paths[@]:-}" && continue
-      delete_paths+=("$path")
+      add_delete_path "$path"
     done < <(find "$dir" -maxdepth 1 -type f | sort)
   done
+}
+
+gather_star_delete_candidates() {
+  local patient="$1"
+  local sample_label="$2"
+  local mapped_dir path
+
+  while IFS= read -r mapped_dir; do
+    [ -d "$mapped_dir" ] || continue
+    while IFS= read -r path; do
+      file_is_heavy_candidate "$path" || continue
+      array_contains "$path" "${keep_paths[@]:-}" && continue
+      add_delete_path "$path"
+    done < <(find "$mapped_dir" -maxdepth 1 -type f | sort)
+  done < <(star_mapped_dirs "$patient" "$sample_label")
 }
 
 convert_bam_to_cram() {
@@ -306,6 +363,9 @@ out_dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 rna_dir_label="${rna_tumor_label:-RNA_TUMOR}"
 dna_suffix="${dna_bam_suffix:-md.bam}"
+preprocessing_root="$(dirname "$bamdir")"
+recaldir="${recaldir:-${preprocessing_root}/recalibrated}"
+stardir="${stardir:-${preprocessing_root}/star}"
 
 patients_seen=0
 patients_ready=0
@@ -353,9 +413,16 @@ while IFS= read -r line; do
     final_keep_vcf="$final_dna_only_vcf"
   fi
 
-  dna_normal_bam="$(pick_first_existing $(resolve_bam_candidates "$patient" "$out_normal_label" "$dna_suffix"))" || dna_normal_bam=""
-  dna_tumor_bam="$(pick_first_existing $(resolve_bam_candidates "$patient" "$out_dna_label" "$dna_suffix"))" || dna_tumor_bam=""
-  rna_tumor_bam="$(pick_first_existing $(resolve_bam_candidates "$patient" "$rna_dir_label" "$dna_suffix"))" || rna_tumor_bam=""
+  dna_normal_md_bam="$(pick_first_existing $(resolve_bam_candidates "$patient" "$out_normal_label" "$dna_suffix"))" || dna_normal_md_bam=""
+  dna_tumor_md_bam="$(pick_first_existing $(resolve_bam_candidates "$patient" "$out_dna_label" "$dna_suffix"))" || dna_tumor_md_bam=""
+  rna_tumor_md_bam="$(pick_first_existing $(resolve_bam_candidates "$patient" "$rna_dir_label" "$dna_suffix"))" || rna_tumor_md_bam=""
+  dna_normal_recal_bam="$(pick_first_existing $(resolve_recal_bam_candidates "$patient" "$out_normal_label"))" || dna_normal_recal_bam=""
+  dna_tumor_recal_bam="$(pick_first_existing $(resolve_recal_bam_candidates "$patient" "$out_dna_label"))" || dna_tumor_recal_bam=""
+  rna_tumor_recal_bam="$(pick_first_existing $(resolve_recal_bam_candidates "$patient" "$rna_dir_label"))" || rna_tumor_recal_bam=""
+
+  dna_normal_bam="${dna_normal_recal_bam:-$dna_normal_md_bam}"
+  dna_tumor_bam="${dna_tumor_recal_bam:-$dna_tumor_md_bam}"
+  rna_tumor_bam="${rna_tumor_recal_bam:-$rna_tumor_md_bam}"
 
   missing_reason=""
   if [ -z "$source_rna_vcf" ]; then
@@ -407,6 +474,12 @@ while IFS= read -r line; do
     "$germ_dir" \
     "$dna_vcf_dir" \
     "$rna_vcf_dir" \
+    "$(dirname "${dna_normal_md_bam:-$dna_normal_bam}")" \
+    "$(dirname "${dna_tumor_md_bam:-$dna_tumor_bam}")" \
+    "$(dirname "${rna_tumor_md_bam:-$rna_tumor_bam}")" \
+    "$(dirname "${dna_normal_recal_bam:-$dna_normal_bam}")" \
+    "$(dirname "${dna_tumor_recal_bam:-$dna_tumor_bam}")" \
+    "$(dirname "${rna_tumor_recal_bam:-$rna_tumor_bam}")" \
     "$(dirname "$dna_normal_bam")" \
     "$(dirname "$dna_tumor_bam")" \
     "$(dirname "$rna_tumor_bam")"
@@ -422,7 +495,9 @@ while IFS= read -r line; do
     [ "$seen_dir" -eq 1 ] || patient_dirs+=("$dir")
   done
 
-  gather_delete_candidates "${patient_dirs[@]}"
+  delete_paths=()
+  gather_delete_candidates_from_dirs "${patient_dirs[@]}"
+  gather_star_delete_candidates "$patient" "$rna_dir_label"
 
   patients_ready=$((patients_ready + 1))
   planned_conversions=$((planned_conversions + 3))
@@ -437,6 +512,10 @@ while IFS= read -r line; do
   echo "    $dna_normal_cram"
   echo "    $dna_tumor_cram"
   echo "    $rna_tumor_cram"
+  echo "  source_bams_for_cram:"
+  echo "    $dna_normal_bam"
+  echo "    $dna_tumor_bam"
+  echo "    $rna_tumor_bam"
   echo "  delete_count: ${#delete_paths[@]}"
 
   if [ "$execute" -eq 0 ]; then
@@ -453,7 +532,9 @@ while IFS= read -r line; do
   convert_bam_to_cram "$rna_tumor_bam"
   executed_conversions=$((executed_conversions + 1))
 
-  gather_delete_candidates "${patient_dirs[@]}"
+  delete_paths=()
+  gather_delete_candidates_from_dirs "${patient_dirs[@]}"
+  gather_star_delete_candidates "$patient" "$rna_dir_label"
   for path in "${delete_paths[@]}"; do
     rm -f "$path"
     executed_deletions=$((executed_deletions + 1))
