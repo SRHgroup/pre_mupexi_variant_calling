@@ -257,7 +257,7 @@ print_section "TOP SPACE HOGS"
 if [ "${#roots[@]}" -eq 0 ]; then
   echo "No existing storage roots found from CONFIG."
 else
-  du -ah "${roots[@]}" 2>/dev/null | sort -hr | head -n "$top_n"
+  du -ah "${roots[@]}" 2>/dev/null | sort -hr | awk -v limit="$top_n" 'NR <= limit { print }'
 fi
 
 print_section "EXPECTED FINAL KEEPERS"
