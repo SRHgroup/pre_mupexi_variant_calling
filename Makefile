@@ -5,6 +5,8 @@ SAMPLE ?=
 FORCE ?=
 MODE ?= all
 OUTDIR ?=
+STAR_ROOT ?=
+DRY_RUN ?=
 MAX_DISTANCE ?= 33
 MIN_CLUSTER_SIZE ?= 2
 MIN_ALT_COUNT ?= 10
@@ -37,6 +39,7 @@ SKIP_RUNNING_FLAG := $(if $(filter 1 true yes,$(SKIP_RUNNING)),--skip-running,)
 OUTDIR_FLAG := $(if $(OUTDIR),-o $(OUTDIR),)
 OUTFILE_FLAG := $(if $(OUTFILE),-o $(OUTFILE),)
 EXECUTE_FLAG := $(if $(filter 1 true yes,$(EXECUTE)),--execute,)
+DRY_RUN_FLAG := $(if $(filter 1 true yes,$(DRY_RUN)),--dry-run,)
 
 check-config:
 	@if [[ -z "$(CONFIG)" ]]; then echo "Set CONFIG=/path/to/CONFIG"; exit 1; fi
@@ -109,6 +112,9 @@ run_research_strand_blacklist: check-config
 
 run_research_mosdepth_overlap: check-config
 	cd research && bash run_mosdepth_overlap.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) --depth-threshold "$(DEPTH_THRESHOLD)" --region-bin-size "$(REGION_BIN_SIZE)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+
+run_splicing_merge_star_sj: check-config
+	cd splicing && bash run_merge_star_sj_shards.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(STAR_ROOT),--root "$(STAR_ROOT)",) $(FORCE_FLAG) $(DRY_RUN_FLAG)
 
 run_mupexi: check-config
 	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(filter 1 true yes,$(FUSION_ONLY)),--fusion-only,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(if $(MUPEXI_NODES),--nodes "$(MUPEXI_NODES)",) $(if $(MUPEXI_PPN),--ppn "$(MUPEXI_PPN)",) $(if $(MUPEXI_MEM),--mem "$(MUPEXI_MEM)",) $(if $(MUPEXI_WALLTIME),--walltime "$(MUPEXI_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
