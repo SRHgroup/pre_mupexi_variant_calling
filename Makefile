@@ -107,6 +107,9 @@ run_research_samecopy_stats: check-config
 run_research_variant_table: check-config
 	cd research && bash run_variant_table_job.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
+run_research_vep_dedup: check-config
+	cd research && bash run_vep_dedup_job.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+
 run_research_strand_blacklist: check-config
 	cd research && bash run_rna_edit_strand_blacklist.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(PROTOCOL),--protocol "$(PROTOCOL)",) $(if $(MIN_MAPQ),--min-mapq "$(MIN_MAPQ)",) $(if $(MIN_BASEQ),--min-baseq "$(MIN_BASEQ)",) $(if $(MIN_EXPECTED_FRAC),--min-expected-frac "$(MIN_EXPECTED_FRAC)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 

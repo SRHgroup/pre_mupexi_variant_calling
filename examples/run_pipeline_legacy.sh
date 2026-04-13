@@ -123,6 +123,17 @@ run_research_variant_table() {
   fi
 }
 
+run_research_vep_dedup() {
+  local sample="${1:-}"
+  local outdir="${2:-}"
+
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_vep_dedup CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $force_arg $skip_running_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_vep_dedup CONFIG="$CONFIG" OUTDIR="$outdir" $force_arg $skip_running_arg
+  fi
+}
+
 run_research_strand_blacklist() {
   local sample="${1:-}"
   local outdir="${2:-}"
@@ -712,6 +723,21 @@ case "$cmd" in
           esac
         done
         run_research_variant_table "$sample" "$outdir"
+        ;;
+      vep-dedup|vep-summary)
+        sample=""
+        outdir=""
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --outdir|-o) outdir="${2:-}"; shift 2 ;;
+            *) echo "Unknown research option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_research_vep_dedup "$sample" "$outdir"
         ;;
       strand-blacklist)
         sample=""
