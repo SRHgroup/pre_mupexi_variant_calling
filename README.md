@@ -43,6 +43,12 @@ gDNA:
   - chain B: `rna1 -> rna2 -> rna3 -> rna4 -> rna5`
   - chain C: `rna6 -> rna7.0 -> rna7`, dependent on A and B completion.
 
+## Scheduling policy
+
+- Cohort-mode work should default to one job per patient/sample, not one large cohort job.
+- If a cohort-level result is needed, produce it by concatenating or aggregating patient-level outputs after the patient jobs finish.
+- Only use a single cohort-wide job when there is a clear technical reason and the behavior is explicitly intended.
+
 ## Requirements
 
 - PBS `qsub` / `qstat`
