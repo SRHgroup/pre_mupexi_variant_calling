@@ -92,12 +92,6 @@ RNA chain:
 make run_all_rna CONFIG=/path/to/CONFIG
 ```
 
-Splicing pipeline, step 1: merge STAR junction shards in place:
-```bash
-make run_splicing_merge_star_sj CONFIG=/path/to/CONFIG
-make run_splicing_merge_star_sj CONFIG=/path/to/CONFIG SAMPLE=Pat21
-```
-
 gDNA chain:
 ```bash
 make run_all_germline CONFIG=/path/to/CONFIG
@@ -133,3 +127,4 @@ If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can chec
 - Scripts precheck inputs before `qsub`; broken/missing inputs are reported immediately.
 - Duplicate submission guard is enabled per step/sample using stored job IDs + `qstat`.
 - `rna7` requires the SM-fixed RNA BAM from `rna7.0` and will fail/skip if that file is missing.
+
