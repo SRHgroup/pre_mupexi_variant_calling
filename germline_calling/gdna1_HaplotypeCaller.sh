@@ -211,7 +211,7 @@ set -euo pipefail
 if [ -n "${PIPELINE_DEFAULTS:-}" ] && [ -f "$PIPELINE_DEFAULTS" ]; then
   source "$PIPELINE_DEFAULTS"
 fi
-module load ${modules_gdna_hc:-tools ngs java/17-openjdk gatk/4.5.0.0}
+module load ${modules_gdna_hc:-tools ngs htslib/1.23 samtools/1.23 java/17-openjdk gatk/4.5.0.0}
 SCRIPT
     printf 'normal_bam=%q\n' "$normal_bam"
     printf 'germline_dir=%q\n' "$germline_dir"
