@@ -202,6 +202,15 @@ python3 "$rnae_scripts/rnae5_1_filter_by_strandedness.py" \
   --blacklist-tsv "$blacklist_tsv" \
   --stats "$stats_file"
 
+if [ ! -s "$out_vcf_raw" ]; then
+  echo "ERROR: rna5.1 did not produce an output VCF: $out_vcf_raw" >&2
+  exit 1
+fi
+if [ ! -s "$stats_file" ]; then
+  echo "ERROR: rna5.1 did not produce stats output: $stats_file" >&2
+  exit 1
+fi
+
 bgzip -f -c "$out_vcf_raw" > "$out_vcf"
 rm -f "$out_vcf_raw"
 
@@ -212,6 +221,11 @@ if ! bcftools view -h "$out_vcf" | grep -q '^#CHROM'; then
 fi
 
 bcftools index -t "$out_vcf"
+
+input_records="$(awk -F'\t' '$1=="input_records"{print $2; exit}' "$stats_file")"
+kept_records="$(awk -F'\t' '$1=="kept_records"{print $2; exit}' "$stats_file")"
+blacklisted_records="$(awk -F'\t' '$1=="blacklisted_records"{print $2; exit}' "$stats_file")"
+echo "[info] rna5.1 strand filter: input=${input_records:-NA} kept=${kept_records:-NA} filtered=${blacklisted_records:-NA}"
 SCRIPT
   } > "$runscript"
   chmod +x "$runscript"
