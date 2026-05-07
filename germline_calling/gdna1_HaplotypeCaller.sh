@@ -283,8 +283,11 @@ if [ ! -s "$sites_bed" ]; then
   exit 1
 fi
 
+# Sample the first 50k primary alignments to estimate the modal read length.
+# awk exits early by design; suppress the expected SIGPIPE noise from samtools.
 read_length="$(
-  samtools view -F 0x900 "$normal_bam" |
+  set +o pipefail
+  samtools view -F 0x900 "$normal_bam" 2>/dev/null |
   awk '
     NR > 50000 { exit }
     {
