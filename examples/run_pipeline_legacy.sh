@@ -295,10 +295,36 @@ legacy_step_input_status() {
   case "$step" in
     2.0)
       local dna_bam="${bamdir}/${patient}_${out_normal}/${patient}_${dna_bam_suffix:-md.bam}"
-      if [ -f "$dna_bam" ] && [ -s "$dna_bam" ]; then
-        printf 'INPUT_OK\t%s\n' "$dna_bam"
-      else
+      source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension:-${out_rna}_vs_{patient}_${out_normal}.mutect2.filtered.vcf.gz}"
+      source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension:-${dna_label}_vs_{patient}_${out_normal}.mutect2.filtered.vcf.gz}"
+      source_rna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_rna_mutect2_vcf_extension" "$patient")"
+      source_dna_mutect2_vcf_extension="$(resolve_patient_placeholder "$source_dna_mutect2_vcf_extension" "$patient")"
+      source_rna_mutect2_vcf_extension="${source_rna_mutect2_vcf_extension%\}}"
+      source_dna_mutect2_vcf_extension="${source_dna_mutect2_vcf_extension%\}}"
+      rna_vcf_dir="${vcfdir}/${patient}_${out_rna}_vs_${patient}_${out_normal}"
+      dna_vcf_dir="${vcfdir}/${patient}_${dna_label}_vs_${patient}_${out_normal}"
+      srna_pref="${rna_vcf_dir}/${patient}_${source_rna_mutect2_vcf_extension}"
+      sdna_pref="${dna_vcf_dir}/${patient}_${source_dna_mutect2_vcf_extension}"
+      srna="$(pick_first_existing \
+        "$srna_pref" \
+        "${rna_vcf_dir}/${patient}_${out_rna}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${rna_vcf_dir}/${patient}_${rna_tumor_label:-RNA_TUMOR}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${rna_vcf_dir}/${patient}_RNA_TUMOR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${rna_vcf_dir}/${patient}_RNA_TUMOUR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+      )" || srna=""
+      sdna="$(pick_first_existing \
+        "$sdna_pref" \
+        "${dna_vcf_dir}/${patient}_${dna_label}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${dna_vcf_dir}/${patient}_${dna_tumor_label:-DNA_TUMOR}_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${dna_vcf_dir}/${patient}_DNA_TUMOR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+        "${dna_vcf_dir}/${patient}_DNA_TUMOUR_vs_${patient}_${out_normal}.mutect2.filtered.vcf.gz" \
+      )" || sdna=""
+      if [ ! -f "$dna_bam" ] || [ ! -s "$dna_bam" ]; then
         printf 'NO_INPUT\t%s\n' "$dna_bam"
+      elif [ -n "$srna" ] || [ -n "$sdna" ]; then
+        printf 'INPUT_OK\tBAM:%s ; DNA:%s ; RNA:%s\n' "$dna_bam" "${sdna:-NA}" "${srna:-NA}"
+      else
+        printf 'NO_INPUT\tDNA:%s ; RNA:%s\n' "$sdna_pref" "$srna_pref"
       fi
       ;;
     2.0.1)

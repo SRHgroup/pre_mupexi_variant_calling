@@ -71,7 +71,7 @@ germline_include_rna_proximity="auto"
 
 # RNA output suffixes
 # Expected under: ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/
-# Upstream mutect2 VCF suffixes produced by rnadnavar (inputs to rna1):
+# Upstream mutect2 VCF suffixes produced by rnadnavar (inputs to rna1 and gdna1):
 # Full source path pattern used by rna1:
 #   RNA source: ${vcfdir}/${patient}_${out_rna_tumor_label}_vs_${patient}_${out_dna_normal_label}/${patient}_${source_rna_mutect2_vcf_extension}
 #   DNA source: ${vcfdir}/${patient}_${out_dna_tumor_label}_vs_${patient}_${out_dna_normal_label}/${patient}_${source_dna_mutect2_vcf_extension}
