@@ -42,6 +42,7 @@ rna_strand_protocol="${rna_strand_protocol:-fr-firststrand}"
 rna_strand_min_mapq="${rna_strand_min_mapq:-20}"
 rna_strand_min_baseq="${rna_strand_min_baseq:-20}"
 rna_strand_min_expected_frac="${rna_strand_min_expected_frac:-0.8}"
+rna_strand_threads="${rna_strand_threads:-4}"
 
 sample_base_name() {
   local value="$1"
@@ -173,6 +174,7 @@ SCRIPT
     printf 'min_mapq=%q\n' "$rna_strand_min_mapq"
     printf 'min_baseq=%q\n' "$rna_strand_min_baseq"
     printf 'min_expected_frac=%q\n' "$rna_strand_min_expected_frac"
+    printf 'threads=%q\n' "$rna_strand_threads"
     printf 'rnae_scripts=%q\n' "$rnae_scripts"
     cat <<'SCRIPT'
 if [ ! -f "$in_vcf" ]; then
@@ -198,6 +200,7 @@ python3 "$rnae_scripts/rnae5_1_filter_by_strandedness.py" \
   --min-mapq "$min_mapq" \
   --min-baseq "$min_baseq" \
   --min-expected-frac "$min_expected_frac" \
+  --threads "$threads" \
   --support-tsv "$support_tsv" \
   --blacklist-tsv "$blacklist_tsv" \
   --stats "$stats_file"
@@ -232,7 +235,7 @@ SCRIPT
 
   qsub_output="$(qsub -W group_list="${qsub_group:-srhgroup}" -A "${qsub_account:-srhgroup}" -d "$(pwd)" \
     "${qsub_depend_arg[@]}" \
-    -l nodes=1:ppn=4,mem=20gb,walltime="00:12:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
+    -l nodes=1:ppn="${rna_strand_threads}",mem=20gb,walltime="00:12:00:00" -r y -N "$job_name" -o "$repdir" -e "$repdir" "$runscript")"
   echo "$qsub_output"
   printf '%s\n' "$qsub_output" > "$submit_marker"
   echo "[submit] ${job_name}: jobid=${qsub_output}"

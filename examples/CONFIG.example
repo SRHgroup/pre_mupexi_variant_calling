@@ -100,6 +100,7 @@ rna_strand_protocol="fr-firststrand"
 rna_strand_min_mapq="20"
 rna_strand_min_baseq="20"
 rna_strand_min_expected_frac="0.8"
+rna_strand_threads="4"
 
 # Required rna7.0 output suffix (rna7 consumes this BAM)
 rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"

@@ -6,6 +6,7 @@ import csv
 import gzip
 import os
 import re
+import multiprocessing as mp
 from collections import Counter, defaultdict
 from typing import Dict, Iterable, List, Optional, Sequence, Set, TextIO, Tuple
 
@@ -20,6 +21,17 @@ PRIMARY_GTF_FEATURES = {
     "three_prime_utr",
 }
 FALLBACK_GTF_FEATURES = {"transcript"}
+
+
+_WORKER_BAM = None
+_WORKER_CONTIG_LOOKUP: Dict[str, str] = {}
+_WORKER_GTF_BINS = None
+_WORKER_PROTOCOL = "fr-firststrand"
+_WORKER_MIN_MAPQ = 20
+_WORKER_MIN_BASEQ = 20
+_WORKER_MIN_EXPECTED_FRAC = 0.8
+_WORKER_FILTER_SOURCE_SET = ""
+_WORKER_PATIENT = "NA"
 
 
 def open_text(path: str) -> TextIO:
@@ -284,6 +296,137 @@ def write_tsv(path: str, rows: Sequence[Dict[str, str]], fieldnames: Sequence[st
             writer.writerow(row)
 
 
+def init_worker(
+    bam_path: str,
+    protocol: str,
+    min_mapq: int,
+    min_baseq: int,
+    min_expected_frac: float,
+    filter_source_set: str,
+    patient: str,
+) -> None:
+    global _WORKER_BAM
+    global _WORKER_CONTIG_LOOKUP
+    global _WORKER_GTF_BINS
+    global _WORKER_PROTOCOL
+    global _WORKER_MIN_MAPQ
+    global _WORKER_MIN_BASEQ
+    global _WORKER_MIN_EXPECTED_FRAC
+    global _WORKER_FILTER_SOURCE_SET
+    global _WORKER_PATIENT
+
+    _WORKER_BAM = open_alignment(bam_path)
+    _WORKER_CONTIG_LOOKUP = build_contig_lookup(_WORKER_BAM.references)
+    _WORKER_GTF_BINS = gtf_bins
+    _WORKER_PROTOCOL = protocol
+    _WORKER_MIN_MAPQ = min_mapq
+    _WORKER_MIN_BASEQ = min_baseq
+    _WORKER_MIN_EXPECTED_FRAC = min_expected_frac
+    _WORKER_FILTER_SOURCE_SET = filter_source_set
+    _WORKER_PATIENT = patient
+
+
+def process_record(task: Tuple[int, List[str]]) -> Dict[str, object]:
+    idx, cols = task
+    chrom = normalize_chrom(cols[0])
+    pos = int(cols[1])
+    ref = cols[3]
+    alt = cols[4]
+    info_map = parse_info(cols[7])
+    source_tokens = {token.strip() for token in str(info_map.get("SOURCE_SET", "")).split(",") if token.strip()}
+
+    if _WORKER_FILTER_SOURCE_SET and _WORKER_FILTER_SOURCE_SET not in source_tokens:
+        return {
+            "idx": idx,
+            "reason": "PRESERVED_NONMATCHING",
+            "blacklisted": False,
+            "preserved_nonmatching": True,
+            "output_line": "\t".join(cols) + "\n",
+            "support_row": None,
+        }
+
+    filter_value = cols[6] if cols[6] else "NA"
+    edit_sig = classify_edit_sig(info_map)
+    known_db = info_map.get("KNOWN_RNAEDIT_DB", "NA")
+
+    transcript_strands, annotation_source = query_transcript_strands(_WORKER_GTF_BINS, chrom, pos)
+    expected_strand = sorted(transcript_strands)[0] if len(transcript_strands) == 1 else "NA"
+
+    expected_alt = 0
+    opposite_alt = 0
+    total_alt = 0
+    expected_frac: Optional[float] = None
+    missing_bam_contig = False
+    if len(transcript_strands) == 1:
+        actual_chrom = _WORKER_CONTIG_LOOKUP.get(chrom)
+        if not actual_chrom:
+            missing_bam_contig = True
+        else:
+            expected_alt, opposite_alt, total_alt, expected_frac = count_alt_reads(
+                bam=_WORKER_BAM,
+                actual_chrom=actual_chrom,
+                pos=pos,
+                alt=alt,
+                expected_strand=expected_strand,
+                protocol=_WORKER_PROTOCOL,
+                min_mapq=_WORKER_MIN_MAPQ,
+                min_baseq=_WORKER_MIN_BASEQ,
+            )
+
+    reason = derive_reason(
+        transcript_strands=transcript_strands,
+        total_alt=total_alt,
+        expected_frac=expected_frac,
+        min_expected_frac=_WORKER_MIN_EXPECTED_FRAC,
+        missing_bam_contig=missing_bam_contig,
+    )
+    blacklisted = reason != "PASS"
+
+    support_row = {
+        "SAMPLE": _WORKER_PATIENT,
+        "chrom": chrom,
+        "pos": str(pos),
+        "ref": ref,
+        "alt": alt,
+        "filter": filter_value,
+        "edit_sig": edit_sig,
+        "known_rnaedit_db": known_db if known_db else "NA",
+        "transcript_strand": expected_strand,
+        "transcript_strand_set": join_values(transcript_strands),
+        "strand_annotation_source": annotation_source,
+        "expected_alt_reads": maybe_num(expected_alt, digits=3),
+        "opposite_alt_reads": maybe_num(opposite_alt, digits=3),
+        "total_alt_reads": maybe_num(total_alt, digits=3),
+        "expected_alt_fraction": maybe_num(expected_frac, digits=6),
+        "strand_filter_reason": reason,
+        "blacklisted": "1" if blacklisted else "0",
+    }
+
+    output_line = None
+    if not blacklisted:
+        extra_info = [
+            ("RNA_STRAND", expected_strand),
+            ("RNA_STRAND_SET", join_values(transcript_strands)),
+            ("RNA_STRAND_SOURCE", annotation_source),
+            ("RNA_EXPECTED_ALT_READS", maybe_num(expected_alt, digits=3)),
+            ("RNA_OPPOSITE_ALT_READS", maybe_num(opposite_alt, digits=3)),
+            ("RNA_TOTAL_ALT_READS", maybe_num(total_alt, digits=3)),
+            ("RNA_EXPECTED_ALT_FRAC", maybe_num(expected_frac, digits=6)),
+            ("RNA_STRAND_REASON", reason),
+        ]
+        cols[7] = format_info(cols[7], extra_info)
+        output_line = "\t".join(cols) + "\n"
+
+    return {
+        "idx": idx,
+        "reason": reason,
+        "blacklisted": blacklisted,
+        "preserved_nonmatching": False,
+        "output_line": output_line,
+        "support_row": support_row,
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Filter RNA-edit VCF by strandedness using RNA BAM and GTF transcript strands.")
     ap.add_argument("-i", "--input", required=True, help="Input RNA-edit VCF (preferably split, e.g. rna5 output)")
@@ -298,6 +441,7 @@ def main() -> None:
     ap.add_argument("--support-tsv", default="")
     ap.add_argument("--blacklist-tsv", default="")
     ap.add_argument("--stats", default="")
+    ap.add_argument("--threads", type=int, default=1)
     ap.add_argument(
         "--filter-source-set",
         default="",
@@ -313,119 +457,110 @@ def main() -> None:
     input_records = 0
     kept_records = 0
     preserved_nonmatching_records = 0
+    header_lines: List[str] = []
+    tasks: List[Tuple[int, List[str]]] = []
 
-    with open_alignment(args.bam) as bam:
-        contig_lookup = build_contig_lookup(bam.references)
-        with open_text(args.input) as fin, open(args.output, "w") as fout:
-            for line in fin:
-                if line.startswith("##"):
-                    fout.write(line)
-                    continue
-                if line.startswith("#CHROM"):
-                    fout.write('##INFO=<ID=RNA_STRAND,Number=1,Type=String,Description="Expected transcript strand used for RNA strandedness filter (+ or -)">\n')
-                    fout.write('##INFO=<ID=RNA_STRAND_SET,Number=1,Type=String,Description="Unique overlapping transcript strands from GTF at this position">\n')
-                    fout.write('##INFO=<ID=RNA_STRAND_SOURCE,Number=1,Type=String,Description="Annotation tier providing RNA_STRAND (exonic, transcript, missing)">\n')
-                    fout.write('##INFO=<ID=RNA_EXPECTED_ALT_READS,Number=1,Type=Integer,Description="ALT-supporting RNA reads consistent with expected transcript strand">\n')
-                    fout.write('##INFO=<ID=RNA_OPPOSITE_ALT_READS,Number=1,Type=Integer,Description="ALT-supporting RNA reads on the opposite transcript strand">\n')
-                    fout.write('##INFO=<ID=RNA_TOTAL_ALT_READS,Number=1,Type=Integer,Description="Total ALT-supporting RNA reads counted for strandedness QC">\n')
-                    fout.write('##INFO=<ID=RNA_EXPECTED_ALT_FRAC,Number=1,Type=Float,Description="Fraction of ALT-supporting RNA reads on the expected transcript strand">\n')
-                    fout.write('##INFO=<ID=RNA_STRAND_REASON,Number=1,Type=String,Description="Result of RNA strandedness QC (PASS or blacklist reason)">\n')
-                    fout.write(line)
-                    continue
-                if not line or line.startswith("#"):
-                    fout.write(line)
-                    continue
+    with open_text(args.input) as fin:
+        for line in fin:
+            if line.startswith("##"):
+                header_lines.append(line)
+                continue
+            if line.startswith("#CHROM"):
+                header_lines.append('##INFO=<ID=RNA_STRAND,Number=1,Type=String,Description="Expected transcript strand used for RNA strandedness filter (+ or -)">\n')
+                header_lines.append('##INFO=<ID=RNA_STRAND_SET,Number=1,Type=String,Description="Unique overlapping transcript strands from GTF at this position">\n')
+                header_lines.append('##INFO=<ID=RNA_STRAND_SOURCE,Number=1,Type=String,Description="Annotation tier providing RNA_STRAND (exonic, transcript, missing)">\n')
+                header_lines.append('##INFO=<ID=RNA_EXPECTED_ALT_READS,Number=1,Type=Integer,Description="ALT-supporting RNA reads consistent with expected transcript strand">\n')
+                header_lines.append('##INFO=<ID=RNA_OPPOSITE_ALT_READS,Number=1,Type=Integer,Description="ALT-supporting RNA reads on the opposite transcript strand">\n')
+                header_lines.append('##INFO=<ID=RNA_TOTAL_ALT_READS,Number=1,Type=Integer,Description="Total ALT-supporting RNA reads counted for strandedness QC">\n')
+                header_lines.append('##INFO=<ID=RNA_EXPECTED_ALT_FRAC,Number=1,Type=Float,Description="Fraction of ALT-supporting RNA reads on the expected transcript strand">\n')
+                header_lines.append('##INFO=<ID=RNA_STRAND_REASON,Number=1,Type=String,Description="Result of RNA strandedness QC (PASS or blacklist reason)">\n')
+                header_lines.append(line)
+                continue
+            if not line or line.startswith("#"):
+                header_lines.append(line)
+                continue
+            cols = line.rstrip("\n").split("\t")
+            if len(cols) < 8:
+                continue
+            tasks.append((len(tasks), cols))
 
-                input_records += 1
-                cols = line.rstrip("\n").split("\t")
-                if len(cols) < 8:
-                    continue
-                chrom = normalize_chrom(cols[0])
-                pos = int(cols[1])
-                ref = cols[3]
-                alt = cols[4]
-                info_map = parse_info(cols[7])
-                source_tokens = {token.strip() for token in str(info_map.get("SOURCE_SET", "")).split(",") if token.strip()}
-                if args.filter_source_set and args.filter_source_set not in source_tokens:
-                    fout.write(line)
-                    kept_records += 1
-                    preserved_nonmatching_records += 1
-                    continue
-                filter_value = cols[6] if cols[6] else "NA"
-                edit_sig = classify_edit_sig(info_map)
-                known_db = info_map.get("KNOWN_RNAEDIT_DB", "NA")
+    input_records = len(tasks)
+    workers = max(1, int(args.threads))
+    results: List[Dict[str, object]]
+    global _WORKER_GTF_BINS
+    _WORKER_GTF_BINS = gtf_bins
+    if workers == 1:
+        init_worker(
+            args.bam,
+            protocol,
+            args.min_mapq,
+            args.min_baseq,
+            args.min_expected_frac,
+            args.filter_source_set,
+            args.patient,
+        )
+        results = [process_record(task) for task in tasks]
+    else:
+        if os.name != "posix":
+            workers = 1
+            init_worker(
+                args.bam,
+                protocol,
+                args.min_mapq,
+                args.min_baseq,
+                args.min_expected_frac,
+                args.filter_source_set,
+                args.patient,
+            )
+            results = [process_record(task) for task in tasks]
+        else:
+            ctx = mp.get_context("fork")
+            with ctx.Pool(
+                processes=workers,
+                initializer=init_worker,
+                initargs=(
+                    args.bam,
+                    protocol,
+                    args.min_mapq,
+                    args.min_baseq,
+                    args.min_expected_frac,
+                    args.filter_source_set,
+                    args.patient,
+                ),
+            ) as pool:
+                results = list(pool.imap(process_record, tasks, chunksize=100))
 
-                transcript_strands, annotation_source = query_transcript_strands(gtf_bins, chrom, pos)
-                expected_strand = sorted(transcript_strands)[0] if len(transcript_strands) == 1 else "NA"
+    kept_lines: List[Tuple[int, str]] = []
+    for result in results:
+        reason = str(result["reason"])
+        preserved_nonmatching = bool(result["preserved_nonmatching"])
+        blacklisted = bool(result["blacklisted"])
+        output_line = result["output_line"]
+        support_row = result["support_row"]
 
-                expected_alt = 0
-                opposite_alt = 0
-                total_alt = 0
-                expected_frac: Optional[float] = None
-                missing_bam_contig = False
-                if len(transcript_strands) == 1:
-                    actual_chrom = contig_lookup.get(chrom)
-                    if not actual_chrom:
-                        missing_bam_contig = True
-                    else:
-                        expected_alt, opposite_alt, total_alt, expected_frac = count_alt_reads(
-                            bam=bam,
-                            actual_chrom=actual_chrom,
-                            pos=pos,
-                            alt=alt,
-                            expected_strand=expected_strand,
-                            protocol=protocol,
-                            min_mapq=args.min_mapq,
-                            min_baseq=args.min_baseq,
-                        )
+        if preserved_nonmatching:
+            kept_records += 1
+            preserved_nonmatching_records += 1
+            reason_counts[reason] += 1
+            kept_lines.append((int(result["idx"]), str(output_line)))
+            continue
 
-                reason = derive_reason(
-                    transcript_strands=transcript_strands,
-                    total_alt=total_alt,
-                    expected_frac=expected_frac,
-                    min_expected_frac=args.min_expected_frac,
-                    missing_bam_contig=missing_bam_contig,
-                )
-                blacklisted = "1" if reason != "PASS" else "0"
-                reason_counts[reason] += 1
+        reason_counts[reason] += 1
+        if support_row is not None:
+            support_rows.append(support_row)
+        if blacklisted:
+            if support_row is not None:
+                blacklist_rows.append(support_row)
+            continue
+        if output_line is not None:
+            kept_lines.append((int(result["idx"]), str(output_line)))
+            kept_records += 1
 
-                support_row = {
-                    "SAMPLE": args.patient,
-                    "chrom": chrom,
-                    "pos": str(pos),
-                    "ref": ref,
-                    "alt": alt,
-                    "filter": filter_value,
-                    "edit_sig": edit_sig,
-                    "known_rnaedit_db": known_db if known_db else "NA",
-                    "transcript_strand": expected_strand,
-                    "transcript_strand_set": join_values(transcript_strands),
-                    "strand_annotation_source": annotation_source,
-                    "expected_alt_reads": maybe_num(expected_alt, digits=3),
-                    "opposite_alt_reads": maybe_num(opposite_alt, digits=3),
-                    "total_alt_reads": maybe_num(total_alt, digits=3),
-                    "expected_alt_fraction": maybe_num(expected_frac, digits=6),
-                    "strand_filter_reason": reason,
-                    "blacklisted": blacklisted,
-                }
-                support_rows.append(support_row)
-                if blacklisted == "1":
-                    blacklist_rows.append(support_row)
-                    continue
-
-                extra_info = [
-                    ("RNA_STRAND", expected_strand),
-                    ("RNA_STRAND_SET", join_values(transcript_strands)),
-                    ("RNA_STRAND_SOURCE", annotation_source),
-                    ("RNA_EXPECTED_ALT_READS", maybe_num(expected_alt, digits=3)),
-                    ("RNA_OPPOSITE_ALT_READS", maybe_num(opposite_alt, digits=3)),
-                    ("RNA_TOTAL_ALT_READS", maybe_num(total_alt, digits=3)),
-                    ("RNA_EXPECTED_ALT_FRAC", maybe_num(expected_frac, digits=6)),
-                    ("RNA_STRAND_REASON", reason),
-                ]
-                cols[7] = format_info(cols[7], extra_info)
-                fout.write("\t".join(cols) + "\n")
-                kept_records += 1
+    with open(args.output, "w") as fout:
+        for line in header_lines:
+            fout.write(line)
+        for _, line in sorted(kept_lines, key=lambda item: item[0]):
+            fout.write(line)
 
     fieldnames = [
         "SAMPLE",
