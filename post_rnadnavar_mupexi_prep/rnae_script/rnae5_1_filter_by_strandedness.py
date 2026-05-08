@@ -317,7 +317,6 @@ def init_worker(
 
     _WORKER_BAM = open_alignment(bam_path)
     _WORKER_CONTIG_LOOKUP = build_contig_lookup(_WORKER_BAM.references)
-    _WORKER_GTF_BINS = gtf_bins
     _WORKER_PROTOCOL = protocol
     _WORKER_MIN_MAPQ = min_mapq
     _WORKER_MIN_BASEQ = min_baseq
