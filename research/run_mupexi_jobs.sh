@@ -211,7 +211,7 @@ extract_hla_from_file() {
       line=$0
       while (match(line, /HLA-[A-Za-z0-9]+\*[0-9]+:[0-9]+/)) {
         h=substr(line, RSTART, RLENGTH)
-        gsub(/\*/, ":", h)
+        gsub(/\*/, "", h)
         if (!(h in seen)) { seen[h]=1; arr[++n]=h }
         line=substr(line, RSTART+RLENGTH)
       }
@@ -249,7 +249,7 @@ extract_hla_from_optitype_file() {
       if (raw == "" || raw == "." || raw == "NA") return
       h = raw
       if (h !~ /^HLA-/) h = "HLA-" h
-      gsub(/\*/, ":", h)
+      gsub(/\*/, "", h)
       if (!(h in seen)) { seen[h]=1; arr[++n]=h }
     }
     NR == 1 {
