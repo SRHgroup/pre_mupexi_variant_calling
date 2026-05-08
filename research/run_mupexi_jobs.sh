@@ -553,7 +553,7 @@ if [ -n "${expr}" ]; then
   cmd+=(-e "${expr}")
 fi
 if [ -n "${fusion_path}" ]; then
-  cmd+=(--fusion "${fusion_path}")
+  cmd+=(--fusion-file "${fusion_path}")
 fi
 
 "\${cmd[@]}"
