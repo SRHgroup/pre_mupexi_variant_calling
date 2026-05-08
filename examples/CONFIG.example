@@ -135,6 +135,9 @@ hladir="${datadir}/hla"
 # Sample names in merged phased VCF
 mupexi_tumor_sample="TUMOR"
 mupexi_normal_sample="DNA_NORMAL"
+# DNA-only MuPeXI runs default to the same tumor sample name as RNA+DNA mode.
+# Override only if your DNA-only phased VCF uses a different tumor sample column, e.g. DNA_TUMOR.
+# mupexi_dna_only_tumor_sample="${out_dna_tumor_label}"
 
 # MuPeXI behavior
 mupexi_peptide_lengths="9-11"
@@ -171,6 +174,9 @@ mupexi_qsub_walltime="24:00:00"
 # Expression defaults are resolved from existing expression pipeline outputs:
 #   ${kaldir}/${patient}_${output_extension_14}
 # If the file is missing, MuPeXI still runs (without -e).
+# Full-cohort launcher mode is auto-detected from SAMPLES:
+#   RNA_TUMOR present -> use rna7_phased_vcf_extension + optional expression/fusions
+#   no RNA_TUMOR      -> use dna_only_phased_vcf_extension and disable RNA/fusion inputs
 # Optional fusion map override:
 # mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv" # patient<TAB>fusion_arriba_path
 

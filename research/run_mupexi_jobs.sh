@@ -68,8 +68,10 @@ mkdir -p "$outdir"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
+out_dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
-tumor_sample_name="${mupexi_tumor_sample:-${rna7_signal_sample_label:-TUMOR}}"
+rna_tumor_sample_name="${mupexi_tumor_sample:-${rna7_signal_sample_label:-TUMOR}}"
+dna_tumor_sample_name="${mupexi_dna_only_tumor_sample:-${rna_tumor_sample_name}}"
 normal_sample_name="${mupexi_normal_sample:-DNA_NORMAL}"
 peptide_lengths="${mupexi_peptide_lengths:-9-11}"
 parallel_k="${mupexi_parallel_k:-true}"
@@ -77,6 +79,7 @@ enable_germlines="${mupexi_enable_germlines:-true}"
 enable_superpeptides="${mupexi_enable_superpeptides:-true}"
 enable_rna_edit="${mupexi_enable_rna_edit:-true}"
 phased_ext="${rna7_phased_vcf_extension:-${phased_vcf_extension:-}}"
+dna_only_phased_ext="${dna_only_phased_vcf_extension:-}"
 hld_ext="${mupexi_hla_extension:-${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}}"
 hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
 expr_dir="${kaldir:-}"
@@ -86,7 +89,10 @@ q_nodes="${cli_nodes:-${mupexi_qsub_nodes:-1}}"
 q_mem="${cli_mem:-${mupexi_qsub_mem:-24gb}}"
 q_walltime="${cli_walltime:-${mupexi_qsub_walltime:-24:00:00}}"
 if [ "$fusion_only" != "1" ]; then
-  [ -n "$phased_ext" ] || { echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension)" >&2; exit 1; }
+  if [ -z "$phased_ext" ] && [ -z "$dna_only_phased_ext" ]; then
+    echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension or dna_only_phased_vcf_extension)" >&2
+    exit 1
+  fi
 fi
 if [ "$fusion_only" = "1" ]; then
   # Force mutation sources off for fusion-only runs.
@@ -174,6 +180,26 @@ find_normal_sample_name() {
     fi
   done < "$samples"
   printf '%s\n' "$out"
+}
+
+patient_has_rna_sample() {
+  local patient="$1"
+  local sid base label
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in [[:space:]]*'#'*) continue ;; esac
+    sid="$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')"
+    base="$(sample_base_name "$sid")"
+    [ "$base" = "$patient" ] || continue
+    label="$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $4}')"
+    if [ "$label" = "${rna_tumor_label:-RNA_TUMOR}" ] || [ "$label" = "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}" ]; then
+      return 0
+    fi
+    if [[ "$sid" == *"_${rna_tumor_label:-RNA_TUMOR}" ]] || [[ "$sid" == *"_${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}" ]] || [[ "$sid" == *"_RNA_TUMOR" ]] || [[ "$sid" == *"_RNA_TUMOUR" ]]; then
+      return 0
+    fi
+  done < "$samples"
+  return 1
 }
 
 extract_hla_from_file() {
@@ -308,26 +334,55 @@ while IFS= read -r line; do
     continue
   fi
 
+  patient_mode="dna_only"
+  patient_enable_rna_edit="false"
+  patient_tumor_sample_name="${dna_tumor_sample_name}"
+  patient_expr_allowed=0
+  patient_fusions_allowed=0
+  if patient_has_rna_sample "$patient"; then
+    patient_mode="dna_rna"
+    patient_enable_rna_edit="${enable_rna_edit}"
+    patient_tumor_sample_name="${rna_tumor_sample_name}"
+    patient_expr_allowed=1
+    patient_fusions_allowed=1
+  fi
+
   vcf=""
   if [ "$fusion_only" != "1" ]; then
-    vcf="${vcfdir}/${patient}_${out_rna_label}_vs_${patient}_${out_normal_label}/${patient}_${phased_ext}"
+    if [ "$patient_mode" = "dna_rna" ]; then
+      if [ -z "$phased_ext" ]; then
+        echo "[skip] ${patient}: RNA present in SAMPLES but CONFIG lacks rna7/phased VCF extension"
+        continue
+      fi
+      vcf="${vcfdir}/${patient}_${out_rna_label}_vs_${patient}_${out_normal_label}/${patient}_${phased_ext}"
+    else
+      if [ -z "$dna_only_phased_ext" ]; then
+        echo "[skip] ${patient}: DNA-only patient but CONFIG lacks dna_only_phased_vcf_extension"
+        continue
+      fi
+      vcf="${vcfdir}/${patient}_${out_dna_label}_vs_${patient}_${out_normal_label}/${patient}_${dna_only_phased_ext}"
+    fi
     if [ ! -f "$vcf" ]; then
-      echo "[skip] ${patient}: missing phased VCF: $vcf"
+      echo "[skip] ${patient}: missing ${patient_mode} phased VCF: $vcf"
       continue
     fi
   fi
 
   expr=""
-  if [ -n "$sample" ] && [ -n "$cli_expr" ]; then
-    expr="$cli_expr"
-  elif [ -n "$expr_dir" ]; then
-    expr="${expr_dir}/${patient}_${expr_ext}"
-  fi
-  if [ -n "$expr" ] && [ ! -f "$expr" ]; then
-    echo "[warn] ${patient}: expression file not found, running MuPeXI without -e: $expr"
-    expr=""
-  elif [ -z "$expr" ]; then
-    echo "[warn] ${patient}: no expression configured/found, running MuPeXI without -e"
+  if [ "$patient_expr_allowed" = "1" ]; then
+    if [ -n "$sample" ] && [ -n "$cli_expr" ]; then
+      expr="$cli_expr"
+    elif [ -n "$expr_dir" ]; then
+      expr="${expr_dir}/${patient}_${expr_ext}"
+    fi
+    if [ -n "$expr" ] && [ ! -f "$expr" ]; then
+      echo "[warn] ${patient}: expression file not found, running MuPeXI without -e: $expr"
+      expr=""
+    elif [ -z "$expr" ]; then
+      echo "[warn] ${patient}: no expression configured/found, running MuPeXI without -e"
+    fi
+  elif [ -n "$sample" ] && [ -n "$cli_expr" ]; then
+    echo "[warn] ${patient}: CLI expression override ignored for DNA-only patient"
   fi
 
   hla=""
@@ -394,40 +449,49 @@ while IFS= read -r line; do
 
   fusion_path=""
   if [ "$run_fusions" = "1" ]; then
-    if [ -n "$sample" ] && [ -n "$cli_fusion" ]; then
-      fusion_path="$cli_fusion"
-    elif [ -n "${mupexi_fusion_arriba_map_tsv:-}" ]; then
-      fusion_path="$(lookup_map_value "$mupexi_fusion_arriba_map_tsv" "$patient" || true)"
-    elif [ -n "${mupexi_fusion_arriba_template:-}" ]; then
-      fusion_path="$(resolve_patient_placeholder "$mupexi_fusion_arriba_template" "$patient")"
-    elif [ -n "${fus_dir:-}" ]; then
-      for p in \
-        "${fus_dir}/${patient}.fusion_arriba.tsv" \
-        "${fus_dir}/${patient}.fusions_arriba.tsv" \
-        "${fus_dir}/${patient}_fusion_arriba.tsv" \
-        "${fus_dir}/${patient}_fusions_arriba.tsv" \
-        "${fus_dir}/${patient}/fusion_arriba.tsv" \
-        "${fus_dir}/${patient}/fusions_arriba.tsv" \
-        "${fus_dir}/${patient}/${patient}.fusion_arriba.tsv" \
-        "${fus_dir}/${patient}/${patient}.fusions_arriba.tsv"; do
-        if [ -f "$p" ]; then
-          fusion_path="$p"
-          break
-        fi
-      done
-    fi
-    if [ -n "$fusion_path" ] && [ ! -f "$fusion_path" ]; then
+    if [ "$patient_fusions_allowed" != "1" ]; then
       if [ "$fusion_only" = "1" ]; then
-        echo "[skip] ${patient}: --fusion-only requested but fusion_arriba file missing"
+        echo "[skip] ${patient}: --fusion-only requested for DNA-only patient"
         continue
       else
-        echo "[warn] ${patient}: --run-fusions requested but fusion_arriba file missing; running without -z"
-        fusion_path=""
+        echo "[warn] ${patient}: --run-fusions requested for DNA-only patient; running SNVs only"
       fi
-    fi
-    if [ "$fusion_only" = "1" ] && [ -z "$fusion_path" ]; then
-      echo "[skip] ${patient}: --fusion-only requested but no fusion file resolved"
-      continue
+    else
+      if [ -n "$sample" ] && [ -n "$cli_fusion" ]; then
+        fusion_path="$cli_fusion"
+      elif [ -n "${mupexi_fusion_arriba_map_tsv:-}" ]; then
+        fusion_path="$(lookup_map_value "$mupexi_fusion_arriba_map_tsv" "$patient" || true)"
+      elif [ -n "${mupexi_fusion_arriba_template:-}" ]; then
+        fusion_path="$(resolve_patient_placeholder "$mupexi_fusion_arriba_template" "$patient")"
+      elif [ -n "${fus_dir:-}" ]; then
+        for p in \
+          "${fus_dir}/${patient}.fusion_arriba.tsv" \
+          "${fus_dir}/${patient}.fusions_arriba.tsv" \
+          "${fus_dir}/${patient}_fusion_arriba.tsv" \
+          "${fus_dir}/${patient}_fusions_arriba.tsv" \
+          "${fus_dir}/${patient}/fusion_arriba.tsv" \
+          "${fus_dir}/${patient}/fusions_arriba.tsv" \
+          "${fus_dir}/${patient}/${patient}.fusion_arriba.tsv" \
+          "${fus_dir}/${patient}/${patient}.fusions_arriba.tsv"; do
+          if [ -f "$p" ]; then
+            fusion_path="$p"
+            break
+          fi
+        done
+      fi
+      if [ -n "$fusion_path" ] && [ ! -f "$fusion_path" ]; then
+        if [ "$fusion_only" = "1" ]; then
+          echo "[skip] ${patient}: --fusion-only requested but fusion_arriba file missing"
+          continue
+        else
+          echo "[warn] ${patient}: --run-fusions requested but fusion_arriba file missing; running without -z"
+          fusion_path=""
+        fi
+      fi
+      if [ "$fusion_only" = "1" ] && [ -z "$fusion_path" ]; then
+        echo "[skip] ${patient}: --fusion-only requested but no fusion file resolved"
+        continue
+      fi
     fi
   fi
 
@@ -466,7 +530,7 @@ cmd=(
   python3 -m mupexi2.cli
   --germlines "${enable_germlines}"
   --superpeptides "${enable_superpeptides}"
-  --rna-edit "${enable_rna_edit}"
+  --rna-edit "${patient_enable_rna_edit}"
   --parallel-k "${parallel_k}"
   -l "${peptide_lengths}"
   -a "${hla}"
@@ -480,7 +544,7 @@ if [ "$fusion_only" != "1" ]; then
   cmd+=(
     -v "${vcf}"
     --vcf-type merged
-    --tumor-sample "${tumor_sample_name}"
+    --tumor-sample "${patient_tumor_sample_name}"
     --normal-sample "${normal_sample_name}"
   )
 fi
@@ -506,7 +570,7 @@ SCRIPT
 
   jobid="$(qsub "${qsub_opts[@]}" "$runscript")"
   printf '%s\n' "$jobid" > "$marker"
-  echo "[submit] ${prefix}.${patient}: jobid=${jobid}"
+  echo "[submit] ${prefix}.${patient}: mode=${patient_mode} jobid=${jobid}"
 done < "$samples"
 
 echo ".. logs and reports saved in ${logroot}"
