@@ -156,9 +156,13 @@ mupexi_qsub_walltime="24:00:00"
 # cleanup_qsub_mem="32gb"
 # cleanup_qsub_walltime="24:00:00"
 
-# HLA is read per patient from hladir (legacy suffix logic compatible).
-# Primary expected file pattern:
-#   ${hladir}/${patient}_hla1.tab
+# HLA is read per patient from hladir.
+# Supported layouts:
+#   Legacy flat file:
+#     ${hladir}/${patient}_hla1.tab
+#   nf-core hlatyping / OptiType:
+#     ${hladir}/optitype/${patient}_NORMAL/<result.tsv>
+# hladir may point either to the old HLA folder or directly to .../hla/nf-core-hlatyping.
 # Optional override for direct suffix:
 # mupexi_hla_direct_extension="hla1.tab"
 # Default suffix uses output_extension_14 when present.

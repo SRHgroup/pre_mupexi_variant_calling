@@ -210,6 +210,75 @@ extract_hla_from_file() {
   ' "$path"
 }
 
+extract_hla_from_optitype_file() {
+  local path="$1"
+  [ -f "$path" ] || return 1
+  awk -F'\t' '
+    function trim(s) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      return s
+    }
+    function add_hla(raw, h) {
+      raw = trim(raw)
+      if (raw == "" || raw == "." || raw == "NA") return
+      h = raw
+      if (h !~ /^HLA-/) h = "HLA-" h
+      gsub(/\*/, ":", h)
+      if (!(h in seen)) { seen[h]=1; arr[++n]=h }
+    }
+    NR == 1 {
+      for (i = 1; i <= NF; i++) {
+        key = trim($i)
+        if (key != "") hdr[key] = i
+      }
+      next
+    }
+    NR >= 2 {
+      add_hla($(hdr["A1"]))
+      add_hla($(hdr["A2"]))
+      add_hla($(hdr["B1"]))
+      add_hla($(hdr["B2"]))
+      add_hla($(hdr["C1"]))
+      add_hla($(hdr["C2"]))
+      exit
+    }
+    END {
+      for (i = 1; i <= n; i++) {
+        if (i > 1) printf ","
+        printf "%s", arr[i]
+      }
+      printf "\n"
+    }
+  ' "$path"
+}
+
+find_nfcore_optitype_hla_file() {
+  local patient="$1"
+  local dirs=(
+    "${hladir}/optitype/${patient}_NORMAL"
+    "${hladir}/optitype/${patient}_DNA_NORMAL"
+    "${hladir}/optitype/${patient}_N"
+    "${hladir}/nf-core-hlatyping/optitype/${patient}_NORMAL"
+    "${hladir}/nf-core-hlatyping/optitype/${patient}_DNA_NORMAL"
+    "${hladir}/nf-core-hlatyping/optitype/${patient}_N"
+  )
+  local dir candidate
+  for dir in "${dirs[@]}"; do
+    [ -d "$dir" ] || continue
+    for candidate in \
+      "$dir"/*result*.tsv \
+      "$dir"/*Result*.tsv \
+      "$dir"/*.tsv \
+      "$dir"/*.txt \
+      "$dir"/*.csv; do
+      [ -f "$candidate" ] || continue
+      printf '%s\n' "$candidate"
+      return 0
+    done
+  done
+  return 1
+}
+
 pbs_state_for_jobid() {
   local jid="$1"
   local line
@@ -266,16 +335,19 @@ while IFS= read -r line; do
     hla="$cli_hla"
   else
     hla_file=""
+    hla_file_type=""
     # Primary expected layout: Pat101_hla1.tab
     direct_hla="${hladir}/${patient}_${hld_direct_ext}"
     if [ -f "$direct_hla" ]; then
       hla_file="$direct_hla"
+      hla_file_type="legacy"
     fi
     normal_name="$(find_normal_sample_name "$patient")"
     if [ -n "$normal_name" ]; then
       cand1="${hladir}/${normal_name}_${hld_ext}"
       if [ -z "$hla_file" ] && [ -f "$cand1" ]; then
         hla_file="$cand1"
+        hla_file_type="legacy"
       fi
     fi
     # Legacy fallback logic:
@@ -285,6 +357,7 @@ while IFS= read -r line; do
       cand2="${hladir}/${base}1_N_${hld_ext}"
       if [ -f "$cand2" ]; then
         hla_file="$cand2"
+        hla_file_type="legacy"
       fi
     fi
     if [ -z "$hla_file" ] && [[ "$patient" =~ ^(H1)$ ]]; then
@@ -292,13 +365,26 @@ while IFS= read -r line; do
       cand3="${hladir}/${base}2_N_${hld_ext}"
       if [ -f "$cand3" ]; then
         hla_file="$cand3"
+        hla_file_type="legacy"
+      fi
+    fi
+    if [ -z "$hla_file" ]; then
+      if nfcore_hla="$(find_nfcore_optitype_hla_file "$patient" || true)"; then
+        if [ -n "$nfcore_hla" ] && [ -f "$nfcore_hla" ]; then
+          hla_file="$nfcore_hla"
+          hla_file_type="optitype"
+        fi
       fi
     fi
     # Optional map fallback if explicitly configured.
     if [ -z "$hla_file" ] && [ -n "${mupexi_hla_map_tsv:-}" ]; then
       hla="$(lookup_map_value "$mupexi_hla_map_tsv" "$patient" || true)"
     elif [ -n "$hla_file" ]; then
-      hla="$(extract_hla_from_file "$hla_file" || true)"
+      if [ "$hla_file_type" = "optitype" ]; then
+        hla="$(extract_hla_from_optitype_file "$hla_file" || true)"
+      else
+        hla="$(extract_hla_from_file "$hla_file" || true)"
+      fi
     fi
   fi
   if [ -z "$hla" ]; then
