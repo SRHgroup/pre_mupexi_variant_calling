@@ -11,9 +11,9 @@ This repository contains two coordinated modules:
 - `post_rnadnavar_mupexi_prep/rnae_script/`: RNA helper scripts (`rnae1..rnae7`)
 - `germline_calling/`: gDNA step scripts + `run_all.sh`
 - `germline_calling/scripts/`: helper python
-- `examples/CONFIG.example`: example of a CONFIG file, which you write in run_pipeline wrapper, it should have the paths to references, desired file extensions and your data folder structure. 
-- `examples/SAMPLES.example`:example of a sample sheet, that you also feed to a run_pipeline wrapper. 
-- `bin/check_outputs.sh`: commands that print you a input/output status for a step you want to run.
+- `examples/CONFIG.example`: example of a CONFIG file, which you write in the run_pipeline wrapper, it should have the paths to references, desired file extensions and your data folder structure. 
+- `examples/SAMPLES.example ': example of a sample sheet, that you also feed to a run_pipeline wrapper. 
+- `bin/check_outputs.sh`: commands that print you an input/output status for a step you want to run.
 - `run_all_end_to_end.sh`: run whole rna/gdna end-to-end (works partially at the moment)
 
 ## Step names
@@ -21,18 +21,18 @@ This repository contains two coordinated modules:
 RNA:
 1. `rna1_OnlyRnaVcf.sh` # remove mutations from RNA vcf that exists in DNA-tumor VCF.
 2. `rna2_FilterEditSignature.sh` # only keep mutations that follow ADAR and APOBEC3 signature. Adds the specific field in INFO.
-3. `rna3_AnnotateKnownSites.sh` # Annotate a specific KNOWN_DB field in the INFO, inditating whether cancer RNA-editing databases have this event. These are be default the only variants later passed to neoantigen preiction.
-4. `rna4_SummariseRnaMetrics.sh` # A step needded specifically to default rnadnavar RNA VCF, as it has separate sample tracks for readgroups, which we summarise into one.
-5. `rna5_FilterByAfDpAr.sh` # Add optionally QC filters to remove potential artefacts.
+3. `rna3_AnnotateKnownSites.sh` # Annotate a specific KNOWN_DB field in the INFO, indicating whether cancer RNA-editing databases have this event. These are, by default, the only variants later passed to neoantigen prediction.
+4. `rna4_SummariseRnaMetrics.sh` # A step needed specifically to default rnadnavar RNA VCF, as it has separate sample tracks for readgroups, which we summarise into one.
+5. `rna5_FilterByAfDpAr.sh` # Add QC filters optionally to remove potential artefacts or tighten your QC requirements.
 6. `rna6_MergeDnaRnaVcfs.sh` # Merge with VCF containing somatic and germline variants.
 7. `rna7.0_FixRnaBamReadGroups.sh` (required before `rna7`) # similar to rna4, removes read group tag from reads in RNA BAM, so the phaser can connect reads in BAM with. Make sure you use both BAM files afer GATK preprocessing for both DNA and RNA. 
-8. `rna7_GenotypeAndPhaseMergedVcf.sh` # standardises and phases all calls from every sourse of variants into MuPeXi2-ready format. 
+8. `rna7_GenotypeAndPhaseMergedVcf.sh` # standardises and phases all calls from every source of variants into MuPeXi2-ready format. 
 
 gDNA:
 1. `gdna1_HaplotypeCaller.sh` # runs germline variant calling
 2. `gdna2_FilterGermline.sh` # applies basic QC filter labels
 3. `gdna3_SelectVariants.sh` # removes low QC entries 
-4. `gdna4_FilterGermlineByAdjacency.sh` # for a given k and somatic/rna-editing VCF preserved only variants adjacent to at least one cancer mutation. Optional but reccomended, as raw germline calls are huge.
+4. `gdna4_FilterGermlineByAdjacency.sh` # for a given k and somatic/rna-editing VCF preserved only variants adjacent to at least one cancer mutation. Optional but recommended, as raw germline calls are huge.
 
 ## Dependency model
 
