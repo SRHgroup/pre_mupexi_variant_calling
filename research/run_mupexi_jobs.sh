@@ -305,6 +305,30 @@ find_nfcore_optitype_hla_file() {
   return 1
 }
 
+find_expression_file() {
+  local patient="$1"
+  local candidates=()
+  [ -n "${expr_dir:-}" ] || return 1
+  [ -n "${expr_ext:-}" ] || return 1
+  candidates+=(
+    "${expr_dir}/${patient}_${expr_ext}"
+    "${expr_dir}/${patient}_${mupexi_tumor_sample:-${rna7_signal_sample_label:-TUMOR}}_${expr_ext}"
+    "${expr_dir}/${patient}_${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}_${expr_ext}"
+    "${expr_dir}/${patient}_${rna_tumor_label:-RNA_TUMOR}_${expr_ext}"
+    "${expr_dir}/${patient}_TUMOR_${expr_ext}"
+    "${expr_dir}/${patient}_RNA_TUMOR_${expr_ext}"
+    "${expr_dir}/${patient}_RNA_TUMOUR_${expr_ext}"
+  )
+  local p
+  for p in "${candidates[@]}"; do
+    if [ -f "$p" ]; then
+      printf '%s\n' "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
 pbs_state_for_jobid() {
   local jid="$1"
   local line
@@ -373,7 +397,7 @@ while IFS= read -r line; do
     if [ -n "$sample" ] && [ -n "$cli_expr" ]; then
       expr="$cli_expr"
     elif [ -n "$expr_dir" ]; then
-      expr="${expr_dir}/${patient}_${expr_ext}"
+      expr="$(find_expression_file "$patient" || true)"
     fi
     if [ -n "$expr" ] && [ ! -f "$expr" ]; then
       echo "[warn] ${patient}: expression file not found, running MuPeXI without -e: $expr"
