@@ -24,6 +24,7 @@ Usage:
   $0 research gather_mupexi_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research gather_maf_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research gather_fusion_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
+  $0 research gather_mosdepth_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
   $0 step <rna1|rna2|rna3|rna4|rna5|rna5.1|rna6|rna7.0|rna7|rna7.1|gdna1|gdna2|gdna3|gdna4> [PATIENT] [-f]
@@ -65,6 +66,7 @@ Examples:
   $0 research gather_mupexi_output
   $0 research gather_maf_output 47-ME-J
   $0 research gather_fusion_output --outdir /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/mupexi2/gathered
+  $0 research gather_mosdepth_output
   $0 research strand-blacklist
   $0 research strand-blacklist Pat11 --min-expected-frac 0.9
   $0 research run_mosdepth_overlap --depth-threshold 10 --region-bin-size 250000
@@ -187,6 +189,17 @@ run_research_gather_fusion_output() {
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_fusion_output CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $force_arg $skip_running_arg
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_fusion_output CONFIG="$CONFIG" OUTDIR="$outdir" $force_arg $skip_running_arg
+  fi
+}
+
+run_research_gather_mosdepth_output() {
+  local sample="${1:-}"
+  local outdir="${2:-}"
+
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_mosdepth_output CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $force_arg $skip_running_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_mosdepth_output CONFIG="$CONFIG" OUTDIR="$outdir" $force_arg $skip_running_arg
   fi
 }
 
@@ -931,6 +944,21 @@ case "$cmd" in
           esac
         done
         run_research_gather_fusion_output "$sample" "$outdir"
+        ;;
+      gather_mosdepth_output|gather-mosdepth-output)
+        sample=""
+        outdir=""
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --outdir|-o) outdir="${2:-}"; shift 2 ;;
+            *) echo "Unknown research option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_research_gather_mosdepth_output "$sample" "$outdir"
         ;;
       strand-blacklist)
         sample=""
