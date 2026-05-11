@@ -101,9 +101,14 @@ def parse_uploaded_variation_extended(uploaded):
     return chrom, pos_text, start_pos, end_pos, ref, alt
 
 
-def build_mutation_id_vep(uploaded_variation, amino_acids):
-    uploaded = str(uploaded_variation).strip()
-    if not uploaded or "_" not in uploaded:
+def build_mutation_id_vep(location, amino_acids, uploaded_variation=""):
+    loc = str(location).strip()
+    if not loc or loc in {"NA", "."}:
+        parsed = parse_uploaded_variation_extended(uploaded_variation)
+        if parsed is not None:
+            chrom, pos_text, _start, _end, _ref, _alt = parsed
+            loc = f"{chrom}:{pos_text}"
+    if not loc or ":" not in loc:
         return ""
     if not amino_acids or amino_acids in {"-", "NA"} or "/" not in amino_acids:
         return ""
@@ -112,8 +117,7 @@ def build_mutation_id_vep(uploaded_variation, amino_acids):
     aa_mut = aa_mut.strip()
     if not aa_normal or not aa_mut:
         return ""
-    prefix, _alleles = uploaded.rsplit("_", 1)
-    return f"{prefix}_{aa_normal}/{aa_mut}"
+    return f"{loc.replace(':', '_')}_{aa_normal}/{aa_mut}"
 
 
 def build_row(patient, row):
@@ -132,7 +136,7 @@ def build_row(patient, row):
         ref = ref_v or "NA"
         alt = alt_v or alt
     amino_acids = row.get("Amino_acids", "NA") or "NA"
-    mutation_id_vep = build_mutation_id_vep(uploaded_variation, amino_acids)
+    mutation_id_vep = build_mutation_id_vep(row.get("Location", "NA"), amino_acids, uploaded_variation)
     return {
         "patient_id": patient,
         "event_type": "SNV",
