@@ -74,9 +74,9 @@ patient_has_rna_sample() {
   local sid base label
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    case "$line" in [[:space:]]*'#'*) continue ;; esac
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
     sid="$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')"
-    case "${sid,,}" in sample|sample_id|patient|patient_id) continue ;; esac
+    case "${sid,,}" in \#sample|sample|sample_id|patient|patient_id) continue ;; esac
     base="$(sample_base_name "$sid")"
     [ "$base" = "$patient" ] || continue
     label="$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $4}')"
@@ -115,9 +115,9 @@ seen=""
 patient_tag="cohort"
 while IFS= read -r line; do
   [ -n "$line" ] || continue
-  case "$line" in [[:space:]]*'#'*) continue ;; esac
+  [[ "$line" =~ ^[[:space:]]*# ]] && continue
   sid="$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')"
-  case "${sid,,}" in sample|sample_id|patient|patient_id) continue ;; esac
+  case "${sid,,}" in \#sample|sample|sample_id|patient|patient_id) continue ;; esac
   patient="$(sample_base_name "$sid")"
   [ -n "$patient" ] || continue
   if printf '%s\n' "$seen" | grep -Fxq "$patient"; then
