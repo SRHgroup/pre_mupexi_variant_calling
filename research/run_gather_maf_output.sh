@@ -46,6 +46,10 @@ if [ -z "$outdir" ]; then
 fi
 mkdir -p "$outdir"
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_dir="$(cd "$script_dir/.." && pwd)"
+research_python_modules="${research_python_modules:-tools ngs anaconda3/2025.06-1}"
+
 out_rna_label="${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
 out_normal_label="${out_dna_normal_label:-${dna_normal_label:-DNA_NORMAL}}"
 out_dna_label="${out_dna_tumor_label:-${dna_tumor_label:-DNA_TUMOR}}"
@@ -155,13 +159,96 @@ if [ "$force" != "1" ] && [ -s "$outfile" ]; then
   exit 0
 fi
 
-python3 "$(cd "$(dirname "$0")/.." && pwd)/research/gather_maf_output.py" \
-  "${vep_inputs[@]}" \
-  "${vcf_inputs[@]}" \
-  "${tumor_samples[@]}" \
-  --tumor-label "${rna7_signal_sample_label:-TUMOR}" \
-  --tumor-label "${out_dna_label}" \
-  --normal-label "${out_normal_label}" \
-  --outfile "$outfile"
+logroot="${outdir}/gather_maf_output.logs_and_reports"
+logdir="${logroot}/logs"
+repdir="${logroot}/reports"
+mkdir -p "$logdir" "$repdir"
 
-echo "[done] MAF-like summary -> $outfile"
+prefix="research_gather_maf_output"
+marker="${logdir}/submitted.${prefix}.${patient_tag}.jobid"
+
+pbs_state_for_jobid() {
+  local jid="$1"
+  local line
+  line="$(qstat -f "$jid" 2>/dev/null | awk -F' = ' '/job_state =/{print $2; exit}' || true)"
+  case "$line" in
+    R|E) printf '%s\n' "RUNNING" ;;
+    Q|H|W|T|S) printf '%s\n' "QUEUED" ;;
+    *) printf '%s\n' "" ;;
+  esac
+}
+
+if [ "$skip_running" = "1" ] && [ -f "$marker" ]; then
+  prev_jobid="$(head -n1 "$marker" 2>/dev/null || true)"
+  if [ -n "$prev_jobid" ]; then
+    st="$(pbs_state_for_jobid "$prev_jobid")"
+    if [ "$st" = "RUNNING" ] || [ "$st" = "QUEUED" ]; then
+      echo "[skip-running] ${prefix}.${patient_tag}: active job ${prev_jobid} (${st})"
+      exit 0
+    fi
+  fi
+fi
+
+active_jobid=""
+if command -v qselect >/dev/null 2>&1; then
+  active_jobid="$(qselect -u "${USER:-$(whoami)}" -N "${prefix}.${patient_tag}" 2>/dev/null | head -n1 || true)"
+fi
+if [ -z "$active_jobid" ] && command -v qstat >/dev/null 2>&1; then
+  active_jobid="$(qstat -u "${USER:-$(whoami)}" 2>/dev/null | awk -v n="${prefix}.${patient_tag}" '$4==n {print $1; exit}')"
+fi
+if [ -n "$active_jobid" ]; then
+  echo "[skip] ${prefix}.${patient_tag}: scheduler already has active job ${active_jobid}"
+  exit 0
+fi
+
+runscript="${logdir}/run.${patient_tag}.${prefix}.sh"
+apply_vep_inputs=()
+for item in "${vep_inputs[@]}"; do
+  apply_vep_inputs+=("$(printf '%q' "$item")")
+done
+apply_vcf_inputs=()
+for item in "${vcf_inputs[@]}"; do
+  apply_vcf_inputs+=("$(printf '%q' "$item")")
+done
+apply_tumor_samples=()
+for item in "${tumor_samples[@]}"; do
+  apply_tumor_samples+=("$(printf '%q' "$item")")
+done
+
+cat > "$runscript" <<SCRIPT
+#!/usr/bin/bash
+set -euo pipefail
+if [ -n "\${PIPELINE_DEFAULTS:-}" ] && [ -f "\$PIPELINE_DEFAULTS" ]; then
+  # shellcheck disable=SC1090
+  source "\$PIPELINE_DEFAULTS"
+fi
+module load ${research_python_modules}
+
+python3 "${repo_dir}/research/gather_maf_output.py" \\
+  ${apply_vep_inputs[*]} \\
+  ${apply_vcf_inputs[*]} \\
+  ${apply_tumor_samples[*]} \\
+  --tumor-label "$(printf '%q' "${rna7_signal_sample_label:-TUMOR}")" \\
+  --tumor-label "$(printf '%q' "$out_dna_label")" \\
+  --normal-label "$(printf '%q' "$out_normal_label")" \\
+  --outfile "$(printf '%q' "$outfile")"
+
+if [ ! -s "$(printf '%q' "$outfile")" ]; then
+  echo "ERROR: gather_maf_output output missing/empty: $(printf '%q' "$outfile")" >&2
+  exit 2
+fi
+SCRIPT
+chmod +x "$runscript"
+
+qsub_opts=()
+[ -n "${qsub_group:-}" ] && qsub_opts+=(-W "group_list=${qsub_group}")
+[ -n "${qsub_account:-}" ] && qsub_opts+=(-A "${qsub_account}")
+qsub_opts+=(-N "${prefix}.${patient_tag}")
+qsub_opts+=(-o "${repdir}/${prefix}.${patient_tag}.o\$PBS_JOBID")
+qsub_opts+=(-e "${repdir}/${prefix}.${patient_tag}.e\$PBS_JOBID")
+
+jobid="$(qsub "${qsub_opts[@]}" "$runscript")"
+printf '%s\n' "$jobid" > "$marker"
+echo "[submit] ${prefix}.${patient_tag}: jobid=${jobid}"
+echo "[info] gather_maf_output file: ${outfile}"
+echo ".. logs and reports saved in ${logroot}"
