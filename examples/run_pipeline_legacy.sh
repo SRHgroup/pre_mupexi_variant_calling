@@ -23,6 +23,7 @@ Usage:
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
   $0 research variant-table [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research gather_mupexi_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
+  $0 research gather_maf_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
   $0 step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
@@ -143,6 +144,17 @@ run_research_gather_mupexi_output() {
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_mupexi_output CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $force_arg $skip_running_arg
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_mupexi_output CONFIG="$CONFIG" OUTDIR="$outdir" $force_arg $skip_running_arg
+  fi
+}
+
+run_research_gather_maf_output() {
+  local sample="${1:-}"
+  local outdir="${2:-}"
+
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_maf_output CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $force_arg $skip_running_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_maf_output CONFIG="$CONFIG" OUTDIR="$outdir" $force_arg $skip_running_arg
   fi
 }
 
@@ -791,6 +803,21 @@ case "$cmd" in
           esac
         done
         run_research_gather_mupexi_output "$sample" "$outdir"
+        ;;
+      gather_maf_output|gather-maf-output)
+        sample=""
+        outdir=""
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --outdir|-o) outdir="${2:-}"; shift 2 ;;
+            *) echo "Unknown research option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_research_gather_maf_output "$sample" "$outdir"
         ;;
       strand-blacklist)
         sample=""
