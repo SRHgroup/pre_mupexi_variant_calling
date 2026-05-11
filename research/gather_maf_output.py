@@ -5,10 +5,8 @@ import os
 
 from annotate_dedup_vep import (
     annotate_rows,
-    deduplicate_rows,
     load_vep,
     load_vcf_annotations,
-    parse_uploaded_variation,
 )
 
 
@@ -190,9 +188,8 @@ def load_patient_rows(patient, vep_path, vcf_path, tumor_sample, tumor_labels, n
     annotated, _missing_vcf = annotate_rows(rows, by_full, by_alt)
     for row in annotated:
         row["SAMPLE"] = patient
-    kept, _filtered, _multi_variant_count = deduplicate_rows(annotated)
     out = []
-    for row in kept:
+    for row in annotated:
         if row.get("source_set") not in {"SOMATIC", "RNA_EDIT"}:
             continue
         out.append(build_row(patient, row))
