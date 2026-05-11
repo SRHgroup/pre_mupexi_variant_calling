@@ -359,6 +359,7 @@ def load_vcf_annotations(path, tumor_sample, tumor_labels, normal_labels):
                 }
                 by_full[(chrom, pos, ref, alt)] = rec
                 by_alt[(chrom, pos, alt)] = rec
+                by_alt.setdefault((chrom, pos, "*"), rec)
     return by_full, by_alt
 
 
@@ -368,10 +369,11 @@ def annotate_rows(rows, vcf_by_full, vcf_by_alt):
     for row in rows:
         uploaded = str(row.get("Uploaded_variation", "")).strip()
         parsed = parse_uploaded_variation(uploaded)
+        loc_chrom, loc_pos = parse_vep_location(row.get("Location", ""))
         if parsed:
             chrom, pos, ref, alt = parsed
         else:
-            chrom, pos = parse_vep_location(row.get("Location", ""))
+            chrom, pos = loc_chrom, loc_pos
             ref = "NA"
             alt = str(row.get("Allele", "")).strip() or "NA"
         ann = None
@@ -379,6 +381,13 @@ def annotate_rows(rows, vcf_by_full, vcf_by_alt):
             ann = vcf_by_full.get((chrom, pos, ref, alt))
         if ann is None and chrom is not None and pos is not None and alt not in ("", "NA"):
             ann = vcf_by_alt.get((chrom, pos, alt))
+        if ann is None and chrom is not None and pos is not None:
+            ann = vcf_by_alt.get((chrom, pos, "*"))
+        loc_alt = str(row.get("Allele", "")).strip() or alt
+        if ann is None and loc_chrom is not None and loc_pos is not None and loc_alt not in ("", "NA"):
+            ann = vcf_by_alt.get((loc_chrom, loc_pos, loc_alt))
+        if ann is None and loc_chrom is not None and loc_pos is not None:
+            ann = vcf_by_alt.get((loc_chrom, loc_pos, "*"))
         if ann is None:
             ann = {
                 "source_set": "NA",
