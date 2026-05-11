@@ -67,6 +67,7 @@ sample_base_name() {
 seen=""
 snv_inputs=()
 fus_inputs=()
+vep_inputs=()
 patient_tag="cohort"
 while IFS= read -r line; do
   [ -n "$line" ] || continue
@@ -87,8 +88,20 @@ while IFS= read -r line; do
   fi
   snv="${mupexi_outdir%/}/${patient}_snv.mupexi"
   fus="${mupexi_outdir%/}/${patient}_fus.mupexi"
+  vep=""
+  for candidate in \
+    "${mupexi_outdir%/}/${patient}_vep.vep" \
+    "${mupexi_outdir%/}/${patient}_vep.vep.gz"; do
+    if [ -f "$candidate" ]; then
+      vep="$candidate"
+      break
+    fi
+  done
   if [ -f "$snv" ]; then
     snv_inputs+=("--snv-input" "${patient}=${snv}")
+    if [ -n "$vep" ]; then
+      vep_inputs+=("--vep-input" "${patient}=${vep}")
+    fi
   fi
   if [ -f "$fus" ]; then
     fus_inputs+=("--fus-input" "${patient}=${fus}")
@@ -153,6 +166,10 @@ apply_fus_inputs=()
 for item in "${fus_inputs[@]}"; do
   apply_fus_inputs+=("$(printf '%q' "$item")")
 done
+apply_vep_inputs=()
+for item in "${vep_inputs[@]}"; do
+  apply_vep_inputs+=("$(printf '%q' "$item")")
+done
 
 cat > "$runscript" <<SCRIPT
 #!/usr/bin/bash
@@ -166,6 +183,7 @@ module load ${research_python_modules}
 python3 "${repo_dir}/research/gather_mupexi_output.py" \\
   ${apply_snv_inputs[*]} \\
   ${apply_fus_inputs[*]} \\
+  ${apply_vep_inputs[*]} \\
   --snv-outfile "$(printf '%q' "$snv_out")" \\
   --fus-outfile "$(printf '%q' "$fus_out")"
 
