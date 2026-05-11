@@ -135,7 +135,9 @@ def build_row(patient, row):
 def load_patient_rows(patient, vep_path, vcf_path, tumor_sample, tumor_labels, normal_labels):
     _meta, _header, rows = load_vep(vep_path)
     by_full, by_alt = load_vcf_annotations(vcf_path, tumor_sample, tumor_labels, normal_labels)
-    annotated = annotate_rows(rows, by_full, by_alt)
+    annotated, _missing_vcf = annotate_rows(rows, by_full, by_alt)
+    for row in annotated:
+        row["SAMPLE"] = patient
     kept, _filtered, _multi_variant_count = deduplicate_rows(annotated)
     out = []
     for row in kept:
