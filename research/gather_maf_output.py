@@ -16,6 +16,8 @@ FIELDNAMES = [
     "patient_id",
     "event_type",
     "event_id",
+    "mutation_id_vep",
+    "uploaded_variation",
     "source_set",
     "known_rnaedit_db",
     "known_db_hit",
@@ -75,6 +77,19 @@ def format_end_position(start_pos, ref):
     return str(start_pos + max(len(ref), 1) - 1)
 
 
+def build_mutation_id_vep(chrom, pos, amino_acids):
+    if chrom in ("", "NA") or pos in ("", "NA"):
+        return ""
+    if not amino_acids or amino_acids in {"-", "NA"} or "/" not in amino_acids:
+        return ""
+    aa_normal, aa_mut = amino_acids.split("/", 1)
+    aa_normal = aa_normal.strip()
+    aa_mut = aa_mut.strip()
+    if not aa_normal or not aa_mut or aa_normal == "-" or aa_mut == "-":
+        return ""
+    return f"{chrom}_{pos}_{aa_normal}/{aa_mut}"
+
+
 def build_row(patient, row):
     parsed = parse_uploaded_variation(row.get("Uploaded_variation", ""))
     chrom = "NA"
@@ -87,10 +102,15 @@ def build_row(patient, row):
         pos = str(pos_v)
         ref = ref_v or "NA"
         alt = alt_v or alt
+    uploaded_variation = row.get("Uploaded_variation", "NA") or "NA"
+    amino_acids = row.get("Amino_acids", "NA") or "NA"
+    mutation_id_vep = build_mutation_id_vep(chrom, pos, amino_acids)
     return {
         "patient_id": patient,
         "event_type": "SNV",
-        "event_id": row.get("Uploaded_variation", "NA") or "NA",
+        "event_id": mutation_id_vep or uploaded_variation,
+        "mutation_id_vep": mutation_id_vep or "NA",
+        "uploaded_variation": uploaded_variation,
         "source_set": row.get("source_set", "NA") or "NA",
         "known_rnaedit_db": row.get("known_rnaedit_db", "NA") or "NA",
         "known_db_hit": row.get("known_db_hit", "0") or "0",
@@ -110,7 +130,7 @@ def build_row(patient, row):
         "Location": row.get("Location", "NA") or "NA",
         "Allele": row.get("Allele", "NA") or "NA",
         "Protein_position": row.get("Protein_position", "NA") or "NA",
-        "Amino_acids": row.get("Amino_acids", "NA") or "NA",
+        "Amino_acids": amino_acids,
         "Codons": row.get("Codons", "NA") or "NA",
         "Existing_variation": row.get("Existing_variation", "NA") or "NA",
         "gt": row.get("gt", "NA") or "NA",
