@@ -108,7 +108,7 @@ def build_row(patient, row):
     return {
         "patient_id": patient,
         "event_type": "SNV",
-        "event_id": mutation_id_vep or uploaded_variation,
+        "event_id": uploaded_variation,
         "mutation_id_vep": mutation_id_vep or "NA",
         "uploaded_variation": uploaded_variation,
         "source_set": row.get("source_set", "NA") or "NA",
