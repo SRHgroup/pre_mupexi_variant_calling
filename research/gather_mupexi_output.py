@@ -127,8 +127,6 @@ def load_mupexi_rows(path, event_type, vep_path=''):
     matched = 0
     if event_type == 'SNV':
         matched = annotate_snv_rows_with_vep(rows, vep_path)
-        for row in rows:
-            row['event_id'] = row.get('uploaded_variation') or row.get('event_id') or 'NA'
     return header or [], rows, matched
 
 
@@ -202,7 +200,7 @@ def main():
     write_tsv(args.fus_outfile, fus_rows, fus_fields)
 
     print(f'[done] gathered SNV rows={len(snv_rows)} -> {args.snv_outfile}')
-    print(f'[info] SNV rows with recovered genomic event_id from VEP={snv_matched}')
+    print(f'[info] SNV rows with recovered uploaded_variation from VEP={snv_matched}')
     print(f'[done] gathered FUS rows={len(fus_rows)} -> {args.fus_outfile}')
 
 
