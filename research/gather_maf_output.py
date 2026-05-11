@@ -133,10 +133,10 @@ def build_row(patient, row):
 
 
 def load_patient_rows(patient, vep_path, vcf_path, tumor_sample, tumor_labels, normal_labels):
-    _header, _meta, rows = load_vep(vep_path)
+    _meta, _header, rows = load_vep(vep_path)
     by_full, by_alt = load_vcf_annotations(vcf_path, tumor_sample, tumor_labels, normal_labels)
     annotated = annotate_rows(rows, by_full, by_alt)
-    kept, _filtered = deduplicate_rows(annotated)
+    kept, _filtered, _multi_variant_count = deduplicate_rows(annotated)
     out = []
     for row in kept:
         if row.get("source_set") not in {"SOMATIC", "RNA_EDIT"}:
