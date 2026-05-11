@@ -45,6 +45,7 @@ mkdir -p "$outdir"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd "$script_dir/.." && pwd)"
 research_python_modules="${research_python_modules:-tools ngs anaconda3/2025.06-1}"
+vep_dir="${gather_mupexi_vep_dir:-${gather_maf_vep_dir:-${vep_dedup_vep_dir:-${variant_table_vep_dir:-${rna_edit_vep_dir:-${mupexi_outdir:-${datadir%/}/mupexi2}}}}}}"
 
 sample_base_name() {
   local value="$1"
@@ -90,6 +91,8 @@ while IFS= read -r line; do
   fus="${mupexi_outdir%/}/${patient}_fus.mupexi"
   vep=""
   for candidate in \
+    "${vep_dir%/}/${patient}_vep.vep" \
+    "${vep_dir%/}/${patient}_vep.vep.gz" \
     "${mupexi_outdir%/}/${patient}_vep.vep" \
     "${mupexi_outdir%/}/${patient}_vep.vep.gz"; do
     if [ -f "$candidate" ]; then
@@ -101,6 +104,8 @@ while IFS= read -r line; do
     snv_inputs+=("--snv-input" "${patient}=${snv}")
     if [ -n "$vep" ]; then
       vep_inputs+=("--vep-input" "${patient}=${vep}")
+    else
+      echo "[warn] ${patient}: missing companion VEP for SNV gather; genomic event_id recovery may fail (looked under ${vep_dir} and ${mupexi_outdir})"
     fi
   fi
   if [ -f "$fus" ]; then
