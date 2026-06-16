@@ -30,6 +30,7 @@ qsub_account="srhgroup"
 knownsites="/path/to/KnownSites_merged.with_source.collapsed.clean.tsv.gz"
 FASTA="/path/to/reference.fa.gz"
 DICT="/path/to/reference.dict"
+GTF="/path/to/gencode.annotation.gtf.gz"
 
 # Label variables used for matching sample suffixes in SAMPLES/VCF/BAM headers.
 dna_normal_label="DNA_NORMAL"

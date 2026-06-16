@@ -15,7 +15,8 @@ Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
   $0 dna-only [PATIENT] [-f]
-  $0 splicing merge-star-sj [PATIENT] [--root STAR_DIR] [-f] [--dry-run]
+  $0 splicing spl1 [PATIENT] [--root STAR_DIR] [-f] [--dry-run]
+  $0 splicing spl2 [PATIENT] [--root STAR_DIR] [--gtf GTF] [--min-unique-reads N] [--include-noncanonical] [--keep-non-protein-coding] [-f] [--dry-run]
   $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 cleanup [PATIENT] [--execute] [--threads N] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
@@ -43,8 +44,10 @@ Examples:
   $0 rna 01-CH-L
   $0 germline 01-CH-L
   $0 dna-only 01-CH-L
-  $0 splicing merge-star-sj Pat21
-  $0 splicing merge-star-sj Pat21 --root /path/to/reports/star --dry-run
+  $0 splicing spl1 Pat21
+  $0 splicing spl1 Pat21 --root /path/to/reports/star --dry-run
+  $0 splicing spl2 Pat21
+  $0 splicing spl2 Pat21 --gtf /path/to/gencode.annotation.gtf.gz --min-unique-reads 10
   $0 mupexi 01-CH-L
   $0 mupexi 01-CH-L --run-fusions
   $0 mupexi 01-CH-L --fusion-only --run-fusions --outdir /path/to/mupexi2_fusions_only
@@ -234,7 +237,7 @@ run_research_mosdepth_overlap() {
   fi
 }
 
-run_splicing_merge_star_sj() {
+run_splicing_spl1() {
   local sample="${1:-}"
   local star_root="${2:-}"
   local dry_run="${3:-0}"
@@ -243,9 +246,40 @@ run_splicing_merge_star_sj() {
   if [ -n "$star_root" ]; then star_root_arg="STAR_ROOT=$star_root"; fi
   if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_merge_star_sj CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $dry_run_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl1 CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $dry_run_arg $force_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_merge_star_sj CONFIG="$CONFIG" $star_root_arg $dry_run_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl1 CONFIG="$CONFIG" $star_root_arg $dry_run_arg $force_arg
+  fi
+}
+
+run_splicing_merge_star_sj() {
+  run_splicing_spl1 "$@"
+}
+
+run_splicing_spl2() {
+  local sample="${1:-}"
+  local star_root="${2:-}"
+  local gtf="${3:-}"
+  local min_unique_reads="${4:-10}"
+  local dry_run="${5:-0}"
+  local include_noncanonical="${6:-0}"
+  local keep_non_protein_coding="${7:-0}"
+  local star_root_arg=""
+  local gtf_arg=""
+  local min_unique_reads_arg=""
+  local dry_run_arg=""
+  local include_noncanonical_arg=""
+  local keep_non_protein_coding_arg=""
+  if [ -n "$star_root" ]; then star_root_arg="STAR_ROOT=$star_root"; fi
+  if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
+  if [ -n "$min_unique_reads" ]; then min_unique_reads_arg="MIN_UNIQUE_READS=$min_unique_reads"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
+  if [ "$keep_non_protein_coding" = "1" ]; then keep_non_protein_coding_arg="KEEP_NON_PROTEIN_CODING=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $gtf_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" $star_root_arg $gtf_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
   fi
 }
 
@@ -791,7 +825,7 @@ case "$cmd" in
     task="${1:-}"
     shift || true
     case "$task" in
-      merge-star-sj)
+      spl1|merge-star-sj)
         sample=""
         star_root=""
         dry_run="0"
@@ -806,7 +840,32 @@ case "$cmd" in
             *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
           esac
         done
-        run_splicing_merge_star_sj "$sample" "$star_root" "$dry_run"
+        run_splicing_spl1 "$sample" "$star_root" "$dry_run"
+        ;;
+      spl2|call-novel-junctions)
+        sample=""
+        star_root=""
+        gtf=""
+        min_unique_reads="10"
+        dry_run="0"
+        include_noncanonical="0"
+        keep_non_protein_coding="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) star_root="${2:-}"; shift 2 ;;
+            --gtf) gtf="${2:-}"; shift 2 ;;
+            --min-unique-reads) min_unique_reads="${2:-}"; shift 2 ;;
+            --dry-run) dry_run="1"; shift ;;
+            --include-noncanonical) include_noncanonical="1"; shift ;;
+            --keep-non-protein-coding) keep_non_protein_coding="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl2 "$sample" "$star_root" "$gtf" "$min_unique_reads" "$dry_run" "$include_noncanonical" "$keep_non_protein_coding"
         ;;
       *)
         echo "Unknown splicing task: ${task:-<missing>}" >&2
