@@ -74,14 +74,23 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script_path="${repo_root}/splicing/call_novel_junctions.py"
+pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain.defaults.sh}"
+
 [ -n "$config" ] || { usage >&2; exit 1; }
 [ -f "$config" ] || { echo "ERROR: config not found: $config" >&2; exit 1; }
+
+if [ -n "${pipeline_defaults:-}" ] && [ -f "$pipeline_defaults" ]; then
+  # shellcheck disable=SC1090
+  source "$pipeline_defaults"
+fi
 
 # shellcheck disable=SC1090
 source "$config"
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-script_path="${repo_root}/splicing/call_novel_junctions.py"
+module load ${splicing_python_modules:-${research_python_modules:-tools ngs anaconda3/2025.06-1}}
+splicing_python="${splicing_python:-python3}"
 
 if [ -n "$root_override" ]; then
   star_root="$root_override"
@@ -110,7 +119,7 @@ fi
 
 [ -f "$gtf_path" ] || { echo "ERROR: missing GTF: $gtf_path" >&2; exit 1; }
 
-cmd=(python3 "$script_path" --star-root "$star_root" --gtf "$gtf_path" --min-unique-reads "$min_unique_reads")
+cmd=("$splicing_python" "$script_path" --star-root "$star_root" --gtf "$gtf_path" --min-unique-reads "$min_unique_reads")
 if [ -n "$sample" ]; then
   cmd+=(--sample-filter "$sample")
 fi
@@ -129,4 +138,5 @@ fi
 
 printf '[spl2] STAR root: %s\n' "$star_root"
 printf '[spl2] GTF: %s\n' "$gtf_path"
+printf '[spl2] Python: %s\n' "$(command -v "$splicing_python" || printf '%s' "$splicing_python")"
 "${cmd[@]}"

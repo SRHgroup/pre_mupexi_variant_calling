@@ -53,14 +53,23 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+script_path="${repo_root}/splicing/merge_star_sj_shards.py"
+pipeline_defaults="${PIPELINE_DEFAULTS:-${repo_root}/pipeline_defaults/toolchain.defaults.sh}"
+
 [ -n "$config" ] || { usage >&2; exit 1; }
 [ -f "$config" ] || { echo "ERROR: config not found: $config" >&2; exit 1; }
+
+if [ -n "${pipeline_defaults:-}" ] && [ -f "$pipeline_defaults" ]; then
+  # shellcheck disable=SC1090
+  source "$pipeline_defaults"
+fi
 
 # shellcheck disable=SC1090
 source "$config"
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-script_path="${repo_root}/splicing/merge_star_sj_shards.py"
+module load ${splicing_python_modules:-${research_python_modules:-tools ngs anaconda3/2025.06-1}}
+splicing_python="${splicing_python:-python3}"
 
 if [ -n "$root_override" ]; then
   star_root="$root_override"
@@ -78,7 +87,7 @@ else
   exit 1
 fi
 
-cmd=(python3 "$script_path" --root "$star_root")
+cmd=("$splicing_python" "$script_path" --root "$star_root")
 if [ -n "$sample" ]; then
   cmd+=(--sample-filter "$sample")
 fi
@@ -90,4 +99,5 @@ if [ "$dry_run" -eq 1 ]; then
 fi
 
 printf '[info] STAR root: %s\n' "$star_root"
+printf '[info] Python: %s\n' "$(command -v "$splicing_python" || printf '%s' "$splicing_python")"
 "${cmd[@]}"
