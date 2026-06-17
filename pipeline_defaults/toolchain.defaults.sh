@@ -19,5 +19,5 @@ modules_dna_only_phase="ngs tools ${module_htslib} ${module_bcftools} ${module_j
 
 # Research/auxiliary jobs
 research_python_modules="tools ngs ${module_anaconda}"
-splicing_python_modules="${research_python_modules}"
+splicing_python_modules="${module_anaconda}"
 mupexi_modules="tools ngs ${module_anaconda} netmhcpan/4.0a perl/5.36.1 ensembl-tools/90"

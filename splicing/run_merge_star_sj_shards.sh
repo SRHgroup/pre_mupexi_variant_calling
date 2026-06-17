@@ -68,7 +68,7 @@ fi
 # shellcheck disable=SC1090
 source "$config"
 
-module load ${splicing_python_modules:-${research_python_modules:-tools ngs anaconda3/2025.06-1}}
+module load ${splicing_python_modules:-anaconda3/2025.06-1}
 splicing_python="${splicing_python:-python3}"
 
 if [ -n "$root_override" ]; then
