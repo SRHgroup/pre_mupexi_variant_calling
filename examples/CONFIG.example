@@ -116,6 +116,10 @@ rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"
 # modules_rna="ngs tools htslib/1.23 bcftools/1.23 ${module_gatk} anaconda3/2025.06-1"
 # modules_gdna_hc="tools ngs ${module_htslib} samtools/1.23 java/17-openjdk ${module_gatk}"
 # splicing_python_modules="anaconda3/2025.06-1"
+# splicing_qsub_nodes="1"
+# splicing_qsub_ppn="2"
+# splicing_qsub_mem="16gb"
+# splicing_qsub_walltime="06:00:00"
 
 # DNA-only path (no RNA): merge germline + DNA somatic, then genotype/phase DNA tumor
 # If unset, defaults are used by dna_only_merge_and_phase.sh.

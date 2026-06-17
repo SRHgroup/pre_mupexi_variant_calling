@@ -20,4 +20,8 @@ modules_dna_only_phase="ngs tools ${module_htslib} ${module_bcftools} ${module_j
 # Research/auxiliary jobs
 research_python_modules="tools ngs ${module_anaconda}"
 splicing_python_modules="${module_anaconda}"
+splicing_qsub_nodes="1"
+splicing_qsub_ppn="2"
+splicing_qsub_mem="16gb"
+splicing_qsub_walltime="06:00:00"
 mupexi_modules="tools ngs ${module_anaconda} netmhcpan/4.0a perl/5.36.1 ensembl-tools/90"
