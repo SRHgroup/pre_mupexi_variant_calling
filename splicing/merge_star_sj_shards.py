@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Merge STAR SJ.out.tab shard files into one STAR-style file per sample."""
 
-from __future__ import annotations
-
 import argparse
 import gzip
 import re

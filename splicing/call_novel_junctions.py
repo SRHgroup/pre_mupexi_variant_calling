@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """Call SSNIP-style tumor-supported novel splice junction candidates."""
 
-from __future__ import annotations
-
 import argparse
 import gzip
 import re
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import DefaultDict, Dict, Iterable, List, Sequence, Set, Tuple
 
@@ -29,17 +26,27 @@ STAR_MOTIFS = {
 }
 
 
-@dataclass
 class TranscriptInfo:
-    transcript_id: str
-    gene_id: str
-    gene_name: str
-    gene_type: str
-    transcript_type: str
-    chrom_key: str
-    chrom: str
-    strand: str
-    exons: List[Tuple[int, int]] = field(default_factory=list)
+    def __init__(
+        self,
+        transcript_id: str,
+        gene_id: str,
+        gene_name: str,
+        gene_type: str,
+        transcript_type: str,
+        chrom_key: str,
+        chrom: str,
+        strand: str,
+    ) -> None:
+        self.transcript_id = transcript_id
+        self.gene_id = gene_id
+        self.gene_name = gene_name
+        self.gene_type = gene_type
+        self.transcript_type = transcript_type
+        self.chrom_key = chrom_key
+        self.chrom = chrom
+        self.strand = strand
+        self.exons: List[Tuple[int, int]] = []
 
     @property
     def start(self) -> int:
@@ -54,15 +61,24 @@ class TranscriptInfo:
         return self.gene_type == "protein_coding" or self.transcript_type == "protein_coding"
 
 
-@dataclass
 class GtfIndex:
-    known_junctions: Set[Tuple[str, str, int, int]]
-    left_edges: DefaultDict[Tuple[str, str], Set[int]]
-    right_edges: DefaultDict[Tuple[str, str], Set[int]]
-    pc_bins: DefaultDict[Tuple[str, str, int], List[TranscriptInfo]]
-    transcript_count: int
-    protein_coding_transcript_count: int
-    known_junction_count: int
+    def __init__(
+        self,
+        known_junctions: Set[Tuple[str, str, int, int]],
+        left_edges: DefaultDict[Tuple[str, str], Set[int]],
+        right_edges: DefaultDict[Tuple[str, str], Set[int]],
+        pc_bins: DefaultDict[Tuple[str, str, int], List[TranscriptInfo]],
+        transcript_count: int,
+        protein_coding_transcript_count: int,
+        known_junction_count: int,
+    ) -> None:
+        self.known_junctions = known_junctions
+        self.left_edges = left_edges
+        self.right_edges = right_edges
+        self.pc_bins = pc_bins
+        self.transcript_count = transcript_count
+        self.protein_coding_transcript_count = protein_coding_transcript_count
+        self.known_junction_count = known_junction_count
 
 
 def parse_args() -> argparse.Namespace:
