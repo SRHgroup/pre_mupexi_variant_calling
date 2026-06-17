@@ -15,9 +15,13 @@ samples="/path/to/SAMPLES.tsv"
 vcfdir="/path/to/project/variant_calling/mutect2"
 bamdir="/path/to/project/preprocessing/markduplicates"
 dna_bam_suffix="md.bam"
-# Optional upstream rnadnavar roots for cleanup; if unset, cleanup derives them as siblings of bamdir.
+# Optional upstream rnadnavar roots for cleanup/BAM-adjacent STAR outputs.
 # recaldir="/path/to/project/preprocessing/recalibrated"
-# stardir="/path/to/project/preprocessing/star"
+
+# Optional splicing-specific STAR reports root.
+# Use this when SJ.out.tab and Log.* outputs live under rnadnavar reports/star, e.g.
+#   /path/to/project/data/rna/rnadnavar/reports/star/Pat101/RNA_TUMOUR/RNA_TUMOUR.0001.SJ.out.tab
+# splicing_sjdir="/path/to/project/data/rna/rnadnavar/reports/star"
 
 # Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"

@@ -277,6 +277,20 @@ def sj_base(path: Path) -> str:
     return path.stem
 
 
+def infer_sample_label(sj_path: Path) -> str:
+    base = sj_base(sj_path)
+    parent = sj_path.parent.name
+    grandparent = sj_path.parent.parent.name if sj_path.parent.parent != sj_path.parent else ""
+    if (
+        grandparent
+        and parent == base
+        and not base.startswith(f"{grandparent}_")
+        and grandparent.lower() not in {"star", "reports"}
+    ):
+        return f"{grandparent}_{base}"
+    return base
+
+
 def star_strand(value: str) -> str:
     if value == "1":
         return "+"
@@ -371,7 +385,7 @@ def process_sj_file(
     include_noncanonical: bool,
     keep_non_protein_coding: bool,
 ) -> Dict[str, int]:
-    sample = sj_base(sj_path)
+    sample = infer_sample_label(sj_path)
     stats = defaultdict(int)
     rows: List[List[str]] = []
 

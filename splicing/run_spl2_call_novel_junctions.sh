@@ -85,13 +85,17 @@ script_path="${repo_root}/splicing/call_novel_junctions.py"
 
 if [ -n "$root_override" ]; then
   star_root="$root_override"
+elif [ -n "${splicing_sjdir:-}" ]; then
+  star_root="$splicing_sjdir"
+elif [ -n "${splicing_stardir:-}" ]; then
+  star_root="$splicing_stardir"
 elif [ -n "${stardir:-}" ]; then
   star_root="$stardir"
 elif [ -n "${bamdir:-}" ]; then
   preprocessing_root="$(dirname "$bamdir")"
   star_root="${preprocessing_root}/star"
 else
-  echo "ERROR: CONFIG must define stardir or bamdir, or pass --root" >&2
+  echo "ERROR: CONFIG must define splicing_sjdir, splicing_stardir, stardir, or bamdir; or pass --root" >&2
   exit 1
 fi
 
