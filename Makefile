@@ -7,6 +7,7 @@ MODE ?= all
 OUTDIR ?=
 STAR_ROOT ?=
 GTF ?=
+SPLICING_OUTDIR ?=
 DRY_RUN ?=
 MIN_UNIQUE_READS ?= 10
 INCLUDE_NONCANONICAL ?=
@@ -136,7 +137,7 @@ run_splicing_spl1: check-config
 	cd splicing && bash run_merge_star_sj_shards.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(STAR_ROOT),--root "$(STAR_ROOT)",) $(FORCE_FLAG) $(DRY_RUN_FLAG)
 
 run_splicing_spl2: check-config
-	cd splicing && bash run_spl2_call_novel_junctions.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(STAR_ROOT),--root "$(STAR_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) --min-unique-reads "$(MIN_UNIQUE_READS)" $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,) $(if $(filter 1 true yes,$(KEEP_NON_PROTEIN_CODING)),--keep-non-protein-coding,)
+	cd splicing && bash run_spl2_call_novel_junctions.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(STAR_ROOT),--root "$(STAR_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) --min-unique-reads "$(MIN_UNIQUE_READS)" $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,) $(if $(filter 1 true yes,$(KEEP_NON_PROTEIN_CODING)),--keep-non-protein-coding,)
 
 run_splicing_merge_star_sj: run_splicing_spl1
 

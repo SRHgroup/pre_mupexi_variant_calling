@@ -22,6 +22,9 @@ dna_bam_suffix="md.bam"
 # Use this when SJ.out.tab and Log.* outputs live under rnadnavar reports/star, e.g.
 #   /path/to/project/data/rna/rnadnavar/reports/star/Pat101/RNA_TUMOUR/RNA_TUMOUR.0001.SJ.out.tab
 # splicing_sjdir="/path/to/project/data/rna/rnadnavar/reports/star"
+# Optional splicing output root for spl2 novel-junction TSVs and splicing logs.
+# If unset and datadir is defined, spl2 defaults to ${datadir}/splicing.
+# splicing_outdir="/path/to/project/data/rna/rnadnavar/splicing"
 
 # Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"

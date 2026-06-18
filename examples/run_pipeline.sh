@@ -16,7 +16,7 @@ Usage:
   $0 germline [PATIENT] [-f]
   $0 dna-only [PATIENT] [-f]
   $0 splicing spl1 [PATIENT] [--root STAR_DIR] [-f] [--dry-run]
-  $0 splicing spl2 [PATIENT] [--root STAR_DIR] [--gtf GTF] [--min-unique-reads N] [--include-noncanonical] [--keep-non-protein-coding] [-f] [--dry-run]
+  $0 splicing spl2 [PATIENT] [--root STAR_DIR] [--gtf GTF] [--outdir DIR] [--min-unique-reads N] [--include-noncanonical] [--keep-non-protein-coding] [-f] [--dry-run]
   $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 cleanup [PATIENT] [--execute] [--threads N] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
@@ -47,7 +47,7 @@ Examples:
   $0 splicing spl1 Pat21
   $0 splicing spl1 Pat21 --root /path/to/reports/star --dry-run
   $0 splicing spl2 Pat21
-  $0 splicing spl2 Pat21 --gtf /path/to/gencode.annotation.gtf.gz --min-unique-reads 10
+  $0 splicing spl2 Pat21 --gtf /path/to/gencode.annotation.gtf.gz --outdir /path/to/splicing --min-unique-reads 10
   $0 mupexi 01-CH-L
   $0 mupexi 01-CH-L --run-fusions
   $0 mupexi 01-CH-L --fusion-only --run-fusions --outdir /path/to/mupexi2_fusions_only
@@ -260,26 +260,29 @@ run_splicing_spl2() {
   local sample="${1:-}"
   local star_root="${2:-}"
   local gtf="${3:-}"
-  local min_unique_reads="${4:-10}"
-  local dry_run="${5:-0}"
-  local include_noncanonical="${6:-0}"
-  local keep_non_protein_coding="${7:-0}"
+  local outdir="${4:-}"
+  local min_unique_reads="${5:-10}"
+  local dry_run="${6:-0}"
+  local include_noncanonical="${7:-0}"
+  local keep_non_protein_coding="${8:-0}"
   local star_root_arg=""
   local gtf_arg=""
+  local outdir_arg=""
   local min_unique_reads_arg=""
   local dry_run_arg=""
   local include_noncanonical_arg=""
   local keep_non_protein_coding_arg=""
   if [ -n "$star_root" ]; then star_root_arg="STAR_ROOT=$star_root"; fi
   if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
+  if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
   if [ -n "$min_unique_reads" ]; then min_unique_reads_arg="MIN_UNIQUE_READS=$min_unique_reads"; fi
   if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
   if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
   if [ "$keep_non_protein_coding" = "1" ]; then keep_non_protein_coding_arg="KEEP_NON_PROTEIN_CODING=1"; fi
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $gtf_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $gtf_arg $outdir_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" $star_root_arg $gtf_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" $star_root_arg $gtf_arg $outdir_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
   fi
 }
 
@@ -846,6 +849,7 @@ case "$cmd" in
         sample=""
         star_root=""
         gtf=""
+        outdir=""
         min_unique_reads="10"
         dry_run="0"
         include_noncanonical="0"
@@ -858,6 +862,7 @@ case "$cmd" in
           case "${1:-}" in
             --root) star_root="${2:-}"; shift 2 ;;
             --gtf) gtf="${2:-}"; shift 2 ;;
+            --outdir) outdir="${2:-}"; shift 2 ;;
             --min-unique-reads) min_unique_reads="${2:-}"; shift 2 ;;
             --dry-run) dry_run="1"; shift ;;
             --include-noncanonical) include_noncanonical="1"; shift ;;
@@ -865,7 +870,7 @@ case "$cmd" in
             *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
           esac
         done
-        run_splicing_spl2 "$sample" "$star_root" "$gtf" "$min_unique_reads" "$dry_run" "$include_noncanonical" "$keep_non_protein_coding"
+        run_splicing_spl2 "$sample" "$star_root" "$gtf" "$outdir" "$min_unique_reads" "$dry_run" "$include_noncanonical" "$keep_non_protein_coding"
         ;;
       *)
         echo "Unknown splicing task: ${task:-<missing>}" >&2

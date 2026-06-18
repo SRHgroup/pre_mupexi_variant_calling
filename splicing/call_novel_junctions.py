@@ -7,7 +7,7 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import DefaultDict, Dict, Iterable, List, Sequence, Set, Tuple
+from typing import DefaultDict, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 
 SHARD_RE = re.compile(r"^.+\.\d{4}\.SJ\.out\.tab(?:\.gz)?$")
@@ -108,6 +108,14 @@ def parse_args() -> argparse.Namespace:
         "--out-suffix",
         default=".spl2.novel_junctions.tsv",
         help="Suffix added to merged SJ basename for the output TSV.",
+    )
+    ap.add_argument(
+        "--out-dir",
+        default="",
+        help=(
+            "Optional root directory for spl2 TSV outputs. When set, the "
+            "input path relative to --star-root is preserved under this root."
+        ),
     )
     ap.add_argument("--force", action="store_true", help="Overwrite existing spl2 outputs")
     ap.add_argument("--dry-run", action="store_true", help="Report planned files without writing outputs")
@@ -291,6 +299,17 @@ def sj_base(path: Path) -> str:
         if name.endswith(suffix):
             return name[: -len(suffix)]
     return path.stem
+
+
+def output_path_for(sj_path: Path, star_root: Path, out_dir: Optional[Path], out_suffix: str) -> Path:
+    out_name = f"{sj_base(sj_path)}{out_suffix}"
+    if not out_dir:
+        return sj_path.with_name(out_name)
+    try:
+        rel_parent = sj_path.parent.relative_to(star_root)
+    except ValueError:
+        rel_parent = Path(sj_path.parent.name)
+    return out_dir / rel_parent / out_name
 
 
 def infer_sample_label(sj_path: Path) -> str:
@@ -508,6 +527,7 @@ def process_sj_file(
         )
     )
 
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as out:
         out.write("\t".join(output_header()))
         out.write("\n")
@@ -536,6 +556,7 @@ def main() -> int:
     args = parse_args()
     gtf = Path(args.gtf)
     star_root = Path(args.star_root)
+    out_dir = Path(args.out_dir) if args.out_dir else None
     if not gtf.exists():
         raise SystemExit(f"ERROR: GTF does not exist: {gtf}")
     if not star_root.exists() or not star_root.is_dir():
@@ -559,7 +580,7 @@ def main() -> int:
     written = 0
     skipped = 0
     for sj_path in sj_files:
-        out_path = sj_path.with_name(f"{sj_base(sj_path)}{args.out_suffix}")
+        out_path = output_path_for(sj_path, star_root, out_dir, args.out_suffix)
         if out_path.exists() and not args.force:
             print(f"[spl2][skip] output exists: {out_path}", file=sys.stderr)
             skipped += 1

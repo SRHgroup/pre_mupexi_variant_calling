@@ -4,13 +4,14 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash splicing/run_spl2_call_novel_junctions.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [--root STAR_DIR] [--gtf GTF] [--min-unique-reads N] [-f] [--dry-run] [--include-noncanonical] [--keep-non-protein-coding]
+  bash splicing/run_spl2_call_novel_junctions.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [--root STAR_DIR] [--gtf GTF] [--outdir DIR] [--min-unique-reads N] [-f] [--dry-run] [--include-noncanonical] [--keep-non-protein-coding]
 
 Behavior:
 - Submits a PBS/qsub job per patient/sample
 - The qsub job builds known splice junctions from CONFIG:GTF or --gtf
 - The qsub job scans merged STAR files such as *.SJ.out.tab under the STAR root
-- Writes *.spl2.novel_junctions.tsv next to each merged STAR file
+- Writes *.spl2.novel_junctions.tsv under --outdir, CONFIG:splicing_outdir,
+  or ${datadir}/splicing when datadir is defined
 - Keeps SSNIP's tumor support threshold by default: unique junction reads >= 10
 USAGE
 }
@@ -19,6 +20,7 @@ config=""
 sample=""
 root_override=""
 gtf_override=""
+outdir_override=""
 min_unique_reads="10"
 force=0
 dry_run=0
@@ -31,6 +33,7 @@ while [ $# -gt 0 ]; do
     -s|--sample) sample="${2:-}"; shift 2 ;;
     --root) root_override="${2:-}"; shift 2 ;;
     --gtf) gtf_override="${2:-}"; shift 2 ;;
+    --outdir) outdir_override="${2:-}"; shift 2 ;;
     --min-unique-reads) min_unique_reads="${2:-}"; shift 2 ;;
     -f|--force) force=1; shift ;;
     --dry-run) dry_run=1; shift ;;
@@ -83,6 +86,16 @@ fi
 
 [ -d "$star_root" ] || { echo "ERROR: STAR root not found: $star_root" >&2; exit 1; }
 [ -f "$gtf_path" ] || { echo "ERROR: missing GTF: $gtf_path" >&2; exit 1; }
+
+if [ -n "$outdir_override" ]; then
+  spl2_outdir="$outdir_override"
+elif [ -n "${splicing_outdir:-}" ]; then
+  spl2_outdir="$splicing_outdir"
+elif [ -n "${datadir:-}" ]; then
+  spl2_outdir="${datadir%/}/splicing"
+else
+  spl2_outdir=""
+fi
 
 sample_base_name() {
   local value="$1"
@@ -165,7 +178,7 @@ submit_target() {
   local tag="${target//[^A-Za-z0-9_.-]/_}"
   local prefix="splicing_spl2"
   local job_name="${prefix}.${tag}"
-  local logroot="${splicing_logroot:-${star_root%/}/${prefix}.logs_and_reports}"
+  local logroot="${splicing_logroot:-${spl2_outdir:-${star_root%/}}/${prefix}.logs_and_reports}"
   local logdir="${logroot}/logs"
   local repdir="${logroot}/reports"
   local marker="${logdir}/submitted.${job_name}.jobid"
@@ -210,8 +223,16 @@ module load \${splicing_python_modules:-anaconda3/2025.06-1}
 splicing_python="\${splicing_python:-python3}"
 printf '[spl2] STAR root: %s\\n' $(printf '%q' "$star_root")
 printf '[spl2] GTF: %s\\n' $(printf '%q' "$gtf_path")
+spl2_outdir=$(printf '%q' "$spl2_outdir")
+if [ -n "\$spl2_outdir" ]; then
+  mkdir -p "\$spl2_outdir"
+  printf '[spl2] output root: %s\\n' "\$spl2_outdir"
+fi
 printf '[spl2] Python: %s\\n' "\$(command -v "\$splicing_python" || printf '%s' "\$splicing_python")"
 cmd=("\$splicing_python" $(printf '%q' "$script_path") --star-root $(printf '%q' "$star_root") --gtf $(printf '%q' "$gtf_path") --min-unique-reads $(printf '%q' "$min_unique_reads") --sample-filter $(printf '%q' "$target"))
+if [ -n "\$spl2_outdir" ]; then
+  cmd+=(--out-dir "\$spl2_outdir")
+fi
 if [ "$force" -eq 1 ]; then
   cmd+=(--force)
 fi

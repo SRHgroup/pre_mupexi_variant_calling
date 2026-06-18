@@ -41,6 +41,7 @@ splicing_python_modules="anaconda3/2025.06-1"
 - Do not overload path variables for different concepts.
 - BAM-adjacent STAR outputs and splice-junction report outputs may live in different places.
 - Splicing STAR junction reports should use `splicing_sjdir`.
+- Splicing-derived outputs should use `splicing_outdir` or default to `${datadir}/splicing`.
 - Keep cohort-specific paths in `CONFIG`, not hard-coded in scripts.
 
 ## Output Behavior
