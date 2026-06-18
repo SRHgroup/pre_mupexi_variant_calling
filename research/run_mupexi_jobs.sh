@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [--fusion-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
+  bash research/run_mupexi_jobs.sh -c CONFIG [-s PATIENT] [-o OUTDIR] [--run-fusions] [--fusion-only] [--run-splicing] [--splicing-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--splicing SPL4_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
 USAGE
 }
 
@@ -13,11 +13,14 @@ sample=""
 outdir=""
 run_fusions=0
 fusion_only=0
+run_splicing=0
+splicing_only=0
 force=0
 skip_running=0
 cli_hla=""
 cli_expr=""
 cli_fusion=""
+cli_splicing=""
 cli_nodes=""
 cli_ppn=""
 cli_mem=""
@@ -30,9 +33,12 @@ while [ $# -gt 0 ]; do
     -o|--outdir) outdir="$2"; shift 2 ;;
     --run-fusions) run_fusions=1; shift ;;
     --fusion-only) fusion_only=1; run_fusions=1; shift ;;
+    --run-splicing) run_splicing=1; shift ;;
+    --splicing-only) splicing_only=1; run_splicing=1; shift ;;
     --hla) cli_hla="$2"; shift 2 ;;
     --expr) cli_expr="$2"; shift 2 ;;
     --fusion) cli_fusion="$2"; shift 2 ;;
+    --splicing) cli_splicing="$2"; shift 2 ;;
     --nodes) cli_nodes="$2"; shift 2 ;;
     --ppn) cli_ppn="$2"; shift 2 ;;
     --mem) cli_mem="$2"; shift 2 ;;
@@ -85,17 +91,22 @@ hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
 expr_dir="${kaldir:-}"
 expr_ext="${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}"
 fus_dir="${fus_dir:-${fusdir:-}}"
+splicing_root="${mupexi_splicing_outdir:-${splicing_outdir:-${datadir:-}/splicing}}"
 q_nodes="${cli_nodes:-${mupexi_qsub_nodes:-1}}"
 q_mem="${cli_mem:-${mupexi_qsub_mem:-24gb}}"
 q_walltime="${cli_walltime:-${mupexi_qsub_walltime:-24:00:00}}"
-if [ "$fusion_only" != "1" ]; then
+junction_only=0
+if [ "$fusion_only" = "1" ] || [ "$splicing_only" = "1" ]; then
+  junction_only=1
+fi
+if [ "$junction_only" != "1" ]; then
   if [ -z "$phased_ext" ] && [ -z "$dna_only_phased_ext" ]; then
     echo "ERROR: missing phased VCF extension in CONFIG (rna7_phased_vcf_extension/phased_vcf_extension or dna_only_phased_vcf_extension)" >&2
     exit 1
   fi
 fi
-if [ "$fusion_only" = "1" ]; then
-  # Force mutation sources off for fusion-only runs.
+if [ "$fusion_only" = "1" ] || [ "$splicing_only" = "1" ]; then
+  # Force SNV-derived mutation sources off for junction-only runs.
   enable_germlines="false"
   enable_superpeptides="false"
   enable_rna_edit="false"
@@ -135,7 +146,17 @@ q_ppn="${cli_ppn:-${mupexi_qsub_ppn:-$default_ppn}}"
 resolve_patient_placeholder() {
   local template="$1"
   local patient="$2"
-  printf '%s\n' "${template//\{patient\}/$patient}"
+  local rna_label="${rna_tumor_label:-RNA_TUMOR}"
+  local out_rna_label_value="${out_rna_tumor_label:-$rna_label}"
+  local tumor_tag_value="${tumor_tag:-TUMOR}"
+  local sample_id="${patient}_${out_rna_label_value}"
+  local out="$template"
+  out="${out//\{patient\}/$patient}"
+  out="${out//\{sample\}/$sample_id}"
+  out="${out//\{rna_tumor_label\}/$rna_label}"
+  out="${out//\{out_rna_tumor_label\}/$out_rna_label_value}"
+  out="${out//\{tumor_tag\}/$tumor_tag_value}"
+  printf '%s\n' "$out"
 }
 
 sample_base_name() {
@@ -329,6 +350,67 @@ find_expression_file() {
   return 1
 }
 
+find_splicing_file() {
+  local patient="$1"
+  local root="${splicing_root:-}"
+  [ -n "$root" ] || return 1
+  [ -d "$root" ] || return 1
+
+  local labels=(
+    "${out_rna_tumor_label:-${rna_tumor_label:-RNA_TUMOR}}"
+    "${rna_tumor_label:-RNA_TUMOR}"
+    "RNA_${tumor_tag:-TUMOR}"
+    "RNA_TUMOR"
+    "RNA_TUMOUR"
+  )
+  local seen_labels="" label sample_id candidate
+  for label in "${labels[@]}"; do
+    [ -n "$label" ] || continue
+    if printf '%s\n' "$seen_labels" | grep -Fxq "$label"; then
+      continue
+    fi
+    seen_labels="${seen_labels}
+${label}"
+    sample_id="${patient}_${label}"
+    for candidate in \
+      "${root}/${sample_id}/${sample_id}.spl4.neojunctions.tsv" \
+      "${root}/${sample_id}/${sample_id}_spl4.neojunctions.tsv" \
+      "${root}/${sample_id}.spl4.neojunctions.tsv" \
+      "${root}/${sample_id}_spl4.neojunctions.tsv" \
+      "${root}/${patient}/${sample_id}.spl4.neojunctions.tsv" \
+      "${root}/${patient}/${sample_id}_spl4.neojunctions.tsv"; do
+      if [ -f "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    done
+  done
+
+  find "$root" -maxdepth 3 -type f \( \
+    -name "${patient}*.spl4.neojunctions.tsv" -o \
+    -name "${patient}*_spl4.neojunctions.tsv" \
+  \) | sort | head -n 1
+}
+
+patient_mupexi_output_exists() {
+  local patient="$1"
+  if [ "$junction_only" = "1" ]; then
+    if [ "$run_splicing" = "1" ] && [ "$run_fusions" = "1" ]; then
+      [ -e "${outdir}/${patient}_neojunctions.mupexi" ]
+      return $?
+    fi
+    if [ "$run_splicing" = "1" ]; then
+      [ -e "${outdir}/${patient}_neospl.mupexi" ]
+      return $?
+    fi
+    if [ "$run_fusions" = "1" ]; then
+      [ -e "${outdir}/${patient}_fus.mupexi" ]
+      return $?
+    fi
+  fi
+  find "$outdir" -maxdepth 1 \( -type f -o -type d \) -name "${patient}*" | grep -q .
+}
+
 pbs_state_for_jobid() {
   local jid="$1"
   local line
@@ -363,16 +445,18 @@ while IFS= read -r line; do
   patient_tumor_sample_name="${dna_tumor_sample_name}"
   patient_expr_allowed=0
   patient_fusions_allowed=0
+  patient_splicing_allowed=0
   if patient_has_rna_sample "$patient"; then
     patient_mode="dna_rna"
     patient_enable_rna_edit="${enable_rna_edit}"
     patient_tumor_sample_name="${rna_tumor_sample_name}"
     patient_expr_allowed=1
     patient_fusions_allowed=1
+    patient_splicing_allowed=1
   fi
 
   vcf=""
-  if [ "$fusion_only" != "1" ]; then
+  if [ "$junction_only" != "1" ]; then
     if [ "$patient_mode" = "dna_rna" ]; then
       if [ -z "$phased_ext" ]; then
         echo "[skip] ${patient}: RNA present in SAMPLES but CONFIG lacks rna7/phased VCF extension"
@@ -519,8 +603,43 @@ while IFS= read -r line; do
     fi
   fi
 
+  splicing_path=""
+  if [ "$run_splicing" = "1" ]; then
+    if [ "$patient_splicing_allowed" != "1" ]; then
+      if [ "$splicing_only" = "1" ]; then
+        echo "[skip] ${patient}: --splicing-only requested for DNA-only patient"
+        continue
+      else
+        echo "[warn] ${patient}: --run-splicing requested for DNA-only patient; running without -S"
+      fi
+    else
+      if [ -n "$sample" ] && [ -n "$cli_splicing" ]; then
+        splicing_path="$cli_splicing"
+      elif [ -n "${mupexi_splicing_map_tsv:-}" ]; then
+        splicing_path="$(lookup_map_value "$mupexi_splicing_map_tsv" "$patient" || true)"
+      elif [ -n "${mupexi_splicing_template:-}" ]; then
+        splicing_path="$(resolve_patient_placeholder "$mupexi_splicing_template" "$patient")"
+      else
+        splicing_path="$(find_splicing_file "$patient" || true)"
+      fi
+      if [ -n "$splicing_path" ] && [ ! -f "$splicing_path" ]; then
+        if [ "$splicing_only" = "1" ]; then
+          echo "[skip] ${patient}: --splicing-only requested but spl4 neojunction file missing: $splicing_path"
+          continue
+        else
+          echo "[warn] ${patient}: --run-splicing requested but spl4 neojunction file missing; running without -S: $splicing_path"
+          splicing_path=""
+        fi
+      fi
+      if [ "$splicing_only" = "1" ] && [ -z "$splicing_path" ]; then
+        echo "[skip] ${patient}: --splicing-only requested but no spl4 neojunction file resolved"
+        continue
+      fi
+    fi
+  fi
+
   # Heuristic skip if patient-prefixed outputs already exist.
-  if [ "$force" != "1" ] && find "$outdir" -maxdepth 1 \( -type f -o -type d \) -name "${patient}*" | grep -q .; then
+  if [ "$force" != "1" ] && patient_mupexi_output_exists "$patient"; then
     echo "[skip] ${patient}: mupexi output(s) already exist in ${outdir} (use -f to overwrite)"
     continue
   fi
@@ -564,7 +683,7 @@ cmd=(
   -d "${outdir}"
 )
 
-if [ "$fusion_only" != "1" ]; then
+if [ "$junction_only" != "1" ]; then
   cmd+=(
     -v "${vcf}"
     --vcf-type merged
@@ -577,7 +696,10 @@ if [ -n "${expr}" ]; then
   cmd+=(-e "${expr}")
 fi
 if [ -n "${fusion_path}" ]; then
-  cmd+=(--fusion-file "${fusion_path}")
+  cmd+=(-z "${fusion_path}")
+fi
+if [ -n "${splicing_path}" ]; then
+  cmd+=(-S "${splicing_path}")
 fi
 
 "\${cmd[@]}"

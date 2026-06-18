@@ -28,7 +28,10 @@ MIN_EXPECTED_FRAC ?=
 HLA ?=
 EXPR ?=
 FUSION ?=
+SPLICING ?=
+RUN_SPLICING ?=
 FUSION_ONLY ?=
+SPLICING_ONLY ?=
 MUPEXI_NODES ?=
 MUPEXI_PPN ?=
 MUPEXI_MEM ?=
@@ -150,7 +153,7 @@ run_splicing_spl4: check-config
 run_splicing_merge_star_sj: run_splicing_spl1
 
 run_mupexi: check-config
-	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(filter 1 true yes,$(FUSION_ONLY)),--fusion-only,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(if $(MUPEXI_NODES),--nodes "$(MUPEXI_NODES)",) $(if $(MUPEXI_PPN),--ppn "$(MUPEXI_PPN)",) $(if $(MUPEXI_MEM),--mem "$(MUPEXI_MEM)",) $(if $(MUPEXI_WALLTIME),--walltime "$(MUPEXI_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(filter 1 true yes,$(FUSION_ONLY)),--fusion-only,) $(if $(filter 1 true yes,$(RUN_SPLICING)),--run-splicing,) $(if $(filter 1 true yes,$(SPLICING_ONLY)),--splicing-only,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(if $(SPLICING),--splicing "$(SPLICING)",) $(if $(MUPEXI_NODES),--nodes "$(MUPEXI_NODES)",) $(if $(MUPEXI_PPN),--ppn "$(MUPEXI_PPN)",) $(if $(MUPEXI_MEM),--mem "$(MUPEXI_MEM)",) $(if $(MUPEXI_WALLTIME),--walltime "$(MUPEXI_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
 run_cleanup_pre_mupexi: check-config
 	bash bin/run_cleanup_pre_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(EXECUTE_FLAG) $(if $(THREADS),--threads "$(THREADS)",) $(if $(CLEANUP_NODES),--nodes "$(CLEANUP_NODES)",) $(if $(CLEANUP_PPN),--ppn "$(CLEANUP_PPN)",) $(if $(CLEANUP_MEM),--mem "$(CLEANUP_MEM)",) $(if $(CLEANUP_WALLTIME),--walltime "$(CLEANUP_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)

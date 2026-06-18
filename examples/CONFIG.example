@@ -209,6 +209,11 @@ mupexi_qsub_walltime="24:00:00"
 #   no RNA_TUMOR      -> use dna_only_phased_vcf_extension and disable RNA/fusion inputs
 # Optional fusion map override:
 # mupexi_fusion_arriba_map_tsv="/path/to/mupexi_fusion_arriba_map.tsv" # patient<TAB>fusion_arriba_path
+# Optional neosplicing/spl4 overrides for MuPeXI2 -S.
+# Default discovery scans ${splicing_outdir:-${datadir}/splicing} for per-patient spl4 neojunction TSVs.
+# mupexi_splicing_outdir="${splicing_outdir}"
+# mupexi_splicing_map_tsv="/path/to/mupexi_splicing_map.tsv" # patient<TAB>spl4_neojunctions_path
+# mupexi_splicing_template="/path/to/splicing/{sample}/{sample}.spl4.neojunctions.tsv"
 
 # Samecopy/RNA-edit research VEP source (per-patient files like Pat11_vep.vep).
 # samecopy_vep_dir="${datadir}/mupexi2"
