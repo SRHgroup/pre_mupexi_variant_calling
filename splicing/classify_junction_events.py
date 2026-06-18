@@ -286,10 +286,33 @@ def discover_inputs(root: Path, filters: Sequence[str], input_suffix: str) -> Li
     for path in root.rglob(f"*{input_suffix}"):
         if not path.is_file():
             continue
-        if filters and not any(filter_value.lower() in str(path).lower() for filter_value in filters):
+        if filters and not input_matches_filters(path, filters):
             continue
         inputs.append(path)
     return sorted(inputs)
+
+
+def input_matches_filters(path: Path, filters: Sequence[str]) -> bool:
+    lowered_filters = [filter_value.lower() for filter_value in filters]
+    if any(filter_value in str(path).lower() for filter_value in lowered_filters):
+        return True
+
+    # spl2 can be written directly under splicing_outdir when STAR root points
+    # at one sample folder, so the path may be RNA_TUMOUR.spl2... without Pat101.
+    # In that case, use the TSV sample/source columns for patient matching.
+    try:
+        with path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                haystack = " ".join(
+                    row.get(column, "")
+                    for column in ("sample", "source_sj", "junc_id", "gene_names", "transcript_ids")
+                ).lower()
+                if any(filter_value in haystack for filter_value in lowered_filters):
+                    return True
+    except OSError:
+        return False
+    return False
 
 
 def output_path_for(input_path: Path, root: Path, out_dir: Optional[Path], input_suffix: str, out_suffix: str) -> Path:
