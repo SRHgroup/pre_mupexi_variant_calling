@@ -25,9 +25,7 @@ dna_bam_suffix="md.bam"
 # Optional splicing output root for spl2/spl3/spl4 TSVs, FASTA files, and splicing logs.
 # If unset and datadir is defined, spl2, spl3, and spl4 default to ${datadir}/splicing.
 # splicing_outdir="/path/to/project/data/rna/rnadnavar/splicing"
-# spl2/spl3/spl4 write patient-scoped outputs under ${splicing_outdir}/${patient}_${tag}.
-# The default tag is RNA_TUMOR even if upstream STAR folders use RNA_TUMOUR.
-# splicing_rna_tumor_tag="RNA_TUMOR"
+# spl2/spl3/spl4 write patient-scoped outputs under ${splicing_outdir}/${patient}_RNA_${tumor_tag}.
 
 # Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"
@@ -42,13 +40,18 @@ FASTA="/path/to/reference.fa.gz"
 DICT="/path/to/reference.dict"
 GTF="/path/to/gencode.annotation.gtf.gz"
 
+# Standardized cohort tags. Change these once if your cohort uses another
+# spelling, e.g. tumor_tag="T", tumor_tag="t", or tumor_tag="TUMOUR".
+normal_tag="NORMAL"
+tumor_tag="TUMOR"
+
 # Label variables used for matching sample suffixes in SAMPLES/VCF/BAM headers.
-dna_normal_label="DNA_NORMAL"
-dna_tumor_label="DNA_TUMOR"
-rna_tumor_label="RNA_TUMOR"
+dna_normal_label="DNA_${normal_tag}"
+dna_tumor_label="DNA_${tumor_tag}"
+rna_tumor_label="RNA_${tumor_tag}"
 
 # Standardized output names for merged outputs.
-out_dna_normal_label="DNA_NORMAL"
+out_dna_normal_label="${dna_normal_label}"
 out_dna_tumor_label="${dna_tumor_label}"
 out_rna_tumor_label="${rna_tumor_label}"
 

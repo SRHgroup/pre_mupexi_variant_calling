@@ -119,10 +119,10 @@ sample_base_name() {
 splicing_target_dir() {
   local target="$1"
   local patient
-  local tag="${splicing_rna_tumor_tag:-RNA_TUMOR}"
+  local tag="${tumor_tag:-TUMOR}"
   patient="$(sample_base_name "$target")"
   [ -n "$patient" ] || patient="$target"
-  printf '%s_%s\n' "$patient" "$tag"
+  printf '%s_RNA_%s\n' "$patient" "$tag"
 }
 
 is_rna_sample_id() {
