@@ -32,6 +32,7 @@ These rules are project requirements, not preferences. Follow them for every new
 - For splicing Python steps, use:
 
 ```bash
+splicing_module_prereq="tools"
 splicing_python_modules="anaconda3/2025.06-1"
 ```
 

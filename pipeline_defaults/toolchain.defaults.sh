@@ -19,6 +19,7 @@ modules_dna_only_phase="ngs tools ${module_htslib} ${module_bcftools} ${module_j
 
 # Research/auxiliary jobs
 research_python_modules="tools ngs ${module_anaconda}"
+splicing_module_prereq="tools"
 splicing_python_modules="${module_anaconda}"
 splicing_qsub_nodes="1"
 splicing_qsub_ppn="2"

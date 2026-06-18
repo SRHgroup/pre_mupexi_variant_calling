@@ -203,6 +203,9 @@ if [ -n "\${PIPELINE_DEFAULTS:-}" ] && [ -f "\$PIPELINE_DEFAULTS" ]; then
 fi
 # shellcheck disable=SC1090
 source $(printf '%q' "$config")
+if [ -n "\${splicing_module_prereq:-tools}" ]; then
+  module load \${splicing_module_prereq:-tools}
+fi
 module load \${splicing_python_modules:-anaconda3/2025.06-1}
 splicing_python="\${splicing_python:-python3}"
 printf '[spl2] STAR root: %s\\n' $(printf '%q' "$star_root")
