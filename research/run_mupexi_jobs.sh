@@ -91,7 +91,13 @@ hld_direct_ext="${mupexi_hla_direct_extension:-hla1.tab}"
 expr_dir="${kaldir:-}"
 expr_ext="${output_extension_14:-1.4.RunStatBootstrapMean.Rstat.txt}"
 fus_dir="${fus_dir:-${fusdir:-}}"
-splicing_root="${mupexi_splicing_outdir:-${splicing_outdir:-${datadir:-}/splicing}}"
+if [ -n "${splicing_outdir:-}" ]; then
+  splicing_root="$splicing_outdir"
+elif [ -n "${datadir:-}" ]; then
+  splicing_root="${datadir%/}/splicing"
+else
+  splicing_root=""
+fi
 q_nodes="${cli_nodes:-${mupexi_qsub_nodes:-1}}"
 q_mem="${cli_mem:-${mupexi_qsub_mem:-24gb}}"
 q_walltime="${cli_walltime:-${mupexi_qsub_walltime:-24:00:00}}"
@@ -615,10 +621,6 @@ while IFS= read -r line; do
     else
       if [ -n "$sample" ] && [ -n "$cli_splicing" ]; then
         splicing_path="$cli_splicing"
-      elif [ -n "${mupexi_splicing_map_tsv:-}" ]; then
-        splicing_path="$(lookup_map_value "$mupexi_splicing_map_tsv" "$patient" || true)"
-      elif [ -n "${mupexi_splicing_template:-}" ]; then
-        splicing_path="$(resolve_patient_placeholder "$mupexi_splicing_template" "$patient")"
       else
         splicing_path="$(find_splicing_file "$patient" || true)"
       fi
