@@ -287,8 +287,28 @@ def build_gtf_index(gtf: Path, include_noncanonical: bool) -> GtfIndex:
     )
 
 
-def discover_sj_files(root: Path, filters: Sequence[str]) -> List[Path]:
-    sj_files: List[Path] = []
+def sj_source_priority(path: Path) -> Tuple[int, int, str]:
+    sample = infer_sample_label(path).lower()
+    base = sj_base(path).lower()
+    parent = path.parent.name.lower()
+    score = 0
+    if base == sample:
+        score += 100
+    if parent == sample:
+        score += 50
+    if base.startswith(sample):
+        score += 20
+    if parent.startswith(sample):
+        score += 10
+    try:
+        size = path.stat().st_size
+    except OSError:
+        size = 0
+    return (score, size, str(path))
+
+
+def discover_sj_files(root: Path, filters: Sequence[str]) -> Tuple[List[Path], Dict[str, List[Path]]]:
+    grouped: DefaultDict[str, List[Path]] = defaultdict(list)
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -298,8 +318,16 @@ def discover_sj_files(root: Path, filters: Sequence[str]) -> List[Path]:
             continue
         if filters and not any(f.lower() in str(path).lower() for f in filters):
             continue
-        sj_files.append(path)
-    return sorted(sj_files)
+        grouped[infer_sample_label(path)].append(path)
+
+    selected: List[Path] = []
+    duplicates: Dict[str, List[Path]] = {}
+    for sample, candidates in grouped.items():
+        ranked = sorted(candidates, key=sj_source_priority, reverse=True)
+        selected.append(ranked[0])
+        if len(ranked) > 1:
+            duplicates[sample] = ranked
+    return sorted(selected), duplicates
 
 
 def sj_base(path: Path) -> str:
@@ -596,10 +624,13 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    sj_files = discover_sj_files(star_root, args.sample_filter)
+    sj_files, duplicate_sj_files = discover_sj_files(star_root, args.sample_filter)
     if not sj_files:
         print(f"[spl2] no merged SJ.out.tab files found under {star_root}", file=sys.stderr)
         return 0
+    for sample, ranked in sorted(duplicate_sj_files.items()):
+        skipped = ", ".join(str(path) for path in ranked[1:])
+        print(f"[spl2][dedupe] sample={sample} keeping {ranked[0]} skipped={skipped}", file=sys.stderr)
 
     written = 0
     skipped = 0

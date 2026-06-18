@@ -45,6 +45,7 @@ splicing_python_modules="anaconda3/2025.06-1"
 - Use standardized cohort tags such as `normal_tag` and `tumor_tag`; do not introduce step-specific tumor spellings.
 - DNA/RNA labels should be composed from the same tag, e.g. `DNA_${tumor_tag}` and `RNA_${tumor_tag}`.
 - Patient-level spl2/spl3/spl4 files should live under `${splicing_outdir}/${patient_id}_RNA_${tumor_tag}`, defaulting `tumor_tag` to `TUMOR`.
+- If both generic and patient-prefixed STAR/splicing files exist for the same sample, keep the patient-prefixed source and skip the generic duplicate.
 - Keep cohort-specific paths in `CONFIG`, not hard-coded in scripts.
 
 ## Output Behavior

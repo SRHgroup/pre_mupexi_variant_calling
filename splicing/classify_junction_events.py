@@ -290,15 +290,63 @@ def build_gtf_model(gtf: Path, include_noncanonical: bool) -> GtfModel:
     return GtfModel(pc_transcripts, bins)
 
 
-def discover_inputs(root: Path, filters: Sequence[str], input_suffix: str) -> List[Path]:
-    inputs: List[Path] = []
+def input_base(path: Path, input_suffix: str) -> str:
+    if path.name.endswith(input_suffix):
+        return path.name[: -len(input_suffix)]
+    return path.stem
+
+
+def infer_input_sample_label(path: Path, input_suffix: str) -> str:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                sample = row.get("sample", "").strip()
+                if sample and sample != "NA":
+                    return sample
+                break
+    except OSError:
+        pass
+    return input_base(path, input_suffix)
+
+
+def input_source_priority(path: Path, input_suffix: str) -> Tuple[int, int, str]:
+    sample = infer_input_sample_label(path, input_suffix).lower()
+    base = input_base(path, input_suffix).lower()
+    parent = path.parent.name.lower()
+    score = 0
+    if base == sample:
+        score += 100
+    if parent == sample:
+        score += 50
+    if base.startswith(sample):
+        score += 20
+    if parent.startswith(sample):
+        score += 10
+    try:
+        size = path.stat().st_size
+    except OSError:
+        size = 0
+    return (score, size, str(path))
+
+
+def discover_inputs(root: Path, filters: Sequence[str], input_suffix: str) -> Tuple[List[Path], Dict[str, List[Path]]]:
+    grouped: DefaultDict[str, List[Path]] = defaultdict(list)
     for path in root.rglob(f"*{input_suffix}"):
         if not path.is_file():
             continue
         if filters and not input_matches_filters(path, filters):
             continue
-        inputs.append(path)
-    return sorted(inputs)
+        grouped[infer_input_sample_label(path, input_suffix)].append(path)
+
+    selected: List[Path] = []
+    duplicates: Dict[str, List[Path]] = {}
+    for sample, candidates in grouped.items():
+        ranked = sorted(candidates, key=lambda candidate: input_source_priority(candidate, input_suffix), reverse=True)
+        selected.append(ranked[0])
+        if len(ranked) > 1:
+            duplicates[sample] = ranked
+    return sorted(selected), duplicates
 
 
 def input_matches_filters(path: Path, filters: Sequence[str]) -> bool:
@@ -618,10 +666,13 @@ def main() -> int:
     model = build_gtf_model(gtf, include_noncanonical=args.include_noncanonical)
     print(f"[spl3] GTF protein-coding transcripts={len(model.transcripts)}", file=sys.stderr)
 
-    inputs = discover_inputs(root, args.sample_filter, args.input_suffix)
+    inputs, duplicate_inputs = discover_inputs(root, args.sample_filter, args.input_suffix)
     if not inputs:
         print(f"[spl3] no spl2 TSV files found under {root}", file=sys.stderr)
         return 0
+    for sample, ranked in sorted(duplicate_inputs.items()):
+        skipped = ", ".join(str(path) for path in ranked[1:])
+        print(f"[spl3][dedupe] sample={sample} keeping {ranked[0]} skipped={skipped}", file=sys.stderr)
 
     written = 0
     skipped = 0
