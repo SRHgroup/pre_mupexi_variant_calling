@@ -22,8 +22,8 @@ dna_bam_suffix="md.bam"
 # Use this when SJ.out.tab and Log.* outputs live under rnadnavar reports/star, e.g.
 #   /path/to/project/data/rna/rnadnavar/reports/star/Pat101/RNA_TUMOUR/RNA_TUMOUR.0001.SJ.out.tab
 # splicing_sjdir="/path/to/project/data/rna/rnadnavar/reports/star"
-# Optional splicing output root for spl2 novel-junction TSVs and splicing logs.
-# If unset and datadir is defined, spl2 defaults to ${datadir}/splicing.
+# Optional splicing output root for spl2/spl3/spl4 TSVs, FASTA files, and splicing logs.
+# If unset and datadir is defined, spl2, spl3, and spl4 default to ${datadir}/splicing.
 # splicing_outdir="/path/to/project/data/rna/rnadnavar/splicing"
 
 # Helper scripts directory (inside this repo).
@@ -124,6 +124,16 @@ rna7_smfixed_bam_suffix="RNA_TUMOUR.md.SMfixed.bam"
 # splicing_qsub_ppn="2"
 # splicing_qsub_mem="16gb"
 # splicing_qsub_walltime="06:00:00"
+# Optional spl3-specific qsub overrides; otherwise spl3 uses splicing_qsub_*.
+# splicing_spl3_qsub_nodes="1"
+# splicing_spl3_qsub_ppn="2"
+# splicing_spl3_qsub_mem="16gb"
+# splicing_spl3_qsub_walltime="06:00:00"
+# Optional spl4-specific qsub overrides; otherwise spl4 uses splicing_qsub_*.
+# splicing_spl4_qsub_nodes="1"
+# splicing_spl4_qsub_ppn="2"
+# splicing_spl4_qsub_mem="24gb"
+# splicing_spl4_qsub_walltime="08:00:00"
 
 # DNA-only path (no RNA): merge germline + DNA somatic, then genotype/phase DNA tumor
 # If unset, defaults are used by dna_only_merge_and_phase.sh.

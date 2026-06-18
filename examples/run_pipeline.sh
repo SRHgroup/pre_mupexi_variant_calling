@@ -17,6 +17,8 @@ Usage:
   $0 dna-only [PATIENT] [-f]
   $0 splicing spl1 [PATIENT] [--root STAR_DIR] [-f] [--dry-run]
   $0 splicing spl2 [PATIENT] [--root STAR_DIR] [--gtf GTF] [--outdir DIR] [--min-unique-reads N] [--include-noncanonical] [--keep-non-protein-coding] [-f] [--dry-run]
+  $0 splicing spl3 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
+  $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
   $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 cleanup [PATIENT] [--execute] [--threads N] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
@@ -48,6 +50,10 @@ Examples:
   $0 splicing spl1 Pat21 --root /path/to/reports/star --dry-run
   $0 splicing spl2 Pat21
   $0 splicing spl2 Pat21 --gtf /path/to/gencode.annotation.gtf.gz --outdir /path/to/splicing --min-unique-reads 10
+  $0 splicing spl3 Pat21
+  $0 splicing spl3 Pat21 --root /path/to/splicing --gtf /path/to/gencode.annotation.gtf.gz
+  $0 splicing spl4 Pat21
+  $0 splicing spl4 Pat21 --root /path/to/splicing --gtf /path/to/gencode.annotation.gtf.gz --fasta /path/to/genome.fa.gz
   $0 mupexi 01-CH-L
   $0 mupexi 01-CH-L --run-fusions
   $0 mupexi 01-CH-L --fusion-only --run-fusions --outdir /path/to/mupexi2_fusions_only
@@ -283,6 +289,57 @@ run_splicing_spl2() {
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $gtf_arg $outdir_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" $star_root_arg $gtf_arg $outdir_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
+  fi
+}
+
+run_splicing_spl3() {
+  local sample="${1:-}"
+  local splicing_root="${2:-}"
+  local gtf="${3:-}"
+  local outdir="${4:-}"
+  local dry_run="${5:-0}"
+  local include_noncanonical="${6:-0}"
+  local splicing_root_arg=""
+  local gtf_arg=""
+  local outdir_arg=""
+  local dry_run_arg=""
+  local include_noncanonical_arg=""
+  if [ -n "$splicing_root" ]; then splicing_root_arg="SPLICING_ROOT=$splicing_root"; fi
+  if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
+  if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl3 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl3 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+  fi
+}
+
+run_splicing_spl4() {
+  local sample="${1:-}"
+  local splicing_root="${2:-}"
+  local gtf="${3:-}"
+  local fasta="${4:-}"
+  local outdir="${5:-}"
+  local dry_run="${6:-0}"
+  local include_noncanonical="${7:-0}"
+  local splicing_root_arg=""
+  local gtf_arg=""
+  local fasta_arg=""
+  local outdir_arg=""
+  local dry_run_arg=""
+  local include_noncanonical_arg=""
+  if [ -n "$splicing_root" ]; then splicing_root_arg="SPLICING_ROOT=$splicing_root"; fi
+  if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
+  if [ -n "$fasta" ]; then fasta_arg="FASTA=$fasta"; fi
+  if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
   fi
 }
 
@@ -871,6 +928,54 @@ case "$cmd" in
           esac
         done
         run_splicing_spl2 "$sample" "$star_root" "$gtf" "$outdir" "$min_unique_reads" "$dry_run" "$include_noncanonical" "$keep_non_protein_coding"
+        ;;
+      spl3|classify-events)
+        sample=""
+        splicing_root=""
+        gtf=""
+        outdir=""
+        dry_run="0"
+        include_noncanonical="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) splicing_root="${2:-}"; shift 2 ;;
+            --gtf) gtf="${2:-}"; shift 2 ;;
+            --outdir) outdir="${2:-}"; shift 2 ;;
+            --dry-run) dry_run="1"; shift ;;
+            --include-noncanonical) include_noncanonical="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl3 "$sample" "$splicing_root" "$gtf" "$outdir" "$dry_run" "$include_noncanonical"
+        ;;
+      spl4|build-sequences)
+        sample=""
+        splicing_root=""
+        gtf=""
+        fasta=""
+        outdir=""
+        dry_run="0"
+        include_noncanonical="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) splicing_root="${2:-}"; shift 2 ;;
+            --gtf) gtf="${2:-}"; shift 2 ;;
+            --fasta) fasta="${2:-}"; shift 2 ;;
+            --outdir) outdir="${2:-}"; shift 2 ;;
+            --dry-run) dry_run="1"; shift ;;
+            --include-noncanonical) include_noncanonical="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl4 "$sample" "$splicing_root" "$gtf" "$fasta" "$outdir" "$dry_run" "$include_noncanonical"
         ;;
       *)
         echo "Unknown splicing task: ${task:-<missing>}" >&2

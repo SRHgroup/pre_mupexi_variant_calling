@@ -52,6 +52,8 @@ splicing_python_modules="anaconda3/2025.06-1"
 
 ## Current Splicing Reminder
 
-- `spl1` and `spl2` must follow the qsub pattern.
+- `spl1`, `spl2`, `spl3`, and `spl4` must follow the qsub pattern.
 - `spl1` should submit the STAR junction shard merge as a qsub job.
 - `spl2` should submit the novel junction calling/GTF parsing as a qsub job.
+- `spl3` should submit the SSNIP-style event classification/GTF parsing as a qsub job.
+- `spl4` should submit neojunction nucleotide/protein sequence reconstruction as a qsub job.

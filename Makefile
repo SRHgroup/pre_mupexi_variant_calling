@@ -6,7 +6,9 @@ FORCE ?=
 MODE ?= all
 OUTDIR ?=
 STAR_ROOT ?=
+SPLICING_ROOT ?=
 GTF ?=
+FASTA ?=
 SPLICING_OUTDIR ?=
 DRY_RUN ?=
 MIN_UNIQUE_READS ?= 10
@@ -138,6 +140,12 @@ run_splicing_spl1: check-config
 
 run_splicing_spl2: check-config
 	cd splicing && bash run_spl2_call_novel_junctions.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(STAR_ROOT),--root "$(STAR_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) --min-unique-reads "$(MIN_UNIQUE_READS)" $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,) $(if $(filter 1 true yes,$(KEEP_NON_PROTEIN_CODING)),--keep-non-protein-coding,)
+
+run_splicing_spl3: check-config
+	cd splicing && bash run_spl3_classify_events.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
+
+run_splicing_spl4: check-config
+	cd splicing && bash run_spl4_build_sequences.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(FASTA),--fasta "$(FASTA)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
 
 run_splicing_merge_star_sj: run_splicing_spl1
 
