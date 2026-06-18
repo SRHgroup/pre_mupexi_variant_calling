@@ -72,7 +72,50 @@ def sample_matches(group_out: Path, filters: Sequence[str]) -> bool:
     return any(f.lower() in text for f in filters for text in haystacks)
 
 
-def discover_groups(root: Path, filters: Sequence[str]) -> Dict[Tuple[Path, str], List[Tuple[int, Path]]]:
+def group_out_path(parent: Path, base: str, shard_paths: Sequence[Tuple[int, Path]]) -> Path:
+    all_gz = all(str(path).endswith(".gz") for _, path in shard_paths)
+    return parent / (f"{base}.SJ.out.tab" + (".gz" if all_gz else ""))
+
+
+def infer_group_sample_label(parent: Path, base: str) -> str:
+    grandparent = parent.parent.name if parent.parent != parent else ""
+    if (
+        grandparent
+        and parent.name == base
+        and not base.startswith(f"{grandparent}_")
+        and grandparent.lower() not in {"star", "reports"}
+    ):
+        return f"{grandparent}_{base}"
+    return base
+
+
+def group_source_priority(key: Tuple[Path, str], shard_paths: Sequence[Tuple[int, Path]]) -> Tuple[int, int, int, str]:
+    parent, base = key
+    sample = infer_group_sample_label(parent, base).lower()
+    base_lower = base.lower()
+    parent_lower = parent.name.lower()
+    score = 0
+    if base_lower == sample:
+        score += 100
+    if parent_lower == sample:
+        score += 50
+    if base_lower.startswith(sample):
+        score += 20
+    if parent_lower.startswith(sample):
+        score += 10
+    total_size = 0
+    for _, path in shard_paths:
+        try:
+            total_size += path.stat().st_size
+        except OSError:
+            pass
+    return (score, len(shard_paths), total_size, str(group_out_path(parent, base, shard_paths)))
+
+
+def discover_groups(
+    root: Path,
+    filters: Sequence[str],
+) -> Tuple[Dict[Tuple[Path, str], List[Tuple[int, Path]]], Dict[str, List[Tuple[Tuple[Path, str], List[Tuple[int, Path]]]]]]:
     groups: Dict[Tuple[Path, str], List[Tuple[int, Path]]] = defaultdict(list)
     for path in root.rglob("*"):
         if not path.is_file():
@@ -84,15 +127,27 @@ def discover_groups(root: Path, filters: Sequence[str]) -> Dict[Tuple[Path, str]
         shard_no = int(match.group("shard"))
         groups[(path.parent, base)].append((shard_no, path))
 
-    filtered: Dict[Tuple[Path, str], List[Tuple[int, Path]]] = {}
+    filtered_by_sample: Dict[str, Dict[Tuple[Path, str], List[Tuple[int, Path]]]] = defaultdict(dict)
     for key, shard_paths in groups.items():
         parent, base = key
-        all_gz = all(str(p).endswith(".gz") for _, p in shard_paths)
-        out_name = f"{base}.SJ.out.tab" + (".gz" if all_gz else "")
-        out_path = parent / out_name
+        out_path = group_out_path(parent, base, shard_paths)
         if sample_matches(out_path, filters):
-            filtered[key] = sorted(shard_paths, key=lambda item: item[0])
-    return filtered
+            filtered_by_sample[infer_group_sample_label(parent, base)][key] = sorted(shard_paths, key=lambda item: item[0])
+
+    selected: Dict[Tuple[Path, str], List[Tuple[int, Path]]] = {}
+    duplicates: Dict[str, List[Tuple[Tuple[Path, str], List[Tuple[int, Path]]]]] = {}
+    for sample, sample_groups in filtered_by_sample.items():
+        ranked = sorted(
+            sample_groups.items(),
+            key=lambda item: group_source_priority(item[0], item[1]),
+            reverse=True,
+        )
+        if not ranked:
+            continue
+        selected[ranked[0][0]] = ranked[0][1]
+        if len(ranked) > 1:
+            duplicates[sample] = ranked
+    return selected, duplicates
 
 
 def merge_group(shard_paths: Sequence[Path]) -> List[List[str]]:
@@ -158,10 +213,20 @@ def main() -> int:
     if not root.is_dir():
         raise SystemExit(f"ERROR: root is not a directory: {root}")
 
-    groups = discover_groups(root, args.sample_filter)
+    groups, duplicate_groups = discover_groups(root, args.sample_filter)
     if not groups:
         print(f"[info] no STAR SJ shard groups found under {root}", file=sys.stderr)
         return 0
+    for sample, ranked in sorted(duplicate_groups.items()):
+        kept_key, kept_shards = ranked[0]
+        skipped = ", ".join(
+            str(group_out_path(parent, base, shard_paths))
+            for (parent, base), shard_paths in ranked[1:]
+        )
+        print(
+            f"[dedupe] sample={sample} keeping {group_out_path(kept_key[0], kept_key[1], kept_shards)} skipped={skipped}",
+            file=sys.stderr,
+        )
 
     merged_groups = 0
     skipped_groups = 0
