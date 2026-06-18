@@ -42,6 +42,7 @@ splicing_python_modules="anaconda3/2025.06-1"
 - BAM-adjacent STAR outputs and splice-junction report outputs may live in different places.
 - Splicing STAR junction reports should use `splicing_sjdir`.
 - Splicing-derived outputs should use `splicing_outdir` or default to `${datadir}/splicing`.
+- Patient-level spl2/spl3/spl4 files should live under `${splicing_outdir}/${patient_id}_${splicing_rna_tumor_tag}`, defaulting to a suffix of `RNA_TUMOR`.
 - Keep cohort-specific paths in `CONFIG`, not hard-coded in scripts.
 
 ## Output Behavior

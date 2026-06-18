@@ -116,6 +116,15 @@ def parse_args() -> argparse.Namespace:
         help="Optional root for spl3 outputs. Input paths relative to --root are preserved.",
     )
     ap.add_argument(
+        "--output-subdir",
+        default="",
+        help=(
+            "Optional first-level folder under --out-dir for patient-scoped "
+            "outputs, e.g. Pat101_RNA_TUMOR. If the input is already under "
+            "that folder relative to the scan root, it is not added twice."
+        ),
+    )
+    ap.add_argument(
         "--sample-filter",
         action="append",
         default=[],
@@ -315,17 +324,33 @@ def input_matches_filters(path: Path, filters: Sequence[str]) -> bool:
     return False
 
 
-def output_path_for(input_path: Path, root: Path, out_dir: Optional[Path], input_suffix: str, out_suffix: str) -> Path:
+def scoped_rel_parent(input_parent: Path, root: Path, output_subdir: str) -> Path:
+    try:
+        rel_parent = input_parent.relative_to(root)
+    except ValueError:
+        rel_parent = Path(input_parent.name)
+    if output_subdir:
+        parts = rel_parent.parts
+        if not parts or parts[0] != output_subdir:
+            return Path(output_subdir)
+    return rel_parent
+
+
+def output_path_for(
+    input_path: Path,
+    root: Path,
+    out_dir: Optional[Path],
+    input_suffix: str,
+    out_suffix: str,
+    output_subdir: str,
+) -> Path:
     if input_path.name.endswith(input_suffix):
         out_name = f"{input_path.name[:-len(input_suffix)]}{out_suffix}"
     else:
         out_name = f"{input_path.stem}{out_suffix}"
     if out_dir is None:
         return input_path.with_name(out_name)
-    try:
-        rel_parent = input_path.parent.relative_to(root)
-    except ValueError:
-        rel_parent = Path(input_path.parent.name)
+    rel_parent = scoped_rel_parent(input_path.parent, root, output_subdir)
     return out_dir / rel_parent / out_name
 
 
@@ -601,7 +626,7 @@ def main() -> int:
     written = 0
     skipped = 0
     for input_path in inputs:
-        out_path = output_path_for(input_path, root, out_dir, args.input_suffix, args.out_suffix)
+        out_path = output_path_for(input_path, root, out_dir, args.input_suffix, args.out_suffix, args.output_subdir)
         if out_path.exists() and not args.force:
             print(f"[spl3][skip] output exists: {out_path}", file=sys.stderr)
             skipped += 1

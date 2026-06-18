@@ -25,6 +25,9 @@ dna_bam_suffix="md.bam"
 # Optional splicing output root for spl2/spl3/spl4 TSVs, FASTA files, and splicing logs.
 # If unset and datadir is defined, spl2, spl3, and spl4 default to ${datadir}/splicing.
 # splicing_outdir="/path/to/project/data/rna/rnadnavar/splicing"
+# spl2/spl3/spl4 write patient-scoped outputs under ${splicing_outdir}/${patient}_${tag}.
+# The default tag is RNA_TUMOR even if upstream STAR folders use RNA_TUMOUR.
+# splicing_rna_tumor_tag="RNA_TUMOR"
 
 # Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"

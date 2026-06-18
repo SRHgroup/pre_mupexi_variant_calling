@@ -105,6 +105,15 @@ sample_base_name() {
   printf '%s\n' "$value"
 }
 
+splicing_target_dir() {
+  local target="$1"
+  local patient
+  local tag="${splicing_rna_tumor_tag:-RNA_TUMOR}"
+  patient="$(sample_base_name "$target")"
+  [ -n "$patient" ] || patient="$target"
+  printf '%s_%s\n' "$patient" "$tag"
+}
+
 is_rna_sample_id() {
   local sid="$1"
   case "$sid" in
@@ -166,6 +175,7 @@ active_job_for_name() {
 submit_target() {
   local target="$1"
   local tag="${target//[^A-Za-z0-9_.-]/_}"
+  local output_subdir
   local prefix="splicing_spl3"
   local job_name="${prefix}.${tag}"
   local logroot="${splicing_logroot:-${spl3_outdir:-${spl3_root%/}}/${prefix}.logs_and_reports}"
@@ -173,6 +183,7 @@ submit_target() {
   local repdir="${logroot}/reports"
   local marker="${logdir}/submitted.${job_name}.jobid"
   local runscript="${logdir}/run.${tag}.${prefix}.sh"
+  output_subdir="$(splicing_target_dir "$target")"
   mkdir -p "$logdir" "$repdir"
 
   if [ "$dry_run" != "1" ] && [ -f "$marker" ]; then
@@ -219,7 +230,7 @@ if [ -n "\$spl3_outdir" ]; then
   printf '[spl3] output root: %s\\n' "\$spl3_outdir"
 fi
 printf '[spl3] Python: %s\\n' "\$(command -v "\$splicing_python" || printf '%s' "\$splicing_python")"
-cmd=("\$splicing_python" $(printf '%q' "$script_path") --root $(printf '%q' "$spl3_root") --gtf $(printf '%q' "$gtf_path") --sample-filter $(printf '%q' "$target"))
+cmd=("\$splicing_python" $(printf '%q' "$script_path") --root $(printf '%q' "$spl3_root") --gtf $(printf '%q' "$gtf_path") --sample-filter $(printf '%q' "$target") --output-subdir $(printf '%q' "$output_subdir"))
 if [ -n "\$spl3_outdir" ]; then
   cmd+=(--out-dir "\$spl3_outdir")
 fi

@@ -117,6 +117,15 @@ def parse_args() -> argparse.Namespace:
             "input path relative to --star-root is preserved under this root."
         ),
     )
+    ap.add_argument(
+        "--output-subdir",
+        default="",
+        help=(
+            "Optional first-level folder under --out-dir for patient-scoped "
+            "outputs, e.g. Pat101_RNA_TUMOR. If the input is already under "
+            "that folder relative to the scan root, it is not added twice."
+        ),
+    )
     ap.add_argument("--force", action="store_true", help="Overwrite existing spl2 outputs")
     ap.add_argument("--dry-run", action="store_true", help="Report planned files without writing outputs")
     ap.add_argument(
@@ -301,14 +310,29 @@ def sj_base(path: Path) -> str:
     return path.stem
 
 
-def output_path_for(sj_path: Path, star_root: Path, out_dir: Optional[Path], out_suffix: str) -> Path:
+def scoped_rel_parent(input_parent: Path, root: Path, output_subdir: str) -> Path:
+    try:
+        rel_parent = input_parent.relative_to(root)
+    except ValueError:
+        rel_parent = Path(input_parent.name)
+    if output_subdir:
+        parts = rel_parent.parts
+        if not parts or parts[0] != output_subdir:
+            return Path(output_subdir)
+    return rel_parent
+
+
+def output_path_for(
+    sj_path: Path,
+    star_root: Path,
+    out_dir: Optional[Path],
+    out_suffix: str,
+    output_subdir: str,
+) -> Path:
     out_name = f"{sj_base(sj_path)}{out_suffix}"
     if not out_dir:
         return sj_path.with_name(out_name)
-    try:
-        rel_parent = sj_path.parent.relative_to(star_root)
-    except ValueError:
-        rel_parent = Path(sj_path.parent.name)
+    rel_parent = scoped_rel_parent(sj_path.parent, star_root, output_subdir)
     return out_dir / rel_parent / out_name
 
 
@@ -580,7 +604,7 @@ def main() -> int:
     written = 0
     skipped = 0
     for sj_path in sj_files:
-        out_path = output_path_for(sj_path, star_root, out_dir, args.out_suffix)
+        out_path = output_path_for(sj_path, star_root, out_dir, args.out_suffix, args.output_subdir)
         if out_path.exists() and not args.force:
             print(f"[spl2][skip] output exists: {out_path}", file=sys.stderr)
             skipped += 1
