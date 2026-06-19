@@ -5,6 +5,15 @@ SAMPLE ?=
 FORCE ?=
 MODE ?= all
 OUTDIR ?=
+STAR_ROOT ?=
+SPLICING_ROOT ?=
+GTF ?=
+FASTA ?=
+SPLICING_OUTDIR ?=
+DRY_RUN ?=
+MIN_UNIQUE_READS ?= 10
+INCLUDE_NONCANONICAL ?=
+KEEP_NON_PROTEIN_CODING ?=
 MAX_DISTANCE ?= 33
 MIN_CLUSTER_SIZE ?= 2
 MIN_ALT_COUNT ?= 10
@@ -19,7 +28,10 @@ MIN_EXPECTED_FRAC ?=
 HLA ?=
 EXPR ?=
 FUSION ?=
+SPLICING ?=
+RUN_SPLICING ?=
 FUSION_ONLY ?=
+SPLICING_ONLY ?=
 MUPEXI_NODES ?=
 MUPEXI_PPN ?=
 MUPEXI_MEM ?=
@@ -37,6 +49,7 @@ SKIP_RUNNING_FLAG := $(if $(filter 1 true yes,$(SKIP_RUNNING)),--skip-running,)
 OUTDIR_FLAG := $(if $(OUTDIR),-o $(OUTDIR),)
 OUTFILE_FLAG := $(if $(OUTFILE),-o $(OUTFILE),)
 EXECUTE_FLAG := $(if $(filter 1 true yes,$(EXECUTE)),--execute,)
+DRY_RUN_FLAG := $(if $(filter 1 true yes,$(DRY_RUN)),--dry-run,)
 
 check-config:
 	@if [[ -z "$(CONFIG)" ]]; then echo "Set CONFIG=/path/to/CONFIG"; exit 1; fi
@@ -125,8 +138,22 @@ run_research_strand_blacklist: check-config
 run_research_mosdepth_overlap: check-config
 	cd research && bash run_mosdepth_overlap.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) --depth-threshold "$(DEPTH_THRESHOLD)" --region-bin-size "$(REGION_BIN_SIZE)" $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
+run_splicing_spl1: check-config
+	cd splicing && bash run_merge_star_sj_shards.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(STAR_ROOT),--root "$(STAR_ROOT)",) $(FORCE_FLAG) $(DRY_RUN_FLAG)
+
+run_splicing_spl2: check-config
+	cd splicing && bash run_spl2_call_novel_junctions.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(STAR_ROOT),--root "$(STAR_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) --min-unique-reads "$(MIN_UNIQUE_READS)" $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,) $(if $(filter 1 true yes,$(KEEP_NON_PROTEIN_CODING)),--keep-non-protein-coding,)
+
+run_splicing_spl3: check-config
+	cd splicing && bash run_spl3_classify_events.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
+
+run_splicing_spl4: check-config
+	cd splicing && bash run_spl4_build_sequences.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(FASTA),--fasta "$(FASTA)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
+
+run_splicing_merge_star_sj: run_splicing_spl1
+
 run_mupexi: check-config
-	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(filter 1 true yes,$(FUSION_ONLY)),--fusion-only,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(if $(MUPEXI_NODES),--nodes "$(MUPEXI_NODES)",) $(if $(MUPEXI_PPN),--ppn "$(MUPEXI_PPN)",) $(if $(MUPEXI_MEM),--mem "$(MUPEXI_MEM)",) $(if $(MUPEXI_WALLTIME),--walltime "$(MUPEXI_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+	cd research && bash run_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(filter 1 true yes,$(RUN_FUSIONS)),--run-fusions,) $(if $(filter 1 true yes,$(FUSION_ONLY)),--fusion-only,) $(if $(filter 1 true yes,$(RUN_SPLICING)),--run-splicing,) $(if $(filter 1 true yes,$(SPLICING_ONLY)),--splicing-only,) $(if $(HLA),--hla "$(HLA)",) $(if $(EXPR),--expr "$(EXPR)",) $(if $(FUSION),--fusion "$(FUSION)",) $(if $(SPLICING),--splicing "$(SPLICING)",) $(if $(MUPEXI_NODES),--nodes "$(MUPEXI_NODES)",) $(if $(MUPEXI_PPN),--ppn "$(MUPEXI_PPN)",) $(if $(MUPEXI_MEM),--mem "$(MUPEXI_MEM)",) $(if $(MUPEXI_WALLTIME),--walltime "$(MUPEXI_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
 run_cleanup_pre_mupexi: check-config
 	bash bin/run_cleanup_pre_mupexi_jobs.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(EXECUTE_FLAG) $(if $(THREADS),--threads "$(THREADS)",) $(if $(CLEANUP_NODES),--nodes "$(CLEANUP_NODES)",) $(if $(CLEANUP_PPN),--ppn "$(CLEANUP_PPN)",) $(if $(CLEANUP_MEM),--mem "$(CLEANUP_MEM)",) $(if $(CLEANUP_WALLTIME),--walltime "$(CLEANUP_WALLTIME)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)

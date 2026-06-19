@@ -15,7 +15,11 @@ Usage:
   $0 rna [PATIENT] [-f]
   $0 germline [PATIENT] [-f]
   $0 dna-only [PATIENT] [-f]
-  $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
+  $0 splicing spl1 [PATIENT] [--root STAR_DIR] [-f] [--dry-run]
+  $0 splicing spl2 [PATIENT] [--root STAR_DIR] [--gtf GTF] [--outdir DIR] [--min-unique-reads N] [--include-noncanonical] [--keep-non-protein-coding] [-f] [--dry-run]
+  $0 splicing spl3 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
+  $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
+  $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--run-splicing] [--splicing-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--splicing SPL4_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 cleanup [PATIENT] [--execute] [--threads N] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
   $0 research rna-clusters [PATIENT] [--outdir DIR] [--max-distance N] [--min-cluster-size N] [--min-alt-count N] [-f] [--skip-running]
@@ -42,8 +46,18 @@ Examples:
   $0 rna 01-CH-L
   $0 germline 01-CH-L
   $0 dna-only 01-CH-L
+  $0 splicing spl1 Pat21
+  $0 splicing spl1 Pat21 --root /path/to/reports/star --dry-run
+  $0 splicing spl2 Pat21
+  $0 splicing spl2 Pat21 --gtf /path/to/gencode.annotation.gtf.gz --outdir /path/to/splicing --min-unique-reads 10
+  $0 splicing spl3 Pat21
+  $0 splicing spl3 Pat21 --root /path/to/splicing --gtf /path/to/gencode.annotation.gtf.gz
+  $0 splicing spl4 Pat21
+  $0 splicing spl4 Pat21 --root /path/to/splicing --gtf /path/to/gencode.annotation.gtf.gz --fasta /path/to/genome.fa.gz
   $0 mupexi 01-CH-L
   $0 mupexi 01-CH-L --run-fusions
+  $0 mupexi Pat101 --splicing-only
+  $0 mupexi Pat101 --splicing-only --run-fusions
   $0 mupexi 01-CH-L --fusion-only --run-fusions --outdir /path/to/mupexi2_fusions_only
   $0 mupexi 01-CH-L --ppn 8 --mem 48gb --walltime 24:00:00
   $0 mupexi Pat11 --hla HLA-A26:01,HLA-A24:02,HLA-B27:02,HLA-B15:09,HLA-C02:02,HLA-C07:04 --expr /path/to/Patient_11.expr.tsv
@@ -231,6 +245,106 @@ run_research_mosdepth_overlap() {
   fi
 }
 
+run_splicing_spl1() {
+  local sample="${1:-}"
+  local star_root="${2:-}"
+  local dry_run="${3:-0}"
+  local star_root_arg=""
+  local dry_run_arg=""
+  if [ -n "$star_root" ]; then star_root_arg="STAR_ROOT=$star_root"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl1 CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $dry_run_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl1 CONFIG="$CONFIG" $star_root_arg $dry_run_arg $force_arg
+  fi
+}
+
+run_splicing_merge_star_sj() {
+  run_splicing_spl1 "$@"
+}
+
+run_splicing_spl2() {
+  local sample="${1:-}"
+  local star_root="${2:-}"
+  local gtf="${3:-}"
+  local outdir="${4:-}"
+  local min_unique_reads="${5:-10}"
+  local dry_run="${6:-0}"
+  local include_noncanonical="${7:-0}"
+  local keep_non_protein_coding="${8:-0}"
+  local star_root_arg=""
+  local gtf_arg=""
+  local outdir_arg=""
+  local min_unique_reads_arg=""
+  local dry_run_arg=""
+  local include_noncanonical_arg=""
+  local keep_non_protein_coding_arg=""
+  if [ -n "$star_root" ]; then star_root_arg="STAR_ROOT=$star_root"; fi
+  if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
+  if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
+  if [ -n "$min_unique_reads" ]; then min_unique_reads_arg="MIN_UNIQUE_READS=$min_unique_reads"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
+  if [ "$keep_non_protein_coding" = "1" ]; then keep_non_protein_coding_arg="KEEP_NON_PROTEIN_CODING=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" SAMPLE="$sample" $star_root_arg $gtf_arg $outdir_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl2 CONFIG="$CONFIG" $star_root_arg $gtf_arg $outdir_arg $min_unique_reads_arg $dry_run_arg $include_noncanonical_arg $keep_non_protein_coding_arg $force_arg
+  fi
+}
+
+run_splicing_spl3() {
+  local sample="${1:-}"
+  local splicing_root="${2:-}"
+  local gtf="${3:-}"
+  local outdir="${4:-}"
+  local dry_run="${5:-0}"
+  local include_noncanonical="${6:-0}"
+  local splicing_root_arg=""
+  local gtf_arg=""
+  local outdir_arg=""
+  local dry_run_arg=""
+  local include_noncanonical_arg=""
+  if [ -n "$splicing_root" ]; then splicing_root_arg="SPLICING_ROOT=$splicing_root"; fi
+  if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
+  if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl3 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl3 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+  fi
+}
+
+run_splicing_spl4() {
+  local sample="${1:-}"
+  local splicing_root="${2:-}"
+  local gtf="${3:-}"
+  local fasta="${4:-}"
+  local outdir="${5:-}"
+  local dry_run="${6:-0}"
+  local include_noncanonical="${7:-0}"
+  local splicing_root_arg=""
+  local gtf_arg=""
+  local fasta_arg=""
+  local outdir_arg=""
+  local dry_run_arg=""
+  local include_noncanonical_arg=""
+  if [ -n "$splicing_root" ]; then splicing_root_arg="SPLICING_ROOT=$splicing_root"; fi
+  if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
+  if [ -n "$fasta" ]; then fasta_arg="FASTA=$fasta"; fi
+  if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+  fi
+}
+
 run_mupexi() {
   local sample="${1:-}"
   local outdir="${2:-}"
@@ -243,11 +357,17 @@ run_mupexi() {
   local ppn="${9:-}"
   local mem="${10:-}"
   local walltime="${11:-}"
+  local run_splicing="${12:-0}"
+  local splicing_only="${13:-0}"
+  local splicing="${14:-}"
   local fusion_arg=""
   local fusion_only_arg=""
+  local splicing_arg=""
+  local splicing_only_arg=""
   local hla_arg=""
   local expr_arg=""
   local fusion_path_arg=""
+  local splicing_path_arg=""
   local nodes_arg=""
   local ppn_arg=""
   local mem_arg=""
@@ -258,17 +378,24 @@ run_mupexi() {
   if [ "$fusion_only" = "1" ]; then
     fusion_only_arg="FUSION_ONLY=1"
   fi
+  if [ "$run_splicing" = "1" ]; then
+    splicing_arg="RUN_SPLICING=1"
+  fi
+  if [ "$splicing_only" = "1" ]; then
+    splicing_only_arg="SPLICING_ONLY=1"
+  fi
   if [ -n "$hla" ]; then hla_arg="HLA=$hla"; fi
   if [ -n "$expr" ]; then expr_arg="EXPR=$expr"; fi
   if [ -n "$fusion" ]; then fusion_path_arg="FUSION=$fusion"; fi
+  if [ -n "$splicing" ]; then splicing_path_arg="SPLICING=$splicing"; fi
   if [ -n "$nodes" ]; then nodes_arg="MUPEXI_NODES=$nodes"; fi
   if [ -n "$ppn" ]; then ppn_arg="MUPEXI_PPN=$ppn"; fi
   if [ -n "$mem" ]; then mem_arg="MUPEXI_MEM=$mem"; fi
   if [ -n "$walltime" ]; then walltime_arg="MUPEXI_WALLTIME=$walltime"; fi
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $fusion_arg $fusion_only_arg $hla_arg $expr_arg $fusion_path_arg $nodes_arg $ppn_arg $mem_arg $walltime_arg $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" SAMPLE="$sample" OUTDIR="$outdir" $fusion_arg $fusion_only_arg $splicing_arg $splicing_only_arg $hla_arg $expr_arg $fusion_path_arg $splicing_path_arg $nodes_arg $ppn_arg $mem_arg $walltime_arg $force_arg $skip_running_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" OUTDIR="$outdir" $fusion_arg $fusion_only_arg $hla_arg $expr_arg $fusion_path_arg $nodes_arg $ppn_arg $mem_arg $walltime_arg $force_arg $skip_running_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_mupexi CONFIG="$CONFIG" OUTDIR="$outdir" $fusion_arg $fusion_only_arg $splicing_arg $splicing_only_arg $hla_arg $expr_arg $fusion_path_arg $splicing_path_arg $nodes_arg $ppn_arg $mem_arg $walltime_arg $force_arg $skip_running_arg
   fi
 }
 
@@ -769,14 +896,119 @@ case "$cmd" in
   rna)       run_make run_all_rna "${1:-}" ;;
   germline)  run_make run_all_germline "${1:-}" ;;
   dna-only)  run_make run_dna_only "${1:-}" ;;
+  splicing)
+    task="${1:-}"
+    shift || true
+    case "$task" in
+      spl1|merge-star-sj)
+        sample=""
+        star_root=""
+        dry_run="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) star_root="${2:-}"; shift 2 ;;
+            --dry-run) dry_run="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl1 "$sample" "$star_root" "$dry_run"
+        ;;
+      spl2|call-novel-junctions)
+        sample=""
+        star_root=""
+        gtf=""
+        outdir=""
+        min_unique_reads="10"
+        dry_run="0"
+        include_noncanonical="0"
+        keep_non_protein_coding="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) star_root="${2:-}"; shift 2 ;;
+            --gtf) gtf="${2:-}"; shift 2 ;;
+            --outdir) outdir="${2:-}"; shift 2 ;;
+            --min-unique-reads) min_unique_reads="${2:-}"; shift 2 ;;
+            --dry-run) dry_run="1"; shift ;;
+            --include-noncanonical) include_noncanonical="1"; shift ;;
+            --keep-non-protein-coding) keep_non_protein_coding="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl2 "$sample" "$star_root" "$gtf" "$outdir" "$min_unique_reads" "$dry_run" "$include_noncanonical" "$keep_non_protein_coding"
+        ;;
+      spl3|classify-events)
+        sample=""
+        splicing_root=""
+        gtf=""
+        outdir=""
+        dry_run="0"
+        include_noncanonical="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) splicing_root="${2:-}"; shift 2 ;;
+            --gtf) gtf="${2:-}"; shift 2 ;;
+            --outdir) outdir="${2:-}"; shift 2 ;;
+            --dry-run) dry_run="1"; shift ;;
+            --include-noncanonical) include_noncanonical="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl3 "$sample" "$splicing_root" "$gtf" "$outdir" "$dry_run" "$include_noncanonical"
+        ;;
+      spl4|build-sequences)
+        sample=""
+        splicing_root=""
+        gtf=""
+        fasta=""
+        outdir=""
+        dry_run="0"
+        include_noncanonical="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) splicing_root="${2:-}"; shift 2 ;;
+            --gtf) gtf="${2:-}"; shift 2 ;;
+            --fasta) fasta="${2:-}"; shift 2 ;;
+            --outdir) outdir="${2:-}"; shift 2 ;;
+            --dry-run) dry_run="1"; shift ;;
+            --include-noncanonical) include_noncanonical="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl4 "$sample" "$splicing_root" "$gtf" "$fasta" "$outdir" "$dry_run" "$include_noncanonical"
+        ;;
+      *)
+        echo "Unknown splicing task: ${task:-<missing>}" >&2
+        exit 1
+        ;;
+    esac
+    ;;
   mupexi)
     sample=""
     outdir=""
     run_fusions="0"
     fusion_only="0"
+    run_splicing="0"
+    splicing_only="0"
     hla=""
     expr=""
     fusion=""
+    splicing=""
     mupexi_nodes=""
     mupexi_ppn=""
     mupexi_mem=""
@@ -790,9 +1022,12 @@ case "$cmd" in
         --outdir|-o) outdir="${2:-}"; shift 2 ;;
         --run-fusions) run_fusions="1"; shift ;;
         --fusion-only) fusion_only="1"; run_fusions="1"; shift ;;
+        --run-splicing) run_splicing="1"; shift ;;
+        --splicing-only) splicing_only="1"; run_splicing="1"; shift ;;
         --hla) hla="${2:-}"; shift 2 ;;
         --expr) expr="${2:-}"; shift 2 ;;
         --fusion) fusion="${2:-}"; shift 2 ;;
+        --splicing) splicing="${2:-}"; shift 2 ;;
         --nodes) mupexi_nodes="${2:-}"; shift 2 ;;
         --ppn) mupexi_ppn="${2:-}"; shift 2 ;;
         --mem) mupexi_mem="${2:-}"; shift 2 ;;
@@ -800,7 +1035,7 @@ case "$cmd" in
         *) echo "Unknown mupexi option: $1" >&2; exit 1 ;;
       esac
     done
-    run_mupexi "$sample" "$outdir" "$run_fusions" "$fusion_only" "$hla" "$expr" "$fusion" "$mupexi_nodes" "$mupexi_ppn" "$mupexi_mem" "$mupexi_walltime"
+    run_mupexi "$sample" "$outdir" "$run_fusions" "$fusion_only" "$hla" "$expr" "$fusion" "$mupexi_nodes" "$mupexi_ppn" "$mupexi_mem" "$mupexi_walltime" "$run_splicing" "$splicing_only" "$splicing"
     ;;
   cleanup)
     sample=""
