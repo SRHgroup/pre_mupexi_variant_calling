@@ -1,9 +1,10 @@
 # post_rnadnavar_mupexi_prep (PBS/qsub pipeline)
 
-This repository contains two coordinated modules:
+This repository contains three coordinated modules:
 
 - RNA-editing post-processing: `rna1..rna7`
 - Germline calling/filtering: `gdna1..gdna4`
+- Splicing neoantigen pre-processing: `spl1..spl4`
 
 ## Layout
 
@@ -34,10 +35,17 @@ gDNA:
 3. `gdna3_SelectVariants.sh` # removes low QC entries 
 4. `gdna4_FilterGermlineByAdjacency.sh` # for a given k and somatic/rna-editing VCF preserved only variants adjacent to at least one cancer mutation. Optional but reccomended, as raw germline calls are huge.
 
+Splicing:
+1. `spl1` # merge split STAR `*.SJ.out.tab` shard files into one sample-level `SJ.out.tab`.
+2. `spl2` # call novel splice junctions by comparing merged STAR junctions to the GTF annotation.
+3. `spl3` # classify novel junctions into SSNIP-style event classes: `A3+`, `A3-`, `A5+`, `A5-`, `ES`, `junction_in_exon`, `junction_in_intron`, or `other`.
+4. `spl4` # reconstruct neojunction nucleotide/protein sequences and write an Arriba-like TSV plus NT/AA FASTA files for MuPeXI2.
+
 ## Dependency model
 
 - `rna1..rna5` are independent from `gdna1..gdna4`.
 - `rna6`, `rna7.0`, and `rna7` require both branches to be done.
+- `spl1 -> spl2 -> spl3 -> spl4` is an independent RNA splicing branch. `spl4` can be used by MuPeXI2 with `--run-splicing` or `--splicing-only`.
 - `run_all_end_to_end.sh` submits exactly that topology:
   - chain A: `gdna1 -> gdna2 -> gdna3 -> gdna4`
   - chain B: `rna1 -> rna2 -> rna3 -> rna4 -> rna5`
@@ -58,6 +66,7 @@ gDNA:
 - `whatshap`
 - `samtools`
 - `bgzip`
+- Genome FASTA and GTF for splicing sequence reconstruction
 
 ## Configure
 
@@ -70,6 +79,7 @@ Edit `CONFIG` and set at minimum:
 - `samples`, `vcfdir`, `bamdir`, `knownsites`, `FASTA`, `DICT`, `rnae_scripts`
 - `source_rna_mutect2_vcf_extension`, `source_dna_mutect2_vcf_extension` if your upstream rnadnavar VCF names differ from defaults
   - `{patient}` placeholder is supported in these suffixes
+- For splicing: `GTF`, `FASTA`, and either `splicing_sjdir` or a STAR output root that contains `*.SJ.out.tab` files. `splicing_outdir` is optional; if unset, splicing outputs default to `${datadir}/splicing`.
 
 Labels:
 - default: `DNA_TUMOR`, `RNA_TUMOR`
@@ -92,10 +102,37 @@ RNA chain:
 make run_all_rna CONFIG=/path/to/CONFIG
 ```
 
-Splicing pipeline, step 1: merge STAR junction shards in place:
+Splicing pipeline:
 ```bash
-make run_splicing_merge_star_sj CONFIG=/path/to/CONFIG
-make run_splicing_merge_star_sj CONFIG=/path/to/CONFIG SAMPLE=Pat21
+./run_pipeline.sh splicing spl1 Pat21
+./run_pipeline.sh splicing spl2 Pat21
+./run_pipeline.sh splicing spl3 Pat21
+./run_pipeline.sh splicing spl4 Pat21
+```
+
+Splicing outputs are written under `${splicing_outdir}/${patient}_RNA_${tumor_tag}` or `${datadir}/splicing/${patient}_RNA_${tumor_tag}`. The main MuPeXI2 input is:
+
+```text
+${patient}_RNA_${tumor_tag}.spl4.neojunctions.tsv
+```
+
+The matching FASTA files are:
+
+```text
+${patient}_RNA_${tumor_tag}.spl4.neojunctions.nt.fa
+${patient}_RNA_${tumor_tag}.spl4.neojunctions.aa.fa
+```
+
+Run MuPeXI2 with neosplicing only:
+
+```bash
+./run_pipeline.sh mupexi Pat21 --splicing-only
+```
+
+Run MuPeXI2 with variants/fusions plus neosplicing:
+
+```bash
+./run_pipeline.sh mupexi Pat21 --run-splicing
 ```
 
 gDNA chain:
