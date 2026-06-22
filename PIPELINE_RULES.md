@@ -44,7 +44,8 @@ splicing_python_modules="anaconda3/2025.06-1"
 - Splicing-derived outputs should use `splicing_outdir` or default to `${datadir}/splicing`.
 - Use standardized cohort tags such as `normal_tag` and `tumor_tag`; do not introduce step-specific tumor spellings.
 - DNA/RNA labels should be composed from the same tag, e.g. `DNA_${tumor_tag}` and `RNA_${tumor_tag}`.
-- Patient-level spl2/spl3/spl4 files should live under `${splicing_outdir}/${patient_id}_RNA_${tumor_tag}`, defaulting `tumor_tag` to `TUMOR`.
+- Patient-level spl2/spl3/spl3.5/spl4 files should live under `${splicing_outdir}/${patient_id}_RNA_${tumor_tag}`, defaulting `tumor_tag` to `TUMOR`.
+- Optional normal-junction filtering should run as `spl3.5`, consuming a compact normal reference from `splicing_normal_junction_ref` or `--normal-ref` and writing a filtered cancer-unique TSV before spl4.
 - If both generic and patient-prefixed STAR/splicing files exist for the same sample, keep the patient-prefixed source and skip the generic duplicate.
 - Keep cohort-specific paths in `CONFIG`, not hard-coded in scripts.
 
@@ -56,8 +57,9 @@ splicing_python_modules="anaconda3/2025.06-1"
 
 ## Current Splicing Reminder
 
-- `spl1`, `spl2`, `spl3`, and `spl4` must follow the qsub pattern.
+- `spl1`, `spl2`, `spl3`, optional `spl3.5`, and `spl4` must follow the qsub pattern.
 - `spl1` should submit the STAR junction shard merge as a qsub job.
 - `spl2` should submit the novel junction calling/GTF parsing as a qsub job.
 - `spl3` should submit the SSNIP-style event classification/GTF parsing as a qsub job.
+- `spl3.5` should submit normal-junction filtering as a qsub job.
 - `spl4` should submit neojunction nucleotide/protein sequence reconstruction as a qsub job.

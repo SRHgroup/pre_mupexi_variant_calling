@@ -18,7 +18,9 @@ Usage:
   $0 splicing spl1 [PATIENT] [--root STAR_DIR] [-f] [--dry-run]
   $0 splicing spl2 [PATIENT] [--root STAR_DIR] [--gtf GTF] [--outdir DIR] [--min-unique-reads N] [--include-noncanonical] [--keep-non-protein-coding] [-f] [--dry-run]
   $0 splicing spl3 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
-  $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
+  $0 splicing spl3.5 [PATIENT] [--root SPLICING_DIR] [--normal-ref TSV] [--outdir DIR] [--max-normal-prevalence X] [--normal-total-samples N] [--max-normal-sample-count N] [--ignore-strand] [-f] [--dry-run]
+  $0 splicing build-normal-ref --snaptron-dir DIR [--out TSV.GZ] [--coordinate-mode star-intron|boundary] [--total-samples N] [--min-sample-count N] [--min-total-reads N] [--min-prevalence X] [--canonical-only] [--drop-unknown-strand] [-f] [--dry-run]
+  $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--input-suffix SUFFIX] [--include-noncanonical] [-f] [--dry-run]
   $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--run-splicing] [--splicing-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--splicing SPL4_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 cleanup [PATIENT] [--execute] [--threads N] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
@@ -52,7 +54,10 @@ Examples:
   $0 splicing spl2 Pat21 --gtf /path/to/gencode.annotation.gtf.gz --outdir /path/to/splicing --min-unique-reads 10
   $0 splicing spl3 Pat21
   $0 splicing spl3 Pat21 --root /path/to/splicing --gtf /path/to/gencode.annotation.gtf.gz
+  $0 splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.tsv.gz
+  $0 splicing spl3.5 Pat21 --normal-ref /path/to/normal_junctions.tsv.gz --max-normal-prevalence 0.01
   $0 splicing spl4 Pat21
+  $0 splicing spl4 Pat21 --input-suffix .spl3.5.cancer_unique.tsv
   $0 splicing spl4 Pat21 --root /path/to/splicing --gtf /path/to/gencode.annotation.gtf.gz --fasta /path/to/genome.fa.gz
   $0 mupexi 01-CH-L
   $0 mupexi 01-CH-L --run-fusions
@@ -318,30 +323,100 @@ run_splicing_spl3() {
   fi
 }
 
+run_splicing_spl3_5() {
+  local sample="${1:-}"
+  local splicing_root="${2:-}"
+  local normal_ref="${3:-}"
+  local outdir="${4:-}"
+  local max_normal_prevalence="${5:-}"
+  local normal_total_samples="${6:-}"
+  local max_normal_sample_count="${7:-}"
+  local ignore_strand="${8:-0}"
+  local dry_run="${9:-0}"
+  local splicing_root_arg=""
+  local normal_ref_arg=""
+  local outdir_arg=""
+  local max_normal_prevalence_arg=""
+  local normal_total_samples_arg=""
+  local max_normal_sample_count_arg=""
+  local ignore_strand_arg=""
+  local dry_run_arg=""
+  if [ -n "$splicing_root" ]; then splicing_root_arg="SPLICING_ROOT=$splicing_root"; fi
+  if [ -n "$normal_ref" ]; then normal_ref_arg="NORMAL_REF=$normal_ref"; fi
+  if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
+  if [ -n "$max_normal_prevalence" ]; then max_normal_prevalence_arg="MAX_NORMAL_PREVALENCE=$max_normal_prevalence"; fi
+  if [ -n "$normal_total_samples" ]; then normal_total_samples_arg="NORMAL_TOTAL_SAMPLES=$normal_total_samples"; fi
+  if [ -n "$max_normal_sample_count" ]; then max_normal_sample_count_arg="MAX_NORMAL_SAMPLE_COUNT=$max_normal_sample_count"; fi
+  if [ "$ignore_strand" = "1" ]; then ignore_strand_arg="IGNORE_STRAND=1"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  if [ -n "$sample" ]; then
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl3_5 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $normal_ref_arg $outdir_arg $max_normal_prevalence_arg $normal_total_samples_arg $max_normal_sample_count_arg $ignore_strand_arg $dry_run_arg $force_arg
+  else
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl3_5 CONFIG="$CONFIG" $splicing_root_arg $normal_ref_arg $outdir_arg $max_normal_prevalence_arg $normal_total_samples_arg $max_normal_sample_count_arg $ignore_strand_arg $dry_run_arg $force_arg
+  fi
+}
+
+run_splicing_build_normal_ref() {
+  local snaptron_dir="${1:-}"
+  local out="${2:-}"
+  local coordinate_mode="${3:-}"
+  local total_samples="${4:-}"
+  local min_sample_count="${5:-}"
+  local min_total_reads="${6:-}"
+  local min_prevalence="${7:-}"
+  local canonical_only="${8:-0}"
+  local drop_unknown_strand="${9:-0}"
+  local dry_run="${10:-0}"
+  local snaptron_dir_arg=""
+  local out_arg=""
+  local coordinate_mode_arg=""
+  local total_samples_arg=""
+  local min_sample_count_arg=""
+  local min_total_reads_arg=""
+  local min_prevalence_arg=""
+  local canonical_only_arg=""
+  local drop_unknown_strand_arg=""
+  local dry_run_arg=""
+  if [ -n "$snaptron_dir" ]; then snaptron_dir_arg="SNAPTRON_DIR=$snaptron_dir"; fi
+  if [ -n "$out" ]; then out_arg="OUT=$out"; fi
+  if [ -n "$coordinate_mode" ]; then coordinate_mode_arg="COORDINATE_MODE=$coordinate_mode"; fi
+  if [ -n "$total_samples" ]; then total_samples_arg="TOTAL_SAMPLES=$total_samples"; fi
+  if [ -n "$min_sample_count" ]; then min_sample_count_arg="MIN_SAMPLE_COUNT=$min_sample_count"; fi
+  if [ -n "$min_total_reads" ]; then min_total_reads_arg="MIN_TOTAL_READS=$min_total_reads"; fi
+  if [ -n "$min_prevalence" ]; then min_prevalence_arg="MIN_PREVALENCE=$min_prevalence"; fi
+  if [ "$canonical_only" = "1" ]; then canonical_only_arg="CANONICAL_ONLY=1"; fi
+  if [ "$drop_unknown_strand" = "1" ]; then drop_unknown_strand_arg="DROP_UNKNOWN_STRAND=1"; fi
+  if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
+  PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_build_normal_ref CONFIG="$CONFIG" $snaptron_dir_arg $out_arg $coordinate_mode_arg $total_samples_arg $min_sample_count_arg $min_total_reads_arg $min_prevalence_arg $canonical_only_arg $drop_unknown_strand_arg $dry_run_arg $force_arg
+}
+
 run_splicing_spl4() {
   local sample="${1:-}"
   local splicing_root="${2:-}"
   local gtf="${3:-}"
   local fasta="${4:-}"
   local outdir="${5:-}"
-  local dry_run="${6:-0}"
-  local include_noncanonical="${7:-0}"
+  local input_suffix="${6:-}"
+  local dry_run="${7:-0}"
+  local include_noncanonical="${8:-0}"
   local splicing_root_arg=""
   local gtf_arg=""
   local fasta_arg=""
   local outdir_arg=""
+  local input_suffix_arg=""
   local dry_run_arg=""
   local include_noncanonical_arg=""
   if [ -n "$splicing_root" ]; then splicing_root_arg="SPLICING_ROOT=$splicing_root"; fi
   if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
   if [ -n "$fasta" ]; then fasta_arg="FASTA=$fasta"; fi
   if [ -n "$outdir" ]; then outdir_arg="SPLICING_OUTDIR=$outdir"; fi
+  if [ -n "$input_suffix" ]; then input_suffix_arg="SPLICING_INPUT_SUFFIX=$input_suffix"; fi
   if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
   if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $input_suffix_arg $dry_run_arg $include_noncanonical_arg $force_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $dry_run_arg $include_noncanonical_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $input_suffix_arg $dry_run_arg $include_noncanonical_arg $force_arg
   fi
 }
 
@@ -967,12 +1042,70 @@ case "$cmd" in
         done
         run_splicing_spl3 "$sample" "$splicing_root" "$gtf" "$outdir" "$dry_run" "$include_noncanonical"
         ;;
+      spl3.5|spl35|filter-normal)
+        sample=""
+        splicing_root=""
+        normal_ref=""
+        outdir=""
+        max_normal_prevalence=""
+        normal_total_samples=""
+        max_normal_sample_count=""
+        ignore_strand="0"
+        dry_run="0"
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --root) splicing_root="${2:-}"; shift 2 ;;
+            --normal-ref) normal_ref="${2:-}"; shift 2 ;;
+            --outdir) outdir="${2:-}"; shift 2 ;;
+            --max-normal-prevalence) max_normal_prevalence="${2:-}"; shift 2 ;;
+            --normal-total-samples) normal_total_samples="${2:-}"; shift 2 ;;
+            --max-normal-sample-count) max_normal_sample_count="${2:-}"; shift 2 ;;
+            --ignore-strand) ignore_strand="1"; shift ;;
+            --dry-run) dry_run="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_spl3_5 "$sample" "$splicing_root" "$normal_ref" "$outdir" "$max_normal_prevalence" "$normal_total_samples" "$max_normal_sample_count" "$ignore_strand" "$dry_run"
+        ;;
+      build-normal-ref|snaptron-normal-ref|build-snaptron-normal-ref)
+        snaptron_dir=""
+        out=""
+        coordinate_mode=""
+        total_samples=""
+        min_sample_count=""
+        min_total_reads=""
+        min_prevalence=""
+        canonical_only="0"
+        drop_unknown_strand="0"
+        dry_run="0"
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --snaptron-dir) snaptron_dir="${2:-}"; shift 2 ;;
+            --out) out="${2:-}"; shift 2 ;;
+            --coordinate-mode) coordinate_mode="${2:-}"; shift 2 ;;
+            --total-samples) total_samples="${2:-}"; shift 2 ;;
+            --min-sample-count) min_sample_count="${2:-}"; shift 2 ;;
+            --min-total-reads) min_total_reads="${2:-}"; shift 2 ;;
+            --min-prevalence) min_prevalence="${2:-}"; shift 2 ;;
+            --canonical-only) canonical_only="1"; shift ;;
+            --drop-unknown-strand) drop_unknown_strand="1"; shift ;;
+            --dry-run) dry_run="1"; shift ;;
+            *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_splicing_build_normal_ref "$snaptron_dir" "$out" "$coordinate_mode" "$total_samples" "$min_sample_count" "$min_total_reads" "$min_prevalence" "$canonical_only" "$drop_unknown_strand" "$dry_run"
+        ;;
       spl4|build-sequences)
         sample=""
         splicing_root=""
         gtf=""
         fasta=""
         outdir=""
+        input_suffix=""
         dry_run="0"
         include_noncanonical="0"
         if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
@@ -985,12 +1118,13 @@ case "$cmd" in
             --gtf) gtf="${2:-}"; shift 2 ;;
             --fasta) fasta="${2:-}"; shift 2 ;;
             --outdir) outdir="${2:-}"; shift 2 ;;
+            --input-suffix) input_suffix="${2:-}"; shift 2 ;;
             --dry-run) dry_run="1"; shift ;;
             --include-noncanonical) include_noncanonical="1"; shift ;;
             *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
           esac
         done
-        run_splicing_spl4 "$sample" "$splicing_root" "$gtf" "$fasta" "$outdir" "$dry_run" "$include_noncanonical"
+        run_splicing_spl4 "$sample" "$splicing_root" "$gtf" "$fasta" "$outdir" "$input_suffix" "$dry_run" "$include_noncanonical"
         ;;
       *)
         echo "Unknown splicing task: ${task:-<missing>}" >&2

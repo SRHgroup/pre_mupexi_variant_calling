@@ -147,8 +147,14 @@ run_splicing_spl2: check-config
 run_splicing_spl3: check-config
 	cd splicing && bash run_spl3_classify_events.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
 
+run_splicing_spl3_5: check-config
+	cd splicing && bash run_spl3_5_filter_normal_junctions.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(NORMAL_REF),--normal-ref "$(NORMAL_REF)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(if $(MAX_NORMAL_PREVALENCE),--max-normal-prevalence "$(MAX_NORMAL_PREVALENCE)",) $(if $(NORMAL_TOTAL_SAMPLES),--normal-total-samples "$(NORMAL_TOTAL_SAMPLES)",) $(if $(MAX_NORMAL_SAMPLE_COUNT),--max-normal-sample-count "$(MAX_NORMAL_SAMPLE_COUNT)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(IGNORE_STRAND)),--ignore-strand,)
+
+run_splicing_build_normal_ref:
+	cd splicing && bash run_build_snaptron_normal_reference.sh $(if $(CONFIG),-c "$(CONFIG)",) --snaptron-dir "$(SNAPTRON_DIR)" $(if $(OUT),--out "$(OUT)",) $(if $(COORDINATE_MODE),--coordinate-mode "$(COORDINATE_MODE)",) $(if $(TOTAL_SAMPLES),--total-samples "$(TOTAL_SAMPLES)",) $(if $(MIN_SAMPLE_COUNT),--min-sample-count "$(MIN_SAMPLE_COUNT)",) $(if $(MIN_TOTAL_READS),--min-total-reads "$(MIN_TOTAL_READS)",) $(if $(MIN_PREVALENCE),--min-prevalence "$(MIN_PREVALENCE)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(CANONICAL_ONLY)),--canonical-only,) $(if $(filter 1 true yes,$(DROP_UNKNOWN_STRAND)),--drop-unknown-strand,)
+
 run_splicing_spl4: check-config
-	cd splicing && bash run_spl4_build_sequences.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(FASTA),--fasta "$(FASTA)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
+	cd splicing && bash run_spl4_build_sequences.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(FASTA),--fasta "$(FASTA)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(if $(SPLICING_INPUT_SUFFIX),--input-suffix "$(SPLICING_INPUT_SUFFIX)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
 
 run_splicing_merge_star_sj: run_splicing_spl1
 

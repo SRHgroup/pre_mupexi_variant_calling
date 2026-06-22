@@ -22,10 +22,27 @@ dna_bam_suffix="md.bam"
 # Use this when SJ.out.tab and Log.* outputs live under rnadnavar reports/star, e.g.
 #   /path/to/project/data/rna/rnadnavar/reports/star/Pat101/RNA_TUMOUR/RNA_TUMOUR.0001.SJ.out.tab
 # splicing_sjdir="/path/to/project/data/rna/rnadnavar/reports/star"
-# Optional splicing output root for spl2/spl3/spl4 TSVs, FASTA files, and splicing logs.
-# If unset and datadir is defined, spl2, spl3, and spl4 default to ${datadir}/splicing.
+# Optional splicing output root for spl2/spl3/spl3.5/spl4 TSVs, FASTA files, and splicing logs.
+# If unset and datadir is defined, spl2, spl3, spl3.5, and spl4 default to ${datadir}/splicing.
 # splicing_outdir="/path/to/project/data/rna/rnadnavar/splicing"
-# spl2/spl3/spl4 write patient-scoped outputs under ${splicing_outdir}/${patient}_RNA_${tumor_tag}.
+# spl2/spl3/spl3.5/spl4 write patient-scoped outputs under ${splicing_outdir}/${patient}_RNA_${tumor_tag}.
+# Optional normal splice-junction reference for spl3.5 filtering. This should be
+# a compact TSV/TSV.GZ already normalized to the same genome build and coordinate
+# convention as spl3. Required columns: chrom, left_boundary/start,
+# right_boundary/end, and optionally strand. Useful optional columns:
+# normal_sample_count/gtex_sample_count/sample_count, normal_total_reads,
+# normal_prevalence/gtex_prevalence, source.
+# splicing_normal_junction_ref="/path/to/normal_splice_junction_reference.tsv.gz"
+# splicing_normal_max_prevalence="0.01"
+# splicing_normal_total_samples="9166"
+# If spl3.5 is used, make spl4 read the filtered cancer-unique file:
+# splicing_spl4_input_suffix=".spl3.5.cancer_unique.tsv"
+# Optional one-time Snaptron normal-reference build resources.
+# splicing_reference_modules="tools anaconda3/2025.06-1"
+# splicing_reference_qsub_nodes="1"
+# splicing_reference_qsub_ppn="2"
+# splicing_reference_qsub_mem="32gb"
+# splicing_reference_qsub_walltime="24:00:00"
 
 # Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"

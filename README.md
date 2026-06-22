@@ -4,7 +4,7 @@ This repository contains three coordinated modules:
 
 - RNA-editing post-processing: `rna1..rna7`
 - Germline calling/filtering: `gdna1..gdna4`
-- Splicing neoantigen pre-processing: `spl1..spl4`
+- Splicing neoantigen pre-processing: `spl1..spl4`, with optional `spl3.5` normal filtering
 
 ## Layout
 
@@ -39,13 +39,14 @@ Splicing:
 1. `spl1` # merge split STAR `*.SJ.out.tab` shard files into one sample-level `SJ.out.tab`.
 2. `spl2` # call novel splice junctions by comparing merged STAR junctions to the GTF annotation.
 3. `spl3` # classify novel junctions into SSNIP-style event classes: `A3+`, `A3-`, `A5+`, `A5-`, `ES`, `junction_in_exon`, `junction_in_intron`, or `other`.
-4. `spl4` # reconstruct neojunction nucleotide/protein sequences and write an Arriba-like TSV plus NT/AA FASTA files for MuPeXI2.
+4. `spl3.5` # optional normal-junction filtering against a compact GTEx/Snaptron/in-house normal reference before sequence reconstruction.
+5. `spl4` # reconstruct neojunction nucleotide/protein sequences and write an Arriba-like TSV plus NT/AA FASTA files for MuPeXI2.
 
 ## Dependency model
 
 - `rna1..rna5` are independent from `gdna1..gdna4`.
 - `rna6`, `rna7.0`, and `rna7` require both branches to be done.
-- `spl1 -> spl2 -> spl3 -> spl4` is an independent RNA splicing branch. `spl4` can be used by MuPeXI2 with `--run-splicing` or `--splicing-only`.
+- `spl1 -> spl2 -> spl3 -> spl4` is an independent RNA splicing branch. Optional normal filtering runs as `spl1 -> spl2 -> spl3 -> spl3.5 -> spl4`. `spl4` can be used by MuPeXI2 with `--run-splicing` or `--splicing-only`.
 - `run_all_end_to_end.sh` submits exactly that topology:
   - chain A: `gdna1 -> gdna2 -> gdna3 -> gdna4`
   - chain B: `rna1 -> rna2 -> rna3 -> rna4 -> rna5`
@@ -80,6 +81,7 @@ Edit `CONFIG` and set at minimum:
 - `source_rna_mutect2_vcf_extension`, `source_dna_mutect2_vcf_extension` if your upstream rnadnavar VCF names differ from defaults
   - `{patient}` placeholder is supported in these suffixes
 - For splicing: `GTF`, `FASTA`, and either `splicing_sjdir` or a STAR output root that contains `*.SJ.out.tab` files. `splicing_outdir` is optional; if unset, splicing outputs default to `${datadir}/splicing`.
+- Optional `spl3.5` normal filtering needs `splicing_normal_junction_ref`, a compact TSV/TSV.GZ with normal splice junction coordinates in the same genome build and coordinate convention as `spl3`.
 
 Labels:
 - default: `DNA_TUMOR`, `RNA_TUMOR`
@@ -109,6 +111,40 @@ Splicing pipeline:
 ./run_pipeline.sh splicing spl3 Pat21
 ./run_pipeline.sh splicing spl4 Pat21
 ```
+
+Optional normal filtering before sequence reconstruction:
+
+```bash
+./run_pipeline.sh splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.tsv.gz --canonical-only
+./run_pipeline.sh splicing spl3.5 Pat21 --normal-ref /path/to/normal_junctions.tsv.gz --max-normal-prevalence 0.01
+./run_pipeline.sh splicing spl4 Pat21 --input-suffix .spl3.5.cancer_unique.tsv
+```
+
+`build-normal-ref` expects a Snaptron folder containing:
+
+```text
+junctions.bgz
+samples.tsv
+samples.fields.tsv
+```
+
+It writes a compact normal reference with `chrom`, `left_boundary`, `right_boundary`, `strand`, normal sample counts, read counts, and prevalence. By default it treats Snaptron `start/end` as STAR-style intron coordinates and writes `left_boundary = start - 1`, `right_boundary = end` to match this pipeline's `spl2/spl3` coordinates.
+
+Snaptron GTEx files may be GRCh37. The compact reference must be in the same genome build as `spl3` before exact filtering; if your Snaptron input is GRCh37 and your cohort is GRCh38, run liftover before using the reference in `spl3.5`.
+
+The compact normal reference for `spl3.5` should contain at least:
+
+```text
+chrom	left_boundary	right_boundary	strand
+```
+
+It may also contain:
+
+```text
+normal_sample_count	normal_total_reads	normal_prevalence	source
+```
+
+Rows matching the normal reference at or above `--max-normal-prevalence` are written to `*.spl3.5.normal_present.tsv`; retained rows are written to `*.spl3.5.cancer_unique.tsv`.
 
 Splicing outputs are written under `${splicing_outdir}/${patient}_RNA_${tumor_tag}` or `${datadir}/splicing/${patient}_RNA_${tumor_tag}`. The main MuPeXI2 input is:
 
