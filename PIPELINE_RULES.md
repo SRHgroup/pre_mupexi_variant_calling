@@ -46,6 +46,7 @@ splicing_python_modules="anaconda3/2025.06-1"
 - DNA/RNA labels should be composed from the same tag, e.g. `DNA_${tumor_tag}` and `RNA_${tumor_tag}`.
 - Patient-level spl2/spl3/spl3.5/spl4 files should live under `${splicing_outdir}/${patient_id}_RNA_${tumor_tag}`, defaulting `tumor_tag` to `TUMOR`.
 - Optional normal-junction filtering should run as `spl3.5`, consuming a compact normal reference from `splicing_normal_junction_ref` or `--normal-ref` and writing a filtered cancer-unique TSV before spl4.
+- Normal-reference build and liftover jobs should use the splicing reference qsub wrappers rather than running multi-GB conversions on the login node.
 - If both generic and patient-prefixed STAR/splicing files exist for the same sample, keep the patient-prefixed source and skip the generic duplicate.
 - Keep cohort-specific paths in `CONFIG`, not hard-coded in scripts.
 

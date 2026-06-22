@@ -116,6 +116,7 @@ Optional normal filtering before sequence reconstruction:
 
 ```bash
 ./run_pipeline.sh splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.tsv.gz --canonical-only
+./run_pipeline.sh splicing liftover-normal-ref --input /path/to/normal_splice_junction_reference.GRCh37.tsv.gz --out /path/to/normal_splice_junction_reference.GRCh38.tsv.gz --chain /path/to/hg19ToHg38.over.chain.gz
 ./run_pipeline.sh splicing spl3.5 Pat21 --normal-ref /path/to/normal_junctions.tsv.gz --max-normal-prevalence 0.01
 ./run_pipeline.sh splicing spl4 Pat21 --input-suffix .spl3.5.cancer_unique.tsv
 ```
@@ -130,7 +131,7 @@ samples.fields.tsv
 
 It writes a compact normal reference with `chrom`, `left_boundary`, `right_boundary`, `strand`, normal sample counts, read counts, and prevalence. By default it treats Snaptron `start/end` as STAR-style intron coordinates and writes `left_boundary = start - 1`, `right_boundary = end` to match this pipeline's `spl2/spl3` coordinates.
 
-Snaptron GTEx files may be GRCh37. The compact reference must be in the same genome build as `spl3` before exact filtering; if your Snaptron input is GRCh37 and your cohort is GRCh38, run liftover before using the reference in `spl3.5`.
+Snaptron GTEx files may be GRCh37. The compact reference must be in the same genome build as `spl3` before exact filtering; if your Snaptron input is GRCh37 and your cohort is GRCh38, run `liftover-normal-ref` before using the reference in `spl3.5`. The liftover step maps the two splice-boundary positions independently as 1-bp BED intervals and writes unmapped/summary audit files.
 
 The compact normal reference for `spl3.5` should contain at least:
 

@@ -33,6 +33,11 @@ dna_bam_suffix="md.bam"
 # normal_sample_count/gtex_sample_count/sample_count, normal_total_reads,
 # normal_prevalence/gtex_prevalence, source.
 # splicing_normal_junction_ref="/path/to/normal_splice_junction_reference.tsv.gz"
+# Optional names for build-specific normal references before/after liftover.
+# splicing_normal_junction_ref_grch37="/path/to/normal_splice_junction_reference.GRCh37.tsv.gz"
+# splicing_normal_junction_ref_grch38="/path/to/normal_splice_junction_reference.GRCh38.tsv.gz"
+# splicing_liftover_chain="/path/to/hg19ToHg38.over.chain.gz"
+# splicing_liftover_bin="liftOver"
 # splicing_normal_max_prevalence="0.01"
 # splicing_normal_total_samples="9166"
 # If spl3.5 is used, make spl4 read the filtered cancer-unique file:
@@ -43,6 +48,11 @@ dna_bam_suffix="md.bam"
 # splicing_reference_qsub_ppn="2"
 # splicing_reference_qsub_mem="32gb"
 # splicing_reference_qsub_walltime="24:00:00"
+# splicing_liftover_modules="tools anaconda3/2025.06-1"
+# splicing_liftover_qsub_nodes="1"
+# splicing_liftover_qsub_ppn="2"
+# splicing_liftover_qsub_mem="32gb"
+# splicing_liftover_qsub_walltime="24:00:00"
 
 # Helper scripts directory (inside this repo).
 rnae_scripts="/path/to/this/repo/post_rnadnavar_mupexi_prep/rnae_script"

@@ -153,6 +153,9 @@ run_splicing_spl3_5: check-config
 run_splicing_build_normal_ref:
 	cd splicing && bash run_build_snaptron_normal_reference.sh $(if $(CONFIG),-c "$(CONFIG)",) --snaptron-dir "$(SNAPTRON_DIR)" $(if $(OUT),--out "$(OUT)",) $(if $(COORDINATE_MODE),--coordinate-mode "$(COORDINATE_MODE)",) $(if $(TOTAL_SAMPLES),--total-samples "$(TOTAL_SAMPLES)",) $(if $(MIN_SAMPLE_COUNT),--min-sample-count "$(MIN_SAMPLE_COUNT)",) $(if $(MIN_TOTAL_READS),--min-total-reads "$(MIN_TOTAL_READS)",) $(if $(MIN_PREVALENCE),--min-prevalence "$(MIN_PREVALENCE)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(CANONICAL_ONLY)),--canonical-only,) $(if $(filter 1 true yes,$(DROP_UNKNOWN_STRAND)),--drop-unknown-strand,)
 
+run_splicing_liftover_normal_ref:
+	cd splicing && bash run_liftover_normal_reference.sh $(if $(CONFIG),-c "$(CONFIG)",) $(if $(INPUT),--input "$(INPUT)",) $(if $(OUT),--out "$(OUT)",) $(if $(CHAIN),--chain "$(CHAIN)",) $(if $(LIFTOVER_BIN),--liftover-bin "$(LIFTOVER_BIN)",) $(if $(FROM_BUILD),--from-build "$(FROM_BUILD)",) $(if $(TO_BUILD),--to-build "$(TO_BUILD)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(KEEP_CROSS_CHROM)),--keep-cross-chrom,) $(if $(filter 1 true yes,$(ALLOW_INVERTED)),--allow-inverted,)
+
 run_splicing_spl4: check-config
 	cd splicing && bash run_spl4_build_sequences.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(FASTA),--fasta "$(FASTA)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(if $(SPLICING_INPUT_SUFFIX),--input-suffix "$(SPLICING_INPUT_SUFFIX)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
 
