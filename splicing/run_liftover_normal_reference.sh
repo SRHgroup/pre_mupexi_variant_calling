@@ -4,11 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash splicing/run_liftover_normal_reference.sh [-c CONFIG] --input REF37.tsv.gz --out REF38.tsv.gz --chain hg19ToHg38.over.chain.gz [--liftover-bin liftOver] [--from-build GRCh37] [--to-build GRCh38] [-f] [--dry-run]
+  bash splicing/run_liftover_normal_reference.sh [-c CONFIG] --input REF37.tsv.gz --out REF38.tsv.gz --chain hg19ToHg38.over.chain.gz [--engine python|ucsc] [--liftover-bin liftOver] [--from-build GRCh37] [--to-build GRCh38] [-f] [--dry-run]
 
 Behavior:
 - Submits one PBS/qsub liftover job
-- Lifts the two 1-bp splice-boundary positions in a compact normal reference
+- Lifts the two 1-bp splice-boundary positions in a compact normal reference.
+- The default Python engine parses the UCSC chain file directly and does not need a liftOver binary.
 - Writes a GRCh38-compatible compact normal reference plus unmapped/summary audit files
 USAGE
 }
@@ -17,6 +18,7 @@ config=""
 input_ref=""
 out_ref=""
 chain_file=""
+liftover_engine=""
 liftover_bin=""
 from_build="GRCh37"
 to_build="GRCh38"
@@ -31,6 +33,7 @@ while [ $# -gt 0 ]; do
     --input) input_ref="${2:-}"; shift 2 ;;
     --out) out_ref="${2:-}"; shift 2 ;;
     --chain) chain_file="${2:-}"; shift 2 ;;
+    --engine) liftover_engine="${2:-}"; shift 2 ;;
     --liftover-bin) liftover_bin="${2:-}"; shift 2 ;;
     --from-build) from_build="${2:-}"; shift 2 ;;
     --to-build) to_build="${2:-}"; shift 2 ;;
@@ -61,6 +64,7 @@ fi
 [ -n "$input_ref" ] || input_ref="${splicing_normal_junction_ref_grch37:-}"
 [ -n "$out_ref" ] || out_ref="${splicing_normal_junction_ref_grch38:-}"
 [ -n "$chain_file" ] || chain_file="${splicing_liftover_chain:-}"
+[ -n "$liftover_engine" ] || liftover_engine="${splicing_liftover_engine:-python}"
 [ -n "$liftover_bin" ] || liftover_bin="${splicing_liftover_bin:-liftOver}"
 
 [ -n "$input_ref" ] || { echo "ERROR: --input is required unless CONFIG defines splicing_normal_junction_ref_grch37" >&2; exit 1; }
@@ -148,8 +152,8 @@ for module_name in \${splicing_liftover_modules:-\${splicing_reference_modules:-
 done
 splicing_python="\${splicing_python:-python3}"
 printf '[liftover-normal-ref] Python: %s\\n' "\$(command -v "\$splicing_python" || printf '%s' "\$splicing_python")"
-printf '[liftover-normal-ref] liftOver: %s\\n' $(printf '%q' "$liftover_bin")
-cmd=("\$splicing_python" $(printf '%q' "$script_path") --input $(printf '%q' "$input_ref") --out $(printf '%q' "$out_ref") --chain $(printf '%q' "$chain_file") --liftover-bin $(printf '%q' "$liftover_bin") --from-build $(printf '%q' "$from_build") --to-build $(printf '%q' "$to_build"))
+printf '[liftover-normal-ref] engine: %s\\n' $(printf '%q' "$liftover_engine")
+cmd=("\$splicing_python" $(printf '%q' "$script_path") --input $(printf '%q' "$input_ref") --out $(printf '%q' "$out_ref") --chain $(printf '%q' "$chain_file") --engine $(printf '%q' "$liftover_engine") --liftover-bin $(printf '%q' "$liftover_bin") --from-build $(printf '%q' "$from_build") --to-build $(printf '%q' "$to_build"))
 if [ "$keep_cross_chrom" -eq 1 ]; then
   cmd+=(--keep-cross-chrom)
 fi

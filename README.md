@@ -131,7 +131,7 @@ samples.fields.tsv
 
 It writes a compact normal reference with `chrom`, `left_boundary`, `right_boundary`, `strand`, normal sample counts, read counts, and prevalence. By default it treats Snaptron `start/end` as STAR-style intron coordinates and writes `left_boundary = start - 1`, `right_boundary = end` to match this pipeline's `spl2/spl3` coordinates.
 
-Snaptron GTEx files may be GRCh37. The compact reference must be in the same genome build as `spl3` before exact filtering; if your Snaptron input is GRCh37 and your cohort is GRCh38, run `liftover-normal-ref` before using the reference in `spl3.5`. The liftover step maps the two splice-boundary positions independently as 1-bp BED intervals and writes unmapped/summary audit files.
+Snaptron GTEx files may be GRCh37. The compact reference must be in the same genome build as `spl3` before exact filtering; if your Snaptron input is GRCh37 and your cohort is GRCh38, run `liftover-normal-ref` before using the reference in `spl3.5`. The default liftover engine is pure Python and reads the UCSC chain file directly, so it does not require a system `liftOver` binary. It maps the two splice-boundary positions independently and writes unmapped/summary audit files.
 
 The compact normal reference for `spl3.5` should contain at least:
 

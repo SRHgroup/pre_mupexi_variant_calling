@@ -8,8 +8,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from bisect import bisect_left
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence, Set, Tuple
 
 
 EXTRA_FIELDS = [
@@ -32,7 +33,13 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--input", required=True, help="Input compact normal reference TSV/TSV.GZ")
     ap.add_argument("--out", required=True, help="Lifted output TSV/TSV.GZ")
     ap.add_argument("--chain", required=True, help="UCSC chain file, e.g. hg19ToHg38.over.chain.gz")
-    ap.add_argument("--liftover-bin", default="liftOver", help="UCSC liftOver executable")
+    ap.add_argument(
+        "--engine",
+        choices=("python", "ucsc"),
+        default="python",
+        help="Liftover engine. python parses the chain file directly; ucsc shells out to UCSC liftOver.",
+    )
+    ap.add_argument("--liftover-bin", default="liftOver", help="UCSC liftOver executable, only used with --engine ucsc")
     ap.add_argument("--from-build", default="GRCh37", help="Label written to liftover_from_build")
     ap.add_argument("--to-build", default="GRCh38", help="Label written to liftover_to_build")
     ap.add_argument(
@@ -51,7 +58,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def open_input(path: Path):
-    if path.suffix == ".gz":
+    if path.suffix in {".gz", ".bgz"}:
         return gzip.open(path, "rt")
     return path.open("r", encoding="utf-8", newline="")
 
@@ -97,6 +104,12 @@ def point_to_bed(chrom: str, pos_1based: int, name: str) -> str:
     if pos_1based < 1:
         raise SystemExit(f"ERROR: cannot liftover non-positive 1-based position {pos_1based} for {name}")
     return f"{chrom}\t{pos_1based - 1}\t{pos_1based}\t{name}\n"
+
+
+def open_chain(path: Path):
+    if path.suffix == ".gz":
+        return gzip.open(path, "rt")
+    return path.open("r", encoding="utf-8", newline="")
 
 
 def run_liftover(liftover_bin: str, bed_in: Path, chain: Path, bed_out: Path, unmapped_bed: Path) -> None:
@@ -151,6 +164,156 @@ def read_unmapped_names(path: Path) -> Dict[int, set]:
     return names
 
 
+def collect_boundary_positions(input_path: Path) -> Tuple[List[str], int, Dict[str, List[Tuple[int, int, str]]]]:
+    positions: Dict[str, List[Tuple[int, int, str]]] = {}
+    with open_input(input_path) as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        if not reader.fieldnames:
+            raise SystemExit(f"ERROR: input reference has no header: {input_path}")
+        fieldnames = reader.fieldnames
+        input_rows = 0
+        for idx, row in enumerate(reader):
+            chrom = chrom_value(row)
+            left, right = boundary_values(row)
+            if left < 1 or right < 1:
+                raise SystemExit(f"ERROR: cannot liftover non-positive boundary in row {idx + 2}")
+            positions.setdefault(chrom, []).append((left - 1, idx, "L"))
+            positions.setdefault(chrom, []).append((right - 1, idx, "R"))
+            input_rows += 1
+    return fieldnames, input_rows, positions
+
+
+def map_positions_in_block(
+    entries: List[Tuple[int, int, str]],
+    coords: List[int],
+    lifted: Dict[int, Dict[str, Tuple[str, int, int]]],
+    source_start0: int,
+    source_end0: int,
+    target_chrom: str,
+    target_start0: int,
+    source_strand: str,
+) -> int:
+    mapped = 0
+    lo = bisect_left(coords, source_start0)
+    hi = bisect_left(coords, source_end0)
+    for source_pos0, row_index, side in entries[lo:hi]:
+        lifted_row = lifted.setdefault(row_index, {})
+        if side in lifted_row:
+            continue
+        if source_strand == "+":
+            target_pos0 = target_start0 + (source_pos0 - source_start0)
+        else:
+            target_pos0 = target_start0 + ((source_end0 - 1) - source_pos0)
+        lifted_row[side] = (target_chrom, target_pos0, target_pos0 + 1)
+        mapped += 1
+    return mapped
+
+
+def lift_positions_with_python(
+    input_path: Path, chain_path: Path
+) -> Tuple[List[str], int, Dict[int, Dict[str, Tuple[str, int, int]]], Dict[int, Set[str]], int]:
+    fieldnames, input_rows, positions = collect_boundary_positions(input_path)
+    for chrom in positions:
+        positions[chrom].sort(key=lambda item: item[0])
+    coords_by_chrom = {chrom: [entry[0] for entry in entries] for chrom, entries in positions.items()}
+    lifted: Dict[int, Dict[str, Tuple[str, int, int]]] = {}
+    mapped_boundaries = 0
+
+    active = None
+    t_cursor = 0
+    q_cursor = 0
+    with open_chain(chain_path) as fh:
+        for raw_line in fh:
+            line = raw_line.strip()
+            if not line:
+                active = None
+                continue
+            parts = line.split()
+            if parts[0] == "chain":
+                if len(parts) < 13:
+                    raise SystemExit(f"ERROR: malformed chain header: {line}")
+                t_chrom = parts[2]
+                t_strand = parts[4]
+                t_start = parse_int(parts[5], "chain tStart")
+                q_chrom = parts[7]
+                q_size = parse_int(parts[8], "chain qSize")
+                q_strand = parts[9]
+                q_start = parse_int(parts[10], "chain qStart")
+                if t_strand != "+":
+                    active = None
+                    continue
+                if q_strand not in {"+", "-"}:
+                    active = None
+                    continue
+                active = (t_chrom, q_chrom, q_size, q_strand)
+                t_cursor = t_start
+                q_cursor = q_start
+                continue
+            if active is None:
+                continue
+
+            block = [parse_int(value, "chain block") for value in parts]
+            if len(block) not in {1, 3}:
+                raise SystemExit(f"ERROR: malformed chain block: {line}")
+            size = block[0]
+            t_chrom, q_chrom, q_size, q_strand = active
+            entries = positions.get(q_chrom)
+            coords = coords_by_chrom.get(q_chrom)
+            if entries and coords:
+                if q_strand == "+":
+                    source_start0 = q_cursor
+                    source_end0 = q_cursor + size
+                else:
+                    source_start0 = q_size - (q_cursor + size)
+                    source_end0 = q_size - q_cursor
+                mapped_boundaries += map_positions_in_block(
+                    entries,
+                    coords,
+                    lifted,
+                    source_start0,
+                    source_end0,
+                    t_chrom,
+                    t_cursor,
+                    q_strand,
+                )
+            t_cursor += size
+            q_cursor += size
+            if len(block) == 3:
+                t_cursor += block[1]
+                q_cursor += block[2]
+
+    return fieldnames, input_rows, lifted, {}, mapped_boundaries
+
+
+def lift_positions_with_ucsc(
+    input_path: Path, chain_path: Path, liftover_bin: str, tmpdir_arg: str
+) -> Tuple[List[str], int, Dict[int, Dict[str, Tuple[str, int, int]]], Dict[int, set], int]:
+    with open_input(input_path) as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        if not reader.fieldnames:
+            raise SystemExit(f"ERROR: input reference has no header: {input_path}")
+        fieldnames = reader.fieldnames
+        input_rows = 0
+        with tempfile.TemporaryDirectory(dir=tmpdir_arg or None) as tmp:
+            tmpdir = Path(tmp)
+            bed_in = tmpdir / "normal_reference.boundaries.bed"
+            bed_out = tmpdir / "normal_reference.boundaries.lifted.bed"
+            bed_unmapped = tmpdir / "normal_reference.boundaries.unmapped.bed"
+            with bed_in.open("w", encoding="utf-8", newline="") as bed:
+                for idx, row in enumerate(reader):
+                    chrom = chrom_value(row)
+                    left, right = boundary_values(row)
+                    bed.write(point_to_bed(chrom, left, f"{idx}|L"))
+                    bed.write(point_to_bed(chrom, right, f"{idx}|R"))
+                    input_rows += 1
+
+            run_liftover(liftover_bin, bed_in, chain_path, bed_out, bed_unmapped)
+            lifted = read_lifted_bed(bed_out)
+            unmapped_names = read_unmapped_names(bed_unmapped)
+    mapped_boundaries = sum(len(value) for value in lifted.values())
+    return fieldnames, input_rows, lifted, unmapped_names, mapped_boundaries
+
+
 def append_fields(fieldnames: Sequence[str], extra: Sequence[str]) -> List[str]:
     fields = list(fieldnames)
     for field in extra:
@@ -169,28 +332,13 @@ def lift_reference(args: argparse.Namespace) -> Dict[str, int]:
     if not chain_path.exists():
         raise SystemExit(f"ERROR: chain file does not exist: {chain_path}")
 
-    with open_input(input_path) as fh:
-        reader = csv.DictReader(fh, delimiter="\t")
-        if not reader.fieldnames:
-            raise SystemExit(f"ERROR: input reference has no header: {input_path}")
-        fieldnames = reader.fieldnames
-        input_rows = 0
-        with tempfile.TemporaryDirectory(dir=args.tmpdir or None) as tmp:
-            tmpdir = Path(tmp)
-            bed_in = tmpdir / "normal_reference.boundaries.bed"
-            bed_out = tmpdir / "normal_reference.boundaries.lifted.bed"
-            bed_unmapped = tmpdir / "normal_reference.boundaries.unmapped.bed"
-            with bed_in.open("w", encoding="utf-8", newline="") as bed:
-                for idx, row in enumerate(reader):
-                    chrom = chrom_value(row)
-                    left, right = boundary_values(row)
-                    bed.write(point_to_bed(chrom, left, f"{idx}|L"))
-                    bed.write(point_to_bed(chrom, right, f"{idx}|R"))
-                    input_rows += 1
-
-            run_liftover(args.liftover_bin, bed_in, chain_path, bed_out, bed_unmapped)
-            lifted = read_lifted_bed(bed_out)
-            unmapped_names = read_unmapped_names(bed_unmapped)
+    if args.engine == "ucsc":
+        fieldnames, input_rows, lifted, unmapped_names, mapped_boundaries = lift_positions_with_ucsc(
+            input_path, chain_path, args.liftover_bin, args.tmpdir
+        )
+    else:
+        print(f"[liftover-normal-ref] using pure-Python chain parser: {chain_path}", file=sys.stderr)
+        fieldnames, input_rows, lifted, unmapped_names, mapped_boundaries = lift_positions_with_python(input_path, chain_path)
 
     stats = {
         "input_rows": input_rows,
@@ -199,6 +347,7 @@ def lift_reference(args: argparse.Namespace) -> Dict[str, int]:
         "cross_chrom_rows": 0,
         "inverted_rows": 0,
         "partially_unmapped_rows": 0,
+        "mapped_boundaries": mapped_boundaries,
     }
     out_fields = append_fields(fieldnames, EXTRA_FIELDS)
     unmapped_fields = append_fields(fieldnames, EXTRA_FIELDS + ["liftover_reason"])
@@ -238,7 +387,7 @@ def lift_reference(args: argparse.Namespace) -> Dict[str, int]:
                     else:
                         stats["partially_unmapped_rows"] += 1
                         reason = "one_boundary_unmapped"
-                    if idx not in unmapped_names and not lifted_row:
+                    if args.engine == "ucsc" and idx not in unmapped_names and not lifted_row:
                         reason = "both_boundaries_missing_from_liftover_output"
                     output_row.update({"liftover_status": "unmapped", "liftover_reason": reason})
                     unmapped_writer.writerow(output_row)
@@ -286,6 +435,7 @@ def lift_reference(args: argparse.Namespace) -> Dict[str, int]:
         summary_writer.writerow(["output", str(out_path)])
         summary_writer.writerow(["unmapped_output", str(unmapped_path)])
         summary_writer.writerow(["chain", str(chain_path)])
+        summary_writer.writerow(["engine", args.engine])
         for key, value in stats.items():
             summary_writer.writerow([key, value])
 

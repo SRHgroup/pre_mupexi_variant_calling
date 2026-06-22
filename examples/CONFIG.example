@@ -37,6 +37,9 @@ dna_bam_suffix="md.bam"
 # splicing_normal_junction_ref_grch37="/path/to/normal_splice_junction_reference.GRCh37.tsv.gz"
 # splicing_normal_junction_ref_grch38="/path/to/normal_splice_junction_reference.GRCh38.tsv.gz"
 # splicing_liftover_chain="/path/to/hg19ToHg38.over.chain.gz"
+# Default is pure Python chain parsing, so no UCSC liftOver binary is required.
+# Set splicing_liftover_engine="ucsc" only if you have a compatible UCSC liftOver binary.
+# splicing_liftover_engine="python"
 # splicing_liftover_bin="liftOver"
 # splicing_normal_max_prevalence="0.01"
 # splicing_normal_total_samples="9166"

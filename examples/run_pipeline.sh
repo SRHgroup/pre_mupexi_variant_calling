@@ -20,7 +20,7 @@ Usage:
   $0 splicing spl3 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
   $0 splicing spl3.5 [PATIENT] [--root SPLICING_DIR] [--normal-ref TSV] [--outdir DIR] [--max-normal-prevalence X] [--normal-total-samples N] [--max-normal-sample-count N] [--ignore-strand] [-f] [--dry-run]
   $0 splicing build-normal-ref --snaptron-dir DIR [--out TSV.GZ] [--coordinate-mode star-intron|boundary] [--total-samples N] [--min-sample-count N] [--min-total-reads N] [--min-prevalence X] [--canonical-only] [--drop-unknown-strand] [-f] [--dry-run]
-  $0 splicing liftover-normal-ref --input REF37.tsv.gz --out REF38.tsv.gz --chain hg19ToHg38.over.chain.gz [--liftover-bin liftOver] [-f] [--dry-run]
+  $0 splicing liftover-normal-ref --input REF37.tsv.gz --out REF38.tsv.gz --chain hg19ToHg38.over.chain.gz [--engine python|ucsc] [--liftover-bin liftOver] [-f] [--dry-run]
   $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--input-suffix SUFFIX] [--include-noncanonical] [-f] [--dry-run]
   $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--run-splicing] [--splicing-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--splicing SPL4_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 cleanup [PATIENT] [--execute] [--threads N] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
@@ -396,19 +396,22 @@ run_splicing_liftover_normal_ref() {
   local input="${1:-}"
   local out="${2:-}"
   local chain="${3:-}"
-  local liftover_bin="${4:-}"
-  local dry_run="${5:-0}"
+  local liftover_engine="${4:-}"
+  local liftover_bin="${5:-}"
+  local dry_run="${6:-0}"
   local input_arg=""
   local out_arg=""
   local chain_arg=""
+  local liftover_engine_arg=""
   local liftover_bin_arg=""
   local dry_run_arg=""
   if [ -n "$input" ]; then input_arg="INPUT=$input"; fi
   if [ -n "$out" ]; then out_arg="OUT=$out"; fi
   if [ -n "$chain" ]; then chain_arg="CHAIN=$chain"; fi
+  if [ -n "$liftover_engine" ]; then liftover_engine_arg="LIFTOVER_ENGINE=$liftover_engine"; fi
   if [ -n "$liftover_bin" ]; then liftover_bin_arg="LIFTOVER_BIN=$liftover_bin"; fi
   if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
-  PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_liftover_normal_ref CONFIG="$CONFIG" $input_arg $out_arg $chain_arg $liftover_bin_arg $dry_run_arg $force_arg
+  PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_liftover_normal_ref CONFIG="$CONFIG" $input_arg $out_arg $chain_arg $liftover_engine_arg $liftover_bin_arg $dry_run_arg $force_arg
 }
 
 run_splicing_spl4() {
@@ -1124,6 +1127,7 @@ case "$cmd" in
         input=""
         out=""
         chain=""
+        liftover_engine=""
         liftover_bin=""
         dry_run="0"
         while [ $# -gt 0 ]; do
@@ -1131,12 +1135,13 @@ case "$cmd" in
             --input) input="${2:-}"; shift 2 ;;
             --out) out="${2:-}"; shift 2 ;;
             --chain) chain="${2:-}"; shift 2 ;;
+            --engine) liftover_engine="${2:-}"; shift 2 ;;
             --liftover-bin) liftover_bin="${2:-}"; shift 2 ;;
             --dry-run) dry_run="1"; shift ;;
             *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
           esac
         done
-        run_splicing_liftover_normal_ref "$input" "$out" "$chain" "$liftover_bin" "$dry_run"
+        run_splicing_liftover_normal_ref "$input" "$out" "$chain" "$liftover_engine" "$liftover_bin" "$dry_run"
         ;;
       spl4|build-sequences)
         sample=""
