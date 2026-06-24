@@ -7,7 +7,7 @@ import gzip
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Optional, Sequence, Tuple
+from typing import DefaultDict, Dict, List, Optional, Sequence, Set, Tuple
 
 
 INPUT_SUFFIX = ".spl3.event_annotated.tsv"
@@ -219,22 +219,54 @@ def sum_optional(left: Optional[float], right: Optional[float]) -> Optional[floa
     return left + right
 
 
-def load_normal_reference(path: Path, total_samples: float, ignore_strand: bool) -> Dict[Tuple[str, int, int, str], NormalHit]:
-    hits: Dict[Tuple[str, int, int, str], NormalHit] = {}
+def collect_input_keys(input_path: Path, ignore_strand: bool) -> Tuple[Set[Tuple[str, int, int, str]], int]:
+    keys: Set[Tuple[str, int, int, str]] = set()
     skipped = 0
-    with open_text(path) as fh:
+    with input_path.open("r", encoding="utf-8", newline="") as fh:
         reader = csv.DictReader(fh, delimiter="\t")
         if not reader.fieldnames:
-            raise SystemExit(f"ERROR: normal reference has no header: {path}")
+            raise SystemExit(f"ERROR: input has no header: {input_path}")
         for row in reader:
             key = row_key(row, ignore_strand)
             if key is None:
                 skipped += 1
                 continue
+            keys.add(key)
+    return keys, skipped
+
+
+def load_normal_reference(
+    path: Path,
+    total_samples: float,
+    ignore_strand: bool,
+    target_keys: Optional[Set[Tuple[str, int, int, str]]] = None,
+) -> Tuple[Dict[Tuple[str, int, int, str], NormalHit], Dict[str, int]]:
+    hits: Dict[Tuple[str, int, int, str], NormalHit] = {}
+    stats = defaultdict(int)
+    if target_keys is not None:
+        stats["target_keys"] = len(target_keys)
+    with open_text(path) as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        if not reader.fieldnames:
+            raise SystemExit(f"ERROR: normal reference has no header: {path}")
+        for row in reader:
+            stats["reference_rows_scanned"] += 1
+            key = row_key(row, ignore_strand)
+            if key is None:
+                stats["reference_rows_skipped"] += 1
+                continue
+            if target_keys is not None and key not in target_keys:
+                continue
+            stats["reference_rows_matched"] += 1
             hit = hits.setdefault(key, NormalHit())
             hit.add(row, total_samples)
-    print(f"[spl3.5] normal reference rows_loaded={len(hits)} skipped={skipped}", file=sys.stderr)
-    return hits
+    stats["reference_keys_loaded"] = len(hits)
+    print(
+        "[spl3.5] normal reference "
+        + " ".join(f"{key}={value}" for key, value in sorted(stats.items())),
+        file=sys.stderr,
+    )
+    return hits, dict(stats)
 
 
 def input_matches_filters(path: Path, filters: Sequence[str]) -> bool:
@@ -417,6 +449,7 @@ def process_file(
     filtered_path: Path,
     summary_path: Path,
     normal_hits: Dict[Tuple[str, int, int, str], NormalHit],
+    normal_scan_stats: Dict[str, int],
     args: argparse.Namespace,
 ) -> Dict[str, int]:
     kept_rows: List[Dict[str, str]] = []
@@ -458,6 +491,9 @@ def process_file(
             stats[f"normal_status_{annotated['normal_status']}"] += 1
             update_tissue_summary_stats(stats, annotated, keep)
 
+    for key, value in normal_scan_stats.items():
+        stats[f"normal_reference_{key}"] = value
+
     write_rows(output_path, fields, kept_rows)
     write_rows(filtered_path, fields, filtered_rows)
     summary_fields = ["input", "output", "normal_present_output", "metric", "value"]
@@ -492,9 +528,6 @@ def main() -> int:
     if not normal_ref.exists():
         raise SystemExit(f"ERROR: normal reference does not exist: {normal_ref}")
 
-    print(f"[spl3.5] loading normal reference: {normal_ref}", file=sys.stderr)
-    normal_hits = load_normal_reference(normal_ref, args.normal_total_samples, args.ignore_strand)
-
     inputs, duplicate_inputs = discover_inputs(root, args.sample_filter, args.input_suffix)
     if not inputs:
         print(f"[spl3.5] no spl3 TSV files found under {root}", file=sys.stderr)
@@ -518,7 +551,17 @@ def main() -> int:
         if args.dry_run:
             written += 1
             continue
-        stats = process_file(input_path, out_path, filtered_path, summary_path, normal_hits, args)
+        target_keys, skipped_input_keys = collect_input_keys(input_path, args.ignore_strand)
+        print(
+            f"[spl3.5] scanning normal reference for input_keys={len(target_keys)} "
+            f"skipped_input_key_rows={skipped_input_keys}: {normal_ref}",
+            file=sys.stderr,
+        )
+        normal_hits, normal_scan_stats = load_normal_reference(
+            normal_ref, args.normal_total_samples, args.ignore_strand, target_keys
+        )
+        normal_scan_stats["input_key_rows_skipped"] = skipped_input_keys
+        stats = process_file(input_path, out_path, filtered_path, summary_path, normal_hits, normal_scan_stats, args)
         print_stats(out_path, stats)
         written += 1
 
