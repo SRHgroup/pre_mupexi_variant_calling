@@ -33,6 +33,7 @@ dna_bam_suffix="md.bam"
 # normal_sample_count/gtex_sample_count/sample_count, normal_total_reads,
 # normal_prevalence/gtex_prevalence, source.
 # splicing_normal_junction_ref="/path/to/normal_splice_junction_reference.tsv.gz"
+# Build the reference with --include-tissue-summary to carry GTEx tissue labels into spl3.5 outputs.
 # Optional names for build-specific normal references before/after liftover.
 # splicing_normal_junction_ref_grch37="/path/to/normal_splice_junction_reference.GRCh37.tsv.gz"
 # splicing_normal_junction_ref_grch38="/path/to/normal_splice_junction_reference.GRCh38.tsv.gz"

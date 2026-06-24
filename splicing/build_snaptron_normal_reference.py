@@ -62,6 +62,13 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--canonical-only", action="store_true", help="Keep only chr1-22,X,Y,MT/M")
     ap.add_argument("--drop-unknown-strand", action="store_true", help="Drop junctions with strand ? or missing")
     ap.add_argument(
+        "--include-tissue-summary",
+        action="store_true",
+        help="Join junction sample rail_ids to samples.tsv and add per-tissue normal counts/read support columns.",
+    )
+    ap.add_argument("--tissue-field", default="SMTSD", help="samples.tsv field for detailed tissue labels")
+    ap.add_argument("--broad-tissue-field", default="SMTS", help="samples.tsv field for broad tissue labels")
+    ap.add_argument(
         "--sample-filter-column",
         action="append",
         default=[],
@@ -152,6 +159,13 @@ def sample_row_matches(row: Dict[str, str], filters: Sequence[Tuple[str, str]]) 
     return True
 
 
+def normalize_label(value: str) -> str:
+    value = str(value or "").strip()
+    if not value or value.upper() in {"NA", "NAN", "."}:
+        return "NA"
+    return value.replace(";", ",")
+
+
 def count_samples(samples_path: Path, fields_path: Path, filters: Sequence[Tuple[str, str]]) -> Tuple[int, Counter]:
     if not samples_path.exists():
         print(f"[snaptron-ref][warn] samples.tsv not found: {samples_path}; total samples denominator will be 0", file=sys.stderr)
@@ -180,6 +194,110 @@ def count_samples(samples_path: Path, fields_path: Path, filters: Sequence[Tuple
             tissue = row.get("SMTSD") or row.get("SMTSC") or row.get("SMTS") or "NA"
             tissue_counts[tissue] += 1
     return count, tissue_counts
+
+
+def sample_reader(samples_path: Path, fields_path: Path):
+    fields_from_sidecar = load_field_names(fields_path)
+    with samples_path.open("r", encoding="utf-8", newline="") as fh:
+        first_line = fh.readline()
+        if not first_line:
+            return
+        first_fields = first_line.rstrip("\n").split("\t")
+        has_header = "rail_id" in first_fields
+        fh.seek(0)
+        if has_header:
+            reader = csv.DictReader(fh, delimiter="\t")
+        else:
+            if not fields_from_sidecar:
+                raise SystemExit("ERROR: samples.tsv has no header and samples.fields.tsv did not provide field names")
+            reader = csv.DictReader(fh, delimiter="\t", fieldnames=fields_from_sidecar)
+        for row in reader:
+            yield row
+
+
+def load_sample_tissue_maps(
+    samples_path: Path,
+    fields_path: Path,
+    filters: Sequence[Tuple[str, str]],
+    tissue_field: str,
+    broad_tissue_field: str,
+) -> Tuple[Dict[str, str], Dict[str, str]]:
+    tissue_by_rail: Dict[str, str] = {}
+    broad_tissue_by_rail: Dict[str, str] = {}
+    if not samples_path.exists():
+        raise SystemExit(f"ERROR: --include-tissue-summary requires samples.tsv: {samples_path}")
+    for row in sample_reader(samples_path, fields_path):
+        if not sample_row_matches(row, filters):
+            continue
+        rail_id = str(row.get("rail_id", "")).strip()
+        if not rail_id:
+            continue
+        tissue_by_rail[rail_id] = normalize_label(row.get(tissue_field, ""))
+        broad_tissue_by_rail[rail_id] = normalize_label(row.get(broad_tissue_field, ""))
+    return tissue_by_rail, broad_tissue_by_rail
+
+
+def parse_sample_support(samples_value: str) -> Iterable[Tuple[str, float]]:
+    for item in str(samples_value or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if ":" not in item:
+            yield item, 0.0
+            continue
+        rail_id, count = item.split(":", 1)
+        rail_id = rail_id.strip()
+        if not rail_id:
+            continue
+        yield rail_id, parse_float(count)
+
+
+def format_counter(counter: Counter) -> str:
+    if not counter:
+        return "NA"
+    parts = []
+    for label, value in sorted(counter.items(), key=lambda item: (-item[1], item[0])):
+        if float(value).is_integer():
+            value_s = str(int(value))
+        else:
+            value_s = f"{value:.6g}"
+        parts.append(f"{label}={value_s}")
+    return ";".join(parts)
+
+
+def summarize_tissues(
+    samples_value: str,
+    tissue_by_rail: Dict[str, str],
+    broad_tissue_by_rail: Dict[str, str],
+) -> Dict[str, str]:
+    tissue_samples: Counter = Counter()
+    tissue_reads: Counter = Counter()
+    broad_samples: Counter = Counter()
+    broad_reads: Counter = Counter()
+    unmatched = 0
+
+    for rail_id, read_count in parse_sample_support(samples_value):
+        tissue = tissue_by_rail.get(rail_id)
+        broad = broad_tissue_by_rail.get(rail_id)
+        if tissue is None and broad is None:
+            unmatched += 1
+            continue
+        tissue = tissue or "NA"
+        broad = broad or "NA"
+        tissue_samples[tissue] += 1
+        tissue_reads[tissue] += read_count
+        broad_samples[broad] += 1
+        broad_reads[broad] += read_count
+
+    return {
+        "normal_tissue_count": str(len(tissue_samples)),
+        "normal_tissue_sample_counts": format_counter(tissue_samples),
+        "normal_tissue_read_counts": format_counter(tissue_reads),
+        "normal_broad_tissue_count": str(len(broad_samples)),
+        "normal_broad_tissue_sample_counts": format_counter(broad_samples),
+        "normal_broad_tissue_read_counts": format_counter(broad_reads),
+        "normal_unmatched_sample_count": str(unmatched),
+    }
 
 
 def split_junction_line(line: str, line_number: int) -> Optional[Dict[str, str]]:
@@ -232,6 +350,18 @@ def build_reference(args: argparse.Namespace) -> Counter:
     if total_samples <= 0:
         print("[snaptron-ref][warn] total sample denominator is 0; normal_prevalence will be NA", file=sys.stderr)
 
+    tissue_by_rail: Dict[str, str] = {}
+    broad_tissue_by_rail: Dict[str, str] = {}
+    if args.include_tissue_summary:
+        print(
+            f"[snaptron-ref] loading tissue metadata from samples.tsv fields {args.tissue_field}/{args.broad_tissue_field}",
+            file=sys.stderr,
+        )
+        tissue_by_rail, broad_tissue_by_rail = load_sample_tissue_maps(
+            samples_path, fields_path, filters, args.tissue_field, args.broad_tissue_field
+        )
+        print(f"[snaptron-ref] sample tissue rows_loaded={len(tissue_by_rail)}", file=sys.stderr)
+
     stats: Counter = Counter()
     fieldnames = [
         "chrom",
@@ -254,6 +384,18 @@ def build_reference(args: argparse.Namespace) -> Counter:
         "normal_median_reads",
         "source_dataset_id",
     ]
+    if args.include_tissue_summary:
+        fieldnames.extend(
+            [
+                "normal_tissue_count",
+                "normal_tissue_sample_counts",
+                "normal_tissue_read_counts",
+                "normal_broad_tissue_count",
+                "normal_broad_tissue_sample_counts",
+                "normal_broad_tissue_read_counts",
+                "normal_unmatched_sample_count",
+            ]
+        )
 
     print(f"[snaptron-ref] junctions: {junctions_path}", file=sys.stderr)
     print(f"[snaptron-ref] samples: {samples_path}", file=sys.stderr)
@@ -300,29 +442,30 @@ def build_reference(args: argparse.Namespace) -> Counter:
                 stats["skipped_low_prevalence"] += 1
                 continue
 
-            writer.writerow(
-                {
-                    "chrom": normalized_chrom(chrom),
-                    "left_boundary": left_boundary,
-                    "right_boundary": right_boundary,
-                    "strand": strand,
-                    "normal_sample_count": f"{sample_count:g}",
-                    "normal_total_reads": f"{total_reads:g}",
-                    "normal_prevalence": "NA" if prevalence is None else f"{prevalence:.8g}",
-                    "source": "Snaptron_GTEx",
-                    "snaptron_id": row["snaptron_id"],
-                    "snaptron_start": start,
-                    "snaptron_end": end,
-                    "snaptron_length": row["length"],
-                    "motif": f"{row['left_motif']}/{row['right_motif']}",
-                    "snaptron_annotated": row["annotated"],
-                    "snaptron_left_annotated": row["left_annotated"],
-                    "snaptron_right_annotated": row["right_annotated"],
-                    "normal_avg_reads": row["coverage_avg"],
-                    "normal_median_reads": row["coverage_median"],
-                    "source_dataset_id": row["source_dataset_id"],
-                }
-            )
+            output_row = {
+                "chrom": normalized_chrom(chrom),
+                "left_boundary": left_boundary,
+                "right_boundary": right_boundary,
+                "strand": strand,
+                "normal_sample_count": f"{sample_count:g}",
+                "normal_total_reads": f"{total_reads:g}",
+                "normal_prevalence": "NA" if prevalence is None else f"{prevalence:.8g}",
+                "source": "Snaptron_GTEx",
+                "snaptron_id": row["snaptron_id"],
+                "snaptron_start": start,
+                "snaptron_end": end,
+                "snaptron_length": row["length"],
+                "motif": f"{row['left_motif']}/{row['right_motif']}",
+                "snaptron_annotated": row["annotated"],
+                "snaptron_left_annotated": row["left_annotated"],
+                "snaptron_right_annotated": row["right_annotated"],
+                "normal_avg_reads": row["coverage_avg"],
+                "normal_median_reads": row["coverage_median"],
+                "source_dataset_id": row["source_dataset_id"],
+            }
+            if args.include_tissue_summary:
+                output_row.update(summarize_tissues(row["samples"], tissue_by_rail, broad_tissue_by_rail))
+            writer.writerow(output_row)
             stats["output_rows"] += 1
             if stats["input_rows"] % 1_000_000 == 0:
                 print(

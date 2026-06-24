@@ -5,7 +5,7 @@ import argparse
 import csv
 import gzip
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Optional, Sequence, Tuple
 
@@ -142,6 +142,10 @@ class NormalHit:
         self.total_reads: Optional[float] = None
         self.prevalence: Optional[float] = None
         self.sources: List[str] = []
+        self.tissue_sample_counts: Counter = Counter()
+        self.tissue_read_counts: Counter = Counter()
+        self.broad_tissue_sample_counts: Counter = Counter()
+        self.broad_tissue_read_counts: Counter = Counter()
 
     def add(self, row: Dict[str, str], total_samples: float) -> None:
         sample_count = parse_float(
@@ -162,6 +166,41 @@ class NormalHit:
         source = first_present(row, ["source", "normal_source", "gtex_source", "dataset"])
         if source and source not in self.sources:
             self.sources.append(source)
+        self.tissue_sample_counts.update(parse_named_counts(first_present(row, ["normal_tissue_sample_counts"])))
+        self.tissue_read_counts.update(parse_named_counts(first_present(row, ["normal_tissue_read_counts"])))
+        self.broad_tissue_sample_counts.update(parse_named_counts(first_present(row, ["normal_broad_tissue_sample_counts"])))
+        self.broad_tissue_read_counts.update(parse_named_counts(first_present(row, ["normal_broad_tissue_read_counts"])))
+
+
+def parse_named_counts(value: str) -> Counter:
+    counts: Counter = Counter()
+    if not value or value.upper() in {"NA", "NAN", "."}:
+        return counts
+    for item in value.split(";"):
+        if not item or "=" not in item:
+            continue
+        label, raw_count = item.rsplit("=", 1)
+        parsed = parse_float(raw_count)
+        if parsed is not None:
+            counts[label] += parsed
+    return counts
+
+
+def format_named_counts(counter: Counter) -> str:
+    if not counter:
+        return "NA"
+    parts = []
+    for label, value in sorted(counter.items(), key=lambda item: (-item[1], item[0])):
+        if float(value).is_integer():
+            value_s = str(int(value))
+        else:
+            value_s = f"{value:.6g}"
+        parts.append(f"{label}={value_s}")
+    return ";".join(parts)
+
+
+def label_count(counter: Counter) -> str:
+    return str(len(counter))
 
 
 def max_optional(left: Optional[float], right: Optional[float]) -> Optional[float]:
@@ -312,6 +351,12 @@ def annotate_row(row: Dict[str, str], hit: Optional[NormalHit], args: argparse.N
                 "normal_total_reads": "0",
                 "normal_prevalence": "0",
                 "normal_source": "NA",
+                "normal_tissue_count": "0",
+                "normal_tissue_sample_counts": "NA",
+                "normal_tissue_read_counts": "NA",
+                "normal_broad_tissue_count": "0",
+                "normal_broad_tissue_sample_counts": "NA",
+                "normal_broad_tissue_read_counts": "NA",
             }
         )
         return row, True
@@ -326,6 +371,12 @@ def annotate_row(row: Dict[str, str], hit: Optional[NormalHit], args: argparse.N
             "normal_total_reads": parse_int_string(hit.total_reads),
             "normal_prevalence": "NA" if hit.prevalence is None else f"{hit.prevalence:.8g}",
             "normal_source": ";".join(hit.sources) if hit.sources else "normal_reference",
+            "normal_tissue_count": label_count(hit.tissue_sample_counts),
+            "normal_tissue_sample_counts": format_named_counts(hit.tissue_sample_counts),
+            "normal_tissue_read_counts": format_named_counts(hit.tissue_read_counts),
+            "normal_broad_tissue_count": label_count(hit.broad_tissue_sample_counts),
+            "normal_broad_tissue_sample_counts": format_named_counts(hit.broad_tissue_sample_counts),
+            "normal_broad_tissue_read_counts": format_named_counts(hit.broad_tissue_read_counts),
         }
     )
     return row, not positive
@@ -345,6 +396,19 @@ def write_rows(path: Path, fieldnames: Sequence[str], rows: Sequence[Dict[str, s
         writer = csv.DictWriter(out, fieldnames=fieldnames, delimiter="\t", lineterminator="\n", extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def update_tissue_summary_stats(stats, annotated: Dict[str, str], keep: bool) -> None:
+    if annotated.get("normal_ref_match") != "1":
+        return
+    for label in parse_named_counts(annotated.get("normal_tissue_sample_counts", "")).keys():
+        stats[f"normal_tissue_match:{label}"] += 1
+        if not keep:
+            stats[f"normal_tissue_filtered:{label}"] += 1
+    for label in parse_named_counts(annotated.get("normal_broad_tissue_sample_counts", "")).keys():
+        stats[f"normal_broad_tissue_match:{label}"] += 1
+        if not keep:
+            stats[f"normal_broad_tissue_filtered:{label}"] += 1
 
 
 def process_file(
@@ -372,6 +436,12 @@ def process_file(
                 "normal_total_reads",
                 "normal_prevalence",
                 "normal_source",
+                "normal_tissue_count",
+                "normal_tissue_sample_counts",
+                "normal_tissue_read_counts",
+                "normal_broad_tissue_count",
+                "normal_broad_tissue_sample_counts",
+                "normal_broad_tissue_read_counts",
             ],
         )
         for row in reader:
@@ -386,6 +456,7 @@ def process_file(
                 filtered_rows.append(annotated)
                 stats["filtered_rows"] += 1
             stats[f"normal_status_{annotated['normal_status']}"] += 1
+            update_tissue_summary_stats(stats, annotated, keep)
 
     write_rows(output_path, fields, kept_rows)
     write_rows(filtered_path, fields, filtered_rows)

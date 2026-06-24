@@ -19,7 +19,7 @@ Usage:
   $0 splicing spl2 [PATIENT] [--root STAR_DIR] [--gtf GTF] [--outdir DIR] [--min-unique-reads N] [--include-noncanonical] [--keep-non-protein-coding] [-f] [--dry-run]
   $0 splicing spl3 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--outdir DIR] [--include-noncanonical] [-f] [--dry-run]
   $0 splicing spl3.5 [PATIENT] [--root SPLICING_DIR] [--normal-ref TSV] [--outdir DIR] [--max-normal-prevalence X] [--normal-total-samples N] [--max-normal-sample-count N] [--ignore-strand] [-f] [--dry-run]
-  $0 splicing build-normal-ref --snaptron-dir DIR [--out TSV.GZ] [--coordinate-mode star-intron|boundary] [--total-samples N] [--min-sample-count N] [--min-total-reads N] [--min-prevalence X] [--canonical-only] [--drop-unknown-strand] [-f] [--dry-run]
+  $0 splicing build-normal-ref --snaptron-dir DIR [--out TSV.GZ] [--coordinate-mode star-intron|boundary] [--total-samples N] [--min-sample-count N] [--min-total-reads N] [--min-prevalence X] [--canonical-only] [--drop-unknown-strand] [--include-tissue-summary] [-f] [--dry-run]
   $0 splicing liftover-normal-ref --input REF37.tsv.gz --out REF38.tsv.gz --chain hg19ToHg38.over.chain.gz [--engine python|ucsc] [--liftover-bin liftOver] [-f] [--dry-run]
   $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--input-suffix SUFFIX] [--include-noncanonical] [-f] [--dry-run]
   $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--run-splicing] [--splicing-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--splicing SPL4_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
@@ -368,7 +368,8 @@ run_splicing_build_normal_ref() {
   local min_prevalence="${7:-}"
   local canonical_only="${8:-0}"
   local drop_unknown_strand="${9:-0}"
-  local dry_run="${10:-0}"
+  local include_tissue_summary="${10:-0}"
+  local dry_run="${11:-0}"
   local snaptron_dir_arg=""
   local out_arg=""
   local coordinate_mode_arg=""
@@ -378,6 +379,7 @@ run_splicing_build_normal_ref() {
   local min_prevalence_arg=""
   local canonical_only_arg=""
   local drop_unknown_strand_arg=""
+  local include_tissue_summary_arg=""
   local dry_run_arg=""
   if [ -n "$snaptron_dir" ]; then snaptron_dir_arg="SNAPTRON_DIR=$snaptron_dir"; fi
   if [ -n "$out" ]; then out_arg="OUT=$out"; fi
@@ -388,8 +390,9 @@ run_splicing_build_normal_ref() {
   if [ -n "$min_prevalence" ]; then min_prevalence_arg="MIN_PREVALENCE=$min_prevalence"; fi
   if [ "$canonical_only" = "1" ]; then canonical_only_arg="CANONICAL_ONLY=1"; fi
   if [ "$drop_unknown_strand" = "1" ]; then drop_unknown_strand_arg="DROP_UNKNOWN_STRAND=1"; fi
+  if [ "$include_tissue_summary" = "1" ]; then include_tissue_summary_arg="INCLUDE_TISSUE_SUMMARY=1"; fi
   if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
-  PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_build_normal_ref CONFIG="$CONFIG" $snaptron_dir_arg $out_arg $coordinate_mode_arg $total_samples_arg $min_sample_count_arg $min_total_reads_arg $min_prevalence_arg $canonical_only_arg $drop_unknown_strand_arg $dry_run_arg $force_arg
+  PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_build_normal_ref CONFIG="$CONFIG" $snaptron_dir_arg $out_arg $coordinate_mode_arg $total_samples_arg $min_sample_count_arg $min_total_reads_arg $min_prevalence_arg $canonical_only_arg $drop_unknown_strand_arg $include_tissue_summary_arg $dry_run_arg $force_arg
 }
 
 run_splicing_liftover_normal_ref() {
@@ -1105,6 +1108,7 @@ case "$cmd" in
         min_prevalence=""
         canonical_only="0"
         drop_unknown_strand="0"
+        include_tissue_summary="0"
         dry_run="0"
         while [ $# -gt 0 ]; do
           case "${1:-}" in
@@ -1117,11 +1121,12 @@ case "$cmd" in
             --min-prevalence) min_prevalence="${2:-}"; shift 2 ;;
             --canonical-only) canonical_only="1"; shift ;;
             --drop-unknown-strand) drop_unknown_strand="1"; shift ;;
+            --include-tissue-summary) include_tissue_summary="1"; shift ;;
             --dry-run) dry_run="1"; shift ;;
             *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
           esac
         done
-        run_splicing_build_normal_ref "$snaptron_dir" "$out" "$coordinate_mode" "$total_samples" "$min_sample_count" "$min_total_reads" "$min_prevalence" "$canonical_only" "$drop_unknown_strand" "$dry_run"
+        run_splicing_build_normal_ref "$snaptron_dir" "$out" "$coordinate_mode" "$total_samples" "$min_sample_count" "$min_total_reads" "$min_prevalence" "$canonical_only" "$drop_unknown_strand" "$include_tissue_summary" "$dry_run"
         ;;
       liftover-normal-ref|liftover-normal-reference)
         input=""

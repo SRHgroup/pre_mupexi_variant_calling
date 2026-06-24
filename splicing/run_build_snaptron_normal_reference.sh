@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash splicing/run_build_snaptron_normal_reference.sh [-c CONFIG] --snaptron-dir DIR [--out TSV.GZ] [--coordinate-mode star-intron|boundary] [--total-samples N] [--min-sample-count N] [--min-total-reads N] [--min-prevalence X] [--canonical-only] [--drop-unknown-strand] [--sample-filter-column COLUMN=VALUE] [-f] [--dry-run]
+  bash splicing/run_build_snaptron_normal_reference.sh [-c CONFIG] --snaptron-dir DIR [--out TSV.GZ] [--coordinate-mode star-intron|boundary] [--total-samples N] [--min-sample-count N] [--min-total-reads N] [--min-prevalence X] [--canonical-only] [--drop-unknown-strand] [--include-tissue-summary] [--sample-filter-column COLUMN=VALUE] [-f] [--dry-run]
 
 Behavior:
 - Submits one PBS/qsub reference-build job
@@ -23,6 +23,7 @@ min_total_reads="1"
 min_prevalence="0"
 canonical_only=0
 drop_unknown_strand=0
+include_tissue_summary=0
 force=0
 dry_run=0
 sample_filter_columns=()
@@ -39,6 +40,7 @@ while [ $# -gt 0 ]; do
     --min-prevalence) min_prevalence="${2:-}"; shift 2 ;;
     --canonical-only) canonical_only=1; shift ;;
     --drop-unknown-strand) drop_unknown_strand=1; shift ;;
+    --include-tissue-summary) include_tissue_summary=1; shift ;;
     --sample-filter-column) sample_filter_columns+=("${2:-}"); shift 2 ;;
     -f|--force) force=1; shift ;;
     --dry-run) dry_run=1; shift ;;
@@ -170,6 +172,9 @@ if [ "$canonical_only" -eq 1 ]; then
 fi
 if [ "$drop_unknown_strand" -eq 1 ]; then
   cmd+=(--drop-unknown-strand)
+fi
+if [ "$include_tissue_summary" -eq 1 ]; then
+  cmd+=(--include-tissue-summary)
 fi
 ${sample_filter_snippet}"\${cmd[@]}"
 SCRIPT

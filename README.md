@@ -116,6 +116,7 @@ Optional normal filtering before sequence reconstruction:
 
 ```bash
 ./run_pipeline.sh splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.tsv.gz --canonical-only
+./run_pipeline.sh splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.with_tissues.GRCh37.tsv.gz --canonical-only --include-tissue-summary
 ./run_pipeline.sh splicing liftover-normal-ref --input /path/to/normal_splice_junction_reference.GRCh37.tsv.gz --out /path/to/normal_splice_junction_reference.GRCh38.tsv.gz --chain /path/to/hg19ToHg38.over.chain.gz
 ./run_pipeline.sh splicing spl3.5 Pat21 --normal-ref /path/to/normal_junctions.tsv.gz --max-normal-prevalence 0.01
 ./run_pipeline.sh splicing spl4 Pat21 --input-suffix .spl3.5.cancer_unique.tsv
@@ -144,6 +145,8 @@ It may also contain:
 ```text
 normal_sample_count	normal_total_reads	normal_prevalence	source
 ```
+
+When built with `--include-tissue-summary`, the reference also carries `normal_tissue_sample_counts`, `normal_tissue_read_counts`, `normal_broad_tissue_sample_counts`, and `normal_broad_tissue_read_counts` from `samples.tsv` metadata. `spl3.5` copies those labels into patient-level outputs and records tissue-specific match/filter counts in `*.spl3.5.normal_filter_summary.tsv`.
 
 Rows matching the normal reference at or above `--max-normal-prevalence` are written to `*.spl3.5.normal_present.tsv`; retained rows are written to `*.spl3.5.cancer_unique.tsv`.
 
