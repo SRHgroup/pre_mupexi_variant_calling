@@ -36,6 +36,9 @@ MUPEXI_NODES ?=
 MUPEXI_PPN ?=
 MUPEXI_MEM ?=
 MUPEXI_WALLTIME ?=
+MUPEXI_SUFFIX ?=
+MUPEXI_INPUT_DIR ?=
+MUPEXI_OUTFILE ?=
 EXECUTE ?=
 THREADS ?=
 CLEANUP_NODES ?=
@@ -122,6 +125,9 @@ run_research_vep_dedup: check-config
 
 run_research_gather_mupexi_output: check-config
 	cd research && bash run_gather_mupexi_output.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
+
+run_research_gather_mupexi_by_suffix: check-config
+	cd research && bash run_gather_mupexi_by_suffix.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(if $(MUPEXI_SUFFIX),--suffix "$(MUPEXI_SUFFIX)",) $(if $(MUPEXI_INPUT_DIR),--input-dir "$(MUPEXI_INPUT_DIR)",) $(if $(MUPEXI_OUTFILE),--outfile "$(MUPEXI_OUTFILE)",) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)
 
 run_research_gather_maf_output: check-config
 	cd research && bash run_gather_maf_output.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(OUTDIR_FLAG) $(FORCE_FLAG) $(SKIP_RUNNING_FLAG)

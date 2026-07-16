@@ -175,6 +175,17 @@ Run MuPeXI2 with variants/fusions plus neosplicing:
 ./run_pipeline.sh mupexi Pat21 --run-splicing
 ```
 
+Gather MuPeXI end-product files into one patient-labelled TSV by exact suffix:
+
+```bash
+./run_pipeline.sh research gather_mupexi_by_suffix --suffix _snv.mupexi -f
+./run_pipeline.sh research gather_mupexi_by_suffix --suffix _fus.mupexi -f
+./run_pipeline.sh research gather_mupexi_by_suffix --suffix _neospl.mupexi -f
+./run_pipeline.sh research gather_mupexi_by_suffix --suffix _neojunctions.mupexi -f
+```
+
+By default this scans `${mupexi_outdir}` recursively and writes to `${mupexi_outdir}/gathered/cohort.<suffix>.tsv`, for example `cohort.neospl.mupexi.tsv`. Add a patient ID after the command name to gather one patient only, or use `--input-dir`, `--outdir`, and `--outfile` to override paths.
+
 gDNA chain:
 ```bash
 make run_all_germline CONFIG=/path/to/CONFIG

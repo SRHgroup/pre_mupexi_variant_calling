@@ -29,6 +29,7 @@ Usage:
   $0 research samecopy-stats [PATIENT] [--outfile FILE] [--window N] [-f] [--skip-running]
   $0 research variant-table [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research gather_mupexi_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
+  $0 research gather_mupexi_by_suffix [PATIENT] --suffix _neospl.mupexi [--outdir DIR] [--input-dir DIR] [--outfile TSV] [-f] [--skip-running]
   $0 research gather_maf_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research gather_fusion_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
   $0 research gather_mosdepth_output [PATIENT] [--outdir DIR] [-f] [--skip-running]
@@ -85,6 +86,8 @@ Examples:
   $0 research variant-table
   $0 research variant-table Pat11 --outdir /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/variant_tables
   $0 research gather_mupexi_output
+  $0 research gather_mupexi_by_suffix --suffix _neospl.mupexi
+  $0 research gather_mupexi_by_suffix --suffix _neojunctions.mupexi
   $0 research gather_maf_output 47-ME-J
   $0 research gather_fusion_output --outdir /home/projects/SRHgroup/projects/SingelCell_Bladder/data/rna/rnadnavar/mupexi2/gathered
   $0 research gather_mosdepth_output
@@ -189,6 +192,25 @@ run_research_gather_mupexi_output() {
   else
     PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_research_gather_mupexi_output CONFIG="$CONFIG" OUTDIR="$outdir" $force_arg $skip_running_arg
   fi
+}
+
+run_research_gather_mupexi_by_suffix() {
+  local sample="${1:-}"
+  local outdir="${2:-}"
+  local suffix="${3:-}"
+  local input_dir="${4:-}"
+  local outfile="${5:-}"
+  local make_args=(run_research_gather_mupexi_by_suffix CONFIG="$CONFIG")
+
+  [ -n "$sample" ] && make_args+=(SAMPLE="$sample")
+  [ -n "$outdir" ] && make_args+=(OUTDIR="$outdir")
+  [ -n "$suffix" ] && make_args+=(MUPEXI_SUFFIX="$suffix")
+  [ -n "$input_dir" ] && make_args+=(MUPEXI_INPUT_DIR="$input_dir")
+  [ -n "$outfile" ] && make_args+=(MUPEXI_OUTFILE="$outfile")
+  [ -n "$force_arg" ] && make_args+=("$force_arg")
+  [ -n "$skip_running_arg" ] && make_args+=("$skip_running_arg")
+
+  PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" "${make_args[@]}"
 }
 
 run_research_gather_maf_output() {
@@ -1332,6 +1354,27 @@ case "$cmd" in
           esac
         done
         run_research_gather_mupexi_output "$sample" "$outdir"
+        ;;
+      gather_mupexi_by_suffix|gather-mupexi-by-suffix|gather_mupexi_suffix|gather-mupexi-suffix)
+        sample=""
+        outdir=""
+        suffix=""
+        input_dir=""
+        outfile=""
+        if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
+          sample="$1"
+          shift
+        fi
+        while [ $# -gt 0 ]; do
+          case "${1:-}" in
+            --outdir|-o) outdir="${2:-}"; shift 2 ;;
+            --suffix) suffix="${2:-}"; shift 2 ;;
+            --input-dir) input_dir="${2:-}"; shift 2 ;;
+            --outfile) outfile="${2:-}"; shift 2 ;;
+            *) echo "Unknown research option: $1" >&2; exit 1 ;;
+          esac
+        done
+        run_research_gather_mupexi_by_suffix "$sample" "$outdir" "$suffix" "$input_dir" "$outfile"
         ;;
       gather_maf_output|gather-maf-output)
         sample=""
