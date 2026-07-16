@@ -50,48 +50,87 @@ splicing_check_step_prefix() {
   esac
 }
 
+splicing_check_resolve_file() {
+  local fallback="${1:-}"
+  local path
+  for path in "$@"; do
+    [ -n "$path" ] || continue
+    if [ -e "$path" ]; then
+      printf '%s\n' "$path"
+      return 0
+    fi
+  done
+  printf '%s\n' "$fallback"
+}
+
+splicing_check_completion_is_done() {
+  case "$1" in
+    DONE|DONE_LEGACY_NAME) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 splicing_check_step_outputs() {
   local patient="$1"
   local step="$2"
-  local sample_id star_root output_root plain gz
+  local sample_id legacy_sample_id star_root output_root output_dir plain gz legacy legacy_gz
   sample_id="$(splicing_check_sample_id "$patient")"
+  legacy_sample_id="${patient}_${sample_id}"
 
   case "$step" in
     spl1)
       star_root="$(splicing_check_star_root)" || return 1
       plain="${star_root%/}/${patient}/${sample_id}/${sample_id}.SJ.out.tab"
       gz="${plain}.gz"
-      if [ -s "$plain" ]; then
-        printf '%s\n' "$plain"
-      elif [ -s "$gz" ]; then
-        printf '%s\n' "$gz"
-      elif [ -e "$plain" ]; then
-        printf '%s\n' "$plain"
-      elif [ -e "$gz" ]; then
-        printf '%s\n' "$gz"
-      else
-        printf '%s\n' "$plain"
-      fi
+      legacy="${star_root%/}/${patient}/${legacy_sample_id}/${legacy_sample_id}.SJ.out.tab"
+      legacy_gz="${legacy}.gz"
+      splicing_check_resolve_file "$plain" "$plain" "$gz" "$legacy" "$legacy_gz"
       ;;
     spl2)
       output_root="$(splicing_check_output_root)" || return 1
-      printf '%s/%s/%s.spl2.novel_junctions.tsv\n' "${output_root%/}" "$sample_id" "$sample_id"
+      output_dir="${output_root%/}/${sample_id}"
+      plain="${output_dir}/${sample_id}.spl2.novel_junctions.tsv"
+      legacy="${output_dir}/${legacy_sample_id}.spl2.novel_junctions.tsv"
+      splicing_check_resolve_file "$plain" "$plain" "$legacy"
       ;;
     spl3)
       output_root="$(splicing_check_output_root)" || return 1
-      printf '%s/%s/%s.spl3.event_annotated.tsv\n' "${output_root%/}" "$sample_id" "$sample_id"
+      output_dir="${output_root%/}/${sample_id}"
+      plain="${output_dir}/${sample_id}.spl3.event_annotated.tsv"
+      legacy="${output_dir}/${legacy_sample_id}.spl3.event_annotated.tsv"
+      splicing_check_resolve_file "$plain" "$plain" "$legacy"
       ;;
     spl3.5)
       output_root="$(splicing_check_output_root)" || return 1
-      printf '%s/%s/%s.spl3.5.cancer_unique.tsv\n' "${output_root%/}" "$sample_id" "$sample_id"
-      printf '%s/%s/%s.spl3.5.normal_present.tsv\n' "${output_root%/}" "$sample_id" "$sample_id"
-      printf '%s/%s/%s.spl3.5.normal_filter_summary.tsv\n' "${output_root%/}" "$sample_id" "$sample_id"
+      output_dir="${output_root%/}/${sample_id}"
+      splicing_check_resolve_file \
+        "${output_dir}/${sample_id}.spl3.5.cancer_unique.tsv" \
+        "${output_dir}/${sample_id}.spl3.5.cancer_unique.tsv" \
+        "${output_dir}/${legacy_sample_id}.spl3.5.cancer_unique.tsv"
+      splicing_check_resolve_file \
+        "${output_dir}/${sample_id}.spl3.5.normal_present.tsv" \
+        "${output_dir}/${sample_id}.spl3.5.normal_present.tsv" \
+        "${output_dir}/${legacy_sample_id}.spl3.5.normal_present.tsv"
+      splicing_check_resolve_file \
+        "${output_dir}/${sample_id}.spl3.5.normal_filter_summary.tsv" \
+        "${output_dir}/${sample_id}.spl3.5.normal_filter_summary.tsv" \
+        "${output_dir}/${legacy_sample_id}.spl3.5.normal_filter_summary.tsv"
       ;;
     spl4)
       output_root="$(splicing_check_output_root)" || return 1
-      printf '%s/%s/%s.spl4.neojunctions.tsv\n' "${output_root%/}" "$sample_id" "$sample_id"
-      printf '%s/%s/%s.spl4.neojunctions.nt.fa\n' "${output_root%/}" "$sample_id" "$sample_id"
-      printf '%s/%s/%s.spl4.neojunctions.aa.fa\n' "${output_root%/}" "$sample_id" "$sample_id"
+      output_dir="${output_root%/}/${sample_id}"
+      splicing_check_resolve_file \
+        "${output_dir}/${sample_id}.spl4.neojunctions.tsv" \
+        "${output_dir}/${sample_id}.spl4.neojunctions.tsv" \
+        "${output_dir}/${legacy_sample_id}.spl4.neojunctions.tsv"
+      splicing_check_resolve_file \
+        "${output_dir}/${sample_id}.spl4.neojunctions.nt.fa" \
+        "${output_dir}/${sample_id}.spl4.neojunctions.nt.fa" \
+        "${output_dir}/${legacy_sample_id}.spl4.neojunctions.nt.fa"
+      splicing_check_resolve_file \
+        "${output_dir}/${sample_id}.spl4.neojunctions.aa.fa" \
+        "${output_dir}/${sample_id}.spl4.neojunctions.aa.fa" \
+        "${output_dir}/${legacy_sample_id}.spl4.neojunctions.aa.fa"
       ;;
     *) return 1 ;;
   esac
@@ -111,7 +150,9 @@ splicing_check_output_requires_content() {
 splicing_check_step_completion() {
   local patient="$1"
   local step="$2"
-  local outputs out detail="" missing="" empty=""
+  local outputs out detail="" missing="" empty="" sample_id legacy_sample_id legacy_name=0
+  sample_id="$(splicing_check_sample_id "$patient")"
+  legacy_sample_id="${patient}_${sample_id}"
   outputs="$(splicing_check_step_outputs "$patient" "$step")" || {
     printf 'CONFIG_ERROR\tunable to resolve %s paths\n' "$step"
     return 1
@@ -126,6 +167,9 @@ splicing_check_step_completion() {
       [ -n "$empty" ] && empty="${empty} ; "
       empty="${empty}${out}"
     fi
+    case "$(basename "$out")" in
+      "${legacy_sample_id}"*) legacy_name=1 ;;
+    esac
     [ -n "$detail" ] && detail="${detail} ; "
     detail="${detail}${out}"
   done <<< "$outputs"
@@ -138,16 +182,24 @@ splicing_check_step_completion() {
     printf 'EMPTY\t%s\n' "$empty"
     return 1
   fi
-  printf 'DONE\t%s\n' "$detail"
+  if [ "$legacy_name" -eq 1 ]; then
+    printf 'DONE_LEGACY_NAME\t%s\n' "$detail"
+  else
+    printf 'DONE\t%s\n' "$detail"
+  fi
 }
 
 splicing_check_spl4_input() {
   local patient="$1"
-  local sample_id output_root suffix
+  local sample_id legacy_sample_id output_root output_dir suffix plain legacy
   sample_id="$(splicing_check_sample_id "$patient")"
+  legacy_sample_id="${patient}_${sample_id}"
   output_root="$(splicing_check_output_root)" || return 1
   suffix="${splicing_spl4_input_suffix:-.spl3.event_annotated.tsv}"
-  printf '%s/%s/%s%s\n' "${output_root%/}" "$sample_id" "$sample_id" "$suffix"
+  output_dir="${output_root%/}/${sample_id}"
+  plain="${output_dir}/${sample_id}${suffix}"
+  legacy="${output_dir}/${legacy_sample_id}${suffix}"
+  splicing_check_resolve_file "$plain" "$plain" "$legacy"
 }
 
 splicing_check_step_input_status() {
@@ -180,7 +232,7 @@ splicing_check_step_input_status() {
       fi
       input_state="${input_info%%$'\t'*}"
       input_detail="${input_info#*$'\t'}"
-      if [ "$input_state" = "DONE" ]; then
+      if splicing_check_completion_is_done "$input_state"; then
         printf 'INPUT_OK\t%s\n' "$input_detail"
       else
         printf 'NO_INPUT\t%s\n' "$input_detail"
@@ -191,7 +243,7 @@ splicing_check_step_input_status() {
       input_info="$(splicing_check_step_completion "$patient" spl3)" || true
       input_state="${input_info%%$'\t'*}"
       input_detail="${input_info#*$'\t'}"
-      if [ "$input_state" != "DONE" ]; then
+      if ! splicing_check_completion_is_done "$input_state"; then
         printf 'NO_INPUT\t%s\n' "$input_detail"
         return 1
       fi

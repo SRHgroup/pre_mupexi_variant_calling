@@ -127,7 +127,7 @@ while IFS= read -r line; do
       status="${completion%%$'\t'*}"
       path="${completion#*$'\t'}"
       printf "%s\t%s\t%s\t%s\n" "$name" "$step" "$status" "$path"
-      [ "$status" = "DONE" ] || failed=1
+      splicing_check_completion_is_done "$status" || failed=1
     done
     continue
   fi

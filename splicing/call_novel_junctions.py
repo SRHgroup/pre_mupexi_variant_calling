@@ -287,11 +287,16 @@ def build_gtf_index(gtf: Path, include_noncanonical: bool) -> GtfIndex:
     )
 
 
-def sj_source_priority(path: Path) -> Tuple[int, int, str]:
+def sj_source_priority(path: Path, preferred_sample: str = "") -> Tuple[int, int, str]:
     sample = infer_sample_label(path).lower()
     base = sj_base(path).lower()
     parent = path.parent.name.lower()
     score = 0
+    preferred = preferred_sample.lower()
+    if preferred and base == preferred:
+        score += 1000
+    if preferred and parent == preferred:
+        score += 500
     if base == sample:
         score += 100
     if parent == sample:
@@ -307,7 +312,11 @@ def sj_source_priority(path: Path) -> Tuple[int, int, str]:
     return (score, size, str(path))
 
 
-def discover_sj_files(root: Path, filters: Sequence[str]) -> Tuple[List[Path], Dict[str, List[Path]]]:
+def discover_sj_files(
+    root: Path,
+    filters: Sequence[str],
+    sample_label: str = "",
+) -> Tuple[List[Path], Dict[str, List[Path]]]:
     grouped: DefaultDict[str, List[Path]] = defaultdict(list)
     for path in root.rglob("*"):
         if not path.is_file():
@@ -318,12 +327,16 @@ def discover_sj_files(root: Path, filters: Sequence[str]) -> Tuple[List[Path], D
             continue
         if filters and not any(f.lower() in str(path).lower() for f in filters):
             continue
-        grouped[infer_sample_label(path)].append(path)
+        grouped[sample_label or infer_sample_label(path)].append(path)
 
     selected: List[Path] = []
     duplicates: Dict[str, List[Path]] = {}
     for sample, candidates in grouped.items():
-        ranked = sorted(candidates, key=sj_source_priority, reverse=True)
+        ranked = sorted(
+            candidates,
+            key=lambda path: sj_source_priority(path, sample_label),
+            reverse=True,
+        )
         selected.append(ranked[0])
         if len(ranked) > 1:
             duplicates[sample] = ranked
@@ -357,7 +370,10 @@ def output_path_for(
     out_suffix: str,
     output_subdir: str,
 ) -> Path:
-    out_name = f"{sj_base(sj_path)}{out_suffix}"
+    # The wrapper supplies the canonical patient RNA sample ID as output_subdir.
+    # Use it for the basename too so malformed legacy STAR names do not propagate.
+    out_base = Path(output_subdir).name if output_subdir else sj_base(sj_path)
+    out_name = f"{out_base}{out_suffix}"
     if not out_dir:
         return sj_path.with_name(out_name)
     rel_parent = scoped_rel_parent(sj_path.parent, star_root, output_subdir)
@@ -471,8 +487,9 @@ def process_sj_file(
     min_unique_reads: int,
     include_noncanonical: bool,
     keep_non_protein_coding: bool,
+    sample_label: Optional[str] = None,
 ) -> Dict[str, int]:
-    sample = infer_sample_label(sj_path)
+    sample = sample_label or infer_sample_label(sj_path)
     stats = defaultdict(int)
     rows: List[List[str]] = []
 
@@ -624,7 +641,11 @@ def main() -> int:
         file=sys.stderr,
     )
 
-    sj_files, duplicate_sj_files = discover_sj_files(star_root, args.sample_filter)
+    sj_files, duplicate_sj_files = discover_sj_files(
+        star_root,
+        args.sample_filter,
+        args.output_subdir,
+    )
     if not sj_files:
         print(f"[spl2] no merged SJ.out.tab files found under {star_root}", file=sys.stderr)
         return 0
@@ -651,6 +672,7 @@ def main() -> int:
             min_unique_reads=args.min_unique_reads,
             include_noncanonical=args.include_noncanonical,
             keep_non_protein_coding=args.keep_non_protein_coding,
+            sample_label=args.output_subdir or None,
         )
         print_stats(out_path, stats)
         written += 1

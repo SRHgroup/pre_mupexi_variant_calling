@@ -945,8 +945,12 @@ watch_step_outputs() {
       status=""
       detail=""
 
-      if { is_splicing_step "$step" && [ "$completion_state" = "DONE" ]; } || { ! is_splicing_step "$step" && [ -f "$out" ] && [ -s "$out" ]; }; then
-        status="DONE"
+      if { is_splicing_step "$step" && splicing_check_completion_is_done "$completion_state"; } || { ! is_splicing_step "$step" && [ -f "$out" ] && [ -s "$out" ]; }; then
+        if is_splicing_step "$step"; then
+          status="$completion_state"
+        else
+          status="DONE"
+        fi
         detail="$out"
         done_ok=$((done_ok + 1))
       else
@@ -1045,8 +1049,12 @@ check_step_outputs() {
       completion="$(splicing_check_step_completion "$patient" "$step")" || true
       completion_state="${completion%%$'\t'*}"
       out="${completion#*$'\t'}"
-      if [ "$completion_state" = "DONE" ]; then
-        printf "%s\tYES\t%s\n" "$patient" "$out"
+      if splicing_check_completion_is_done "$completion_state"; then
+        if [ "$completion_state" = "DONE_LEGACY_NAME" ]; then
+          printf "%s\tYES_LEGACY_NAME\t%s\n" "$patient" "$out"
+        else
+          printf "%s\tYES\t%s\n" "$patient" "$out"
+        fi
         continue
       fi
       input_info="$(splicing_check_step_input_status "$patient" "$step")" || true

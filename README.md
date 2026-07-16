@@ -222,6 +222,8 @@ If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can chec
 
 The splicing cohort check validates `spl1`, `spl2`, `spl3`, optional `spl3.5`, and all three `spl4` outputs. An empty `spl4` NT/AA FASTA is accepted when the output TSV exists and is non-empty, because a successfully processed sample can have no translated records.
 
+Legacy STAR folders/files with a duplicated patient prefix, such as `43-DE-B_43-DE-B_RNA_TUMOR`, are accepted as `DONE_LEGACY_NAME`. `spl2` uses the canonical patient target for its output basename and sample label, preventing the malformed upstream name from propagating into `spl2` through `spl4`.
+
 ## Notes
 
 - Scripts precheck inputs before `qsub`; broken/missing inputs are reported immediately.
