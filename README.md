@@ -207,14 +207,20 @@ make runrna5 CONFIG=/path/to/CONFIG SAMPLE=Pat11 FORCE=1
 bash bin/check_outputs.sh -c /path/to/CONFIG -m all
 bash bin/check_outputs.sh -c /path/to/CONFIG -m rna
 bash bin/check_outputs.sh -c /path/to/CONFIG -m germline
+bash bin/check_outputs.sh -c /path/to/CONFIG -m splicing
 ```
 
-If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can check one step per patient or forthe whole cohort:
+If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can check one step per patient or for the whole cohort:
 
 ```bash
-./run_pipeline.sh check-step rna5 # runs rna5 script for the whole cohort
-./run_pipeline.sh check-step gdna4 SampleX # runs germline variant calling only for SampleX
+./run_pipeline.sh check splicing
+./run_pipeline.sh check Pat101 splicing
+./run_pipeline.sh check-step spl3.5
+./run_pipeline.sh check-step spl4 Pat101
+./run_pipeline.sh watch-step spl4 Pat101 10
 ```
+
+The splicing cohort check validates `spl1`, `spl2`, `spl3`, optional `spl3.5`, and all three `spl4` outputs. An empty `spl4` NT/AA FASTA is accepted when the output TSV exists and is non-empty, because a successfully processed sample can have no translated records.
 
 ## Notes
 

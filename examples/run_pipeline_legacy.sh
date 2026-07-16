@@ -30,9 +30,9 @@ Usage:
   $0 research strand-blacklist [PATIENT] [--outdir DIR] [--protocol NAME] [--min-mapq N] [--min-baseq N] [--min-expected-frac X] [-f] [--skip-running]
   $0 research run_mosdepth_overlap [PATIENT] [--outdir DIR] [--depth-threshold N] [--region-bin-size N]
   $0 step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0> [PATIENT] [-f]
-  $0 check [PATIENT] [all|rna|germline]
-  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0> [PATIENT]
-  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0> [PATIENT] [INTERVAL_SEC]
+  $0 check [PATIENT] [all|rna|germline|splicing]
+  $0 check-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0|spl1|spl2|spl3|spl3.5|spl4> [PATIENT]
+  $0 watch-step <4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0|spl1|spl2|spl3|spl3.5|spl4> [PATIENT] [INTERVAL_SEC]
   $0 sync
   $0 show-config
   (append --skip-running to submit commands to avoid re-submitting active jobs)
@@ -317,6 +317,20 @@ pick_first_existing() {
   return 1
 }
 
+is_splicing_step() {
+  case "$1" in
+    spl1|spl2|spl3|spl3.5|spl4) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+load_splicing_check_helpers() {
+  local helper="${REPO}/bin/splicing_check_helpers.sh"
+  [ -f "$helper" ] || { echo "Missing splicing check helper: $helper" >&2; exit 1; }
+  # shellcheck disable=SC1090
+  source "$helper"
+}
+
 legacy_step_expected_output() {
   local patient="$1"
   local step="$2"
@@ -343,6 +357,7 @@ legacy_step_expected_output() {
     4.7.0) printf '%s\n' "${bamdir}/${patient}_${rna_dir_label}/${patient}_${rna_bam_smfixed_suffix}" ;;
     4.7) printf '%s\n' "${outdir}/${patient}_${phased_vcf_extension}" ;;
     4.7.1) printf '%s\n' "${outdir}/${patient}_${phased_vcf_extension%.vcf.gz}.rna7.1.strand_filter_stats.tsv" ;;
+    spl1|spl2|spl3|spl3.5|spl4) splicing_check_step_outputs "$patient" "$step" | awk 'NR==1{print; exit}' ;;
     *) return 1 ;;
   esac
 }
@@ -545,6 +560,9 @@ legacy_step_input_status() {
         printf 'NO_INPUT\tBAM:%s\n' "$in_471_bam"
       fi
       ;;
+    spl1|spl2|spl3|spl3.5|spl4)
+      splicing_check_step_input_status "$patient" "$step" || true
+      ;;
     *)
       printf 'NO_INPUT\tunknown-step\n'
       ;;
@@ -567,6 +585,7 @@ legacy_step_prefix() {
     2.0.1) printf '%s\n' "2.0.1_FilterGermline" ;;
     2.0.2) printf '%s\n' "2.0.2_SelectVariants" ;;
     3.0) printf '%s\n' "3.0_FilterGermlineByAdjacency" ;;
+    spl1|spl2|spl3|spl3.5|spl4) splicing_check_step_prefix "$1" ;;
     *) return 1 ;;
   esac
 }
@@ -575,22 +594,43 @@ check_step_outputs() {
   local step="$1"
   local selected="${2:-}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0|spl1|spl2|spl3|spl3.5|spl4) ;;
     *) echo "Unknown step for check-step: $step" >&2; exit 1 ;;
   esac
 
   load_config
-  local failed=0
+  is_splicing_step "$step" && load_splicing_check_helpers
+  local failed=0 checked=0
   declare -A seen=()
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     case "$line" in [[:space:]]*'#'*) continue ;; esac
     sample_id=$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')
+    if is_splicing_step "$step"; then
+      splicing_check_is_rna_sample_id "$sample_id" || continue
+    fi
     patient=$(sample_base_name "$sample_id")
     [ -n "$patient" ] || continue
     [ -n "${seen[$patient]:-}" ] && continue
     seen["$patient"]=1
     if [ -n "$selected" ] && [ "$selected" != "$patient" ] && [ "$selected" != "$sample_id" ]; then
+      continue
+    fi
+    checked=$((checked + 1))
+
+    if is_splicing_step "$step"; then
+      completion="$(splicing_check_step_completion "$patient" "$step")" || true
+      completion_state="${completion%%$'\t'*}"
+      out="${completion#*$'\t'}"
+      if [ "$completion_state" = "DONE" ]; then
+        printf "%s\tYES\t%s\n" "$patient" "$out"
+        continue
+      fi
+      input_info="$(splicing_check_step_input_status "$patient" "$step")" || true
+      input_state="${input_info%%$'\t'*}"
+      input_path="${input_info#*$'\t'}"
+      printf "%s\tNO\t%s\t%s\t%s\t%s\n" "$patient" "$completion_state" "$out" "$input_state" "$input_path"
+      failed=1
       continue
     fi
 
@@ -613,6 +653,10 @@ check_step_outputs() {
     fi
   done < "$samples"
 
+  if [ "$checked" -eq 0 ]; then
+    echo "No matching sample found in $samples" >&2
+    return 1
+  fi
   [ "$failed" -eq 0 ]
 }
 
@@ -633,16 +677,21 @@ watch_step_outputs() {
   local selected="${2:-}"
   local interval="${3:-5}"
   case "$step" in
-    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0) ;;
+    4.1|4.2|4.3|4.4|4.5|4.5.1|4.6|4.7.0|4.7|4.7.1|2.0|2.0.1|2.0.2|3.0|spl1|spl2|spl3|spl3.5|spl4) ;;
     *) echo "Unknown step for watch-step: $step" >&2; exit 1 ;;
   esac
   [[ "$interval" =~ ^[0-9]+$ ]] || { echo "INTERVAL_SEC must be integer" >&2; exit 1; }
   [ "$interval" -gt 0 ] || { echo "INTERVAL_SEC must be > 0" >&2; exit 1; }
 
   load_config
+  is_splicing_step "$step" && load_splicing_check_helpers
   local prefix logdir spinner_idx=0
   prefix="$(legacy_step_prefix "$step")"
-  logdir="${vcfdir}/${prefix}.logs_and_reports/logs"
+  if is_splicing_step "$step"; then
+    logdir="$(splicing_check_step_logdir "$step")"
+  else
+    logdir="${vcfdir}/${prefix}.logs_and_reports/logs"
+  fi
   sp='|/-\\'
 
   while :; do
@@ -657,6 +706,9 @@ watch_step_outputs() {
       [ -n "$line" ] || continue
       case "$line" in [[:space:]]*'#'*) continue ;; esac
       sample_id=$(printf '%s\n' "$line" | awk -F'[,\t ]+' '{print $1}')
+      if is_splicing_step "$step"; then
+        splicing_check_is_rna_sample_id "$sample_id" || continue
+      fi
       patient=$(sample_base_name "$sample_id")
       [ -n "$patient" ] || continue
       [ -n "${seen[$patient]:-}" ] && continue
@@ -666,12 +718,20 @@ watch_step_outputs() {
       fi
       total=$((total + 1))
 
-      out="$(legacy_step_expected_output "$patient" "$step")"
-      marker="${logdir}/submitted.${prefix}.${patient}.jobid"
+      if is_splicing_step "$step"; then
+        completion="$(splicing_check_step_completion "$patient" "$step")" || true
+        completion_state="${completion%%$'\t'*}"
+        out="${completion#*$'\t'}"
+        marker="$(splicing_check_find_marker "$patient" "$sample_id" "$step")"
+      else
+        completion_state=""
+        out="$(legacy_step_expected_output "$patient" "$step")"
+        marker="${logdir}/submitted.${prefix}.${patient}.jobid"
+      fi
       status=""
       detail=""
 
-      if [ -f "$out" ] && [ -s "$out" ]; then
+      if { is_splicing_step "$step" && [ "$completion_state" = "DONE" ]; } || { ! is_splicing_step "$step" && [ -f "$out" ] && [ -s "$out" ]; }; then
         status="DONE"
         detail="$out"
         done_ok=$((done_ok + 1))
@@ -977,8 +1037,13 @@ case "$cmd" in
     esac
     ;;
   check)
-    sample="${1:-}"
-    mode="${2:-all}"
+    if [ "${1:-}" = "all" ] || [ "${1:-}" = "rna" ] || [ "${1:-}" = "germline" ] || [ "${1:-}" = "splicing" ]; then
+      sample=""
+      mode="$1"
+    else
+      sample="${1:-}"
+      mode="${2:-all}"
+    fi
     if [ -n "$sample" ]; then
       make -C "$REPO" check_outputs CONFIG="$CONFIG" SAMPLE="$sample" MODE="$mode"
     else
