@@ -4,14 +4,15 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  bash splicing/run_spl4_build_sequences.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--input-suffix SUFFIX] [-f] [--dry-run] [--include-noncanonical]
+  bash splicing/run_spl4_build_sequences.sh -c CONFIG [-s SAMPLE_OR_PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--input-suffix SUFFIX] [-f] [--dry-run] [--include-noncanonical] [--allow-non-methionine-start]
 
 Behavior:
 - Submits a PBS/qsub job per patient/sample
 - The qsub job reads spl3 event TSVs from the splicing root, or another suffix
   supplied with --input-suffix, such as .spl3.5.cancer_unique.tsv
 - The qsub job reconstructs pipe-marked nucleotide/protein neojunction sequences
-- Writes Arriba-like *.spl4.neojunctions.tsv plus full NT/AA FASTA files
+- Writes sequence-eligible events to Arriba-like *.spl4.neojunctions.tsv and NT/AA FASTA files
+- Writes excluded events and reasons to *.spl4.sequence_rejected.tsv
 USAGE
 }
 
@@ -25,6 +26,7 @@ input_suffix_override=""
 force=0
 dry_run=0
 include_noncanonical=0
+allow_non_methionine_start=0
 
 while [ $# -gt 0 ]; do
   case "${1:-}" in
@@ -38,6 +40,7 @@ while [ $# -gt 0 ]; do
     -f|--force) force=1; shift ;;
     --dry-run) dry_run=1; shift ;;
     --include-noncanonical) include_noncanonical=1; shift ;;
+    --allow-non-methionine-start) allow_non_methionine_start=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -57,6 +60,10 @@ fi
 
 # shellcheck disable=SC1090
 source "$config"
+
+case "${splicing_spl4_allow_non_methionine_start:-false}" in
+  1|true|TRUE|yes|YES) allow_non_methionine_start=1 ;;
+esac
 
 if [ -n "$root_override" ]; then
   spl4_root="$root_override"
@@ -257,6 +264,9 @@ if [ "$force" -eq 1 ]; then
 fi
 if [ "$include_noncanonical" -eq 1 ]; then
   cmd+=(--include-noncanonical)
+fi
+if [ "$allow_non_methionine_start" -eq 1 ]; then
+  cmd+=(--allow-non-methionine-start)
 fi
 "\${cmd[@]}"
 SCRIPT

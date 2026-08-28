@@ -131,6 +131,10 @@ splicing_check_step_outputs() {
         "${output_dir}/${sample_id}.spl4.neojunctions.aa.fa" \
         "${output_dir}/${sample_id}.spl4.neojunctions.aa.fa" \
         "${output_dir}/${legacy_sample_id}.spl4.neojunctions.aa.fa"
+      splicing_check_resolve_file \
+        "${output_dir}/${sample_id}.spl4.sequence_rejected.tsv" \
+        "${output_dir}/${sample_id}.spl4.sequence_rejected.tsv" \
+        "${output_dir}/${legacy_sample_id}.spl4.sequence_rejected.tsv"
       ;;
     *) return 1 ;;
   esac

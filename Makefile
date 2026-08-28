@@ -163,7 +163,7 @@ run_splicing_liftover_normal_ref:
 	cd splicing && bash run_liftover_normal_reference.sh $(if $(CONFIG),-c "$(CONFIG)",) $(if $(INPUT),--input "$(INPUT)",) $(if $(OUT),--out "$(OUT)",) $(if $(CHAIN),--chain "$(CHAIN)",) $(if $(LIFTOVER_ENGINE),--engine "$(LIFTOVER_ENGINE)",) $(if $(LIFTOVER_BIN),--liftover-bin "$(LIFTOVER_BIN)",) $(if $(FROM_BUILD),--from-build "$(FROM_BUILD)",) $(if $(TO_BUILD),--to-build "$(TO_BUILD)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(KEEP_CROSS_CHROM)),--keep-cross-chrom,) $(if $(filter 1 true yes,$(ALLOW_INVERTED)),--allow-inverted,)
 
 run_splicing_spl4: check-config
-	cd splicing && bash run_spl4_build_sequences.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(FASTA),--fasta "$(FASTA)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(if $(SPLICING_INPUT_SUFFIX),--input-suffix "$(SPLICING_INPUT_SUFFIX)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,)
+	cd splicing && bash run_spl4_build_sequences.sh -c "$(CONFIG)" $(SAMPLE_FLAG) $(if $(SPLICING_ROOT),--root "$(SPLICING_ROOT)",) $(if $(GTF),--gtf "$(GTF)",) $(if $(FASTA),--fasta "$(FASTA)",) $(if $(SPLICING_OUTDIR),--outdir "$(SPLICING_OUTDIR)",) $(if $(SPLICING_INPUT_SUFFIX),--input-suffix "$(SPLICING_INPUT_SUFFIX)",) $(FORCE_FLAG) $(DRY_RUN_FLAG) $(if $(filter 1 true yes,$(INCLUDE_NONCANONICAL)),--include-noncanonical,) $(if $(filter 1 true yes,$(ALLOW_NON_METHIONINE_START)),--allow-non-methionine-start,)
 
 run_splicing_merge_star_sj: run_splicing_spl1
 

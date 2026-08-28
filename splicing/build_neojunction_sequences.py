@@ -15,6 +15,7 @@ INPUT_SUFFIX = ".spl3.event_annotated.tsv"
 OUTPUT_SUFFIX = ".spl4.neojunctions.tsv"
 NT_FASTA_SUFFIX = ".spl4.neojunctions.nt.fa"
 AA_FASTA_SUFFIX = ".spl4.neojunctions.aa.fa"
+REJECTED_SUFFIX = ".spl4.sequence_rejected.tsv"
 CANONICAL_CHROMS = {str(i) for i in range(1, 23)} | {"X", "Y"}
 
 CODON_TABLE = {
@@ -109,6 +110,12 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--out-suffix", default=OUTPUT_SUFFIX, help="Suffix for the spl4 Arriba-like TSV")
     ap.add_argument("--nt-fasta-suffix", default=NT_FASTA_SUFFIX, help="Suffix for full nucleotide FASTA")
     ap.add_argument("--aa-fasta-suffix", default=AA_FASTA_SUFFIX, help="Suffix for full amino-acid FASTA")
+    ap.add_argument("--rejected-suffix", default=REJECTED_SUFFIX, help="Suffix for sequence-ineligible event audit TSV")
+    ap.add_argument(
+        "--allow-non-methionine-start",
+        action="store_true",
+        help="Do not reject reconstructed WT/altered proteins that do not begin with methionine",
+    )
     ap.add_argument("--force", action="store_true", help="Overwrite existing outputs")
     ap.add_argument("--dry-run", action="store_true", help="Report planned outputs without writing")
     ap.add_argument("--include-noncanonical", action="store_true", help="Keep non-canonical contigs in the GTF")
@@ -621,17 +628,6 @@ def trim_at_stop(aa: str) -> Tuple[str, bool]:
     return aa.split("*", 1)[0], True
 
 
-def longest_frame_translation(nt_seq: str) -> Tuple[str, int]:
-    best_aa = ""
-    best_frame = 0
-    for frame in range(3):
-        aa, _ = trim_at_stop(translate(nt_seq[frame:]))
-        if len(aa) > len(best_aa):
-            best_aa = aa
-            best_frame = frame
-    return best_aa, best_frame
-
-
 def cds_anchor(tx: Transcript) -> Optional[int]:
     if not tx.cds_features:
         return None
@@ -641,6 +637,47 @@ def cds_anchor(tx: Transcript) -> Optional[int]:
     if tx.strand == "+":
         return first.start + phase
     return first.end - phase
+
+
+def cds_terminal(tx: Transcript) -> Optional[int]:
+    if not tx.cds_features:
+        return None
+    ordered = sorted(tx.cds_features, key=lambda feature: (feature.start, feature.end), reverse=(tx.strand == "-"))
+    last = ordered[-1]
+    return last.end if tx.strand == "+" else last.start
+
+
+def build_wildtype_transcript(
+    tx: Transcript,
+    seq_cache: Dict[Tuple[str, int, int], str],
+) -> Tuple[str, List[int]]:
+    seq_parts: List[str] = []
+    coords: List[int] = []
+    for feature in transcript_ordered_features(tx):
+        if feature.lab != "exon":
+            continue
+        add_segment(seq_parts, coords, seq_cache, tx, feature, feature.start, feature.end)
+    return "".join(seq_parts), coords
+
+
+def sequence_between_coords(seq: str, coords: Sequence[int], start_coord: int, end_coord: int) -> Optional[str]:
+    try:
+        start_idx = coords.index(start_coord)
+        end_idx = coords.index(end_coord)
+    except ValueError:
+        return None
+    if start_idx > end_idx:
+        return None
+    return seq[start_idx : end_idx + 1]
+
+
+def first_sequence_difference(left: str, right: str) -> Optional[int]:
+    for idx, (left_aa, right_aa) in enumerate(zip(left, right)):
+        if left_aa != right_aa:
+            return idx
+    if len(left) != len(right):
+        return min(len(left), len(right))
+    return None
 
 
 def mark_with_pipe(seq: str, offset: int) -> str:
@@ -698,25 +735,39 @@ def build_sequences(
     junction_nt_offset = len(left_seq)
     nt_marked = mark_with_pipe(nt_seq, junction_nt_offset)
 
-    flags = []
+    wt_nt_seq, wt_coords = build_wildtype_transcript(tx, seq_cache)
     anchor = cds_anchor(tx)
-    if anchor is not None and anchor in coords:
-        cds_offset = coords.index(anchor)
-        aa_raw = translate(nt_seq[cds_offset:])
-        aa_seq, saw_stop = trim_at_stop(aa_raw)
-        translation_frame = str(cds_offset % 3)
-        if saw_stop:
-            flags.append("stop_codon_after_junction_or_cds")
-    else:
-        aa_seq, fallback_frame = longest_frame_translation(nt_seq)
-        cds_offset = fallback_frame
-        translation_frame = f"fallback_frame_{fallback_frame}"
-        flags.append("no_cds_anchor")
+    terminal = cds_terminal(tx)
+    if anchor is None or terminal is None:
+        return {"error": "no_cds_model"}
+    if anchor not in wt_coords or terminal not in wt_coords:
+        return {"error": "invalid_wildtype_cds_coordinates"}
+    if anchor not in coords or terminal not in coords:
+        return {"error": "cds_boundary_removed_by_event"}
+
+    wt_cds = sequence_between_coords(wt_nt_seq, wt_coords, anchor, terminal)
+    altered_cds = sequence_between_coords(nt_seq, coords, anchor, terminal)
+    if wt_cds is None or altered_cds is None:
+        return {"error": "cannot_reconstruct_cds"}
+
+    wt_cds_offset = wt_coords.index(anchor)
+    altered_cds_offset = coords.index(anchor)
+    wt_aa, wt_saw_stop = trim_at_stop(translate(wt_nt_seq[wt_cds_offset:]))
+    aa_seq, altered_saw_stop = trim_at_stop(translate(nt_seq[altered_cds_offset:]))
+    cds_length_delta = len(altered_cds) - len(wt_cds)
+    first_changed_aa = first_sequence_difference(wt_aa, aa_seq)
+    protein_changed = first_changed_aa is not None
+
+    flags = []
+    if altered_saw_stop:
+        flags.append("stop_codon_after_cds_start")
+    if not wt_saw_stop:
+        flags.append("wildtype_stop_not_observed")
 
     if not aa_seq:
         flags.append("no_aa_sequence")
 
-    rel_junction = junction_nt_offset - cds_offset
+    rel_junction = junction_nt_offset - altered_cds_offset
     if rel_junction < 0:
         junction_aa_offset = 0
         flags.append("junction_before_translation_start")
@@ -725,9 +776,13 @@ def build_sequences(
         if rel_junction % 3 != 0:
             flags.append("junction_inside_codon")
     aa_marked = mark_with_pipe(aa_seq, junction_aa_offset) if aa_seq else "NA"
-    reading_frame = "unknown"
-    if aa_seq:
-        reading_frame = "out_of_frame" if "junction_inside_codon" in flags else "inframe"
+    if not protein_changed:
+        reading_frame = "no_protein_change"
+        flags.append("no_protein_change")
+    elif cds_length_delta % 3:
+        reading_frame = "out_of_frame"
+    else:
+        reading_frame = "inframe"
 
     return {
         "nt_sequence": nt_seq,
@@ -736,11 +791,45 @@ def build_sequences(
         "aa_sequence_junction_marked": aa_marked,
         "junction_nt_offset": str(junction_nt_offset),
         "junction_aa_offset": str(junction_aa_offset),
-        "translation_frame": translation_frame,
+        "first_changed_aa_offset": "NA" if first_changed_aa is None else str(first_changed_aa),
+        "translation_frame": str(altered_cds_offset % 3),
         "reading_frame": reading_frame,
+        "frame_method": "altered_vs_wildtype_cds_length_mod3",
+        "wt_cds_length": str(len(wt_cds)),
+        "altered_cds_length": str(len(altered_cds)),
+        "cds_length_delta": str(cds_length_delta),
+        "wt_aa_length": str(len(wt_aa)),
+        "altered_aa_length": str(len(aa_seq)),
+        "wt_aa_sequence": wt_aa or "NA",
+        "altered_stop_detected": "1" if altered_saw_stop else "0",
         "donor_breakpoint": f"{tx.chrom}:{donor_pos}",
         "acceptor_breakpoint": f"{tx.chrom}:{acceptor_pos}",
         "qc_flags": ";".join(flags) if flags else "PASS",
+    }
+
+
+def failed_sequence_fields(reason: str) -> Dict[str, str]:
+    return {
+        "nt_sequence": "NA",
+        "nt_sequence_junction_marked": "NA",
+        "aa_sequence": "NA",
+        "aa_sequence_junction_marked": "NA",
+        "junction_nt_offset": "NA",
+        "junction_aa_offset": "NA",
+        "first_changed_aa_offset": "NA",
+        "translation_frame": "NA",
+        "reading_frame": "unknown",
+        "frame_method": "altered_vs_wildtype_cds_length_mod3",
+        "wt_cds_length": "NA",
+        "altered_cds_length": "NA",
+        "cds_length_delta": "NA",
+        "wt_aa_length": "NA",
+        "altered_aa_length": "NA",
+        "wt_aa_sequence": "NA",
+        "altered_stop_detected": "NA",
+        "donor_breakpoint": "NA",
+        "acceptor_breakpoint": "NA",
+        "qc_flags": reason,
     }
 
 
@@ -774,6 +863,41 @@ def confidence(row: Dict[str, str], sequence_fields: Dict[str, str]) -> Tuple[st
     return level, ";".join(sorted(set(flag for flag in flags if flag))) if flags else "PASS"
 
 
+def sequence_filter_reasons(
+    sequence_fields: Dict[str, str],
+    confidence_level: str,
+    allow_non_methionine_start: bool,
+) -> List[str]:
+    reasons: List[str] = []
+    frame = sequence_fields.get("reading_frame", "unknown")
+    altered_aa = sequence_fields.get("aa_sequence", "NA")
+    wt_aa = sequence_fields.get("wt_aa_sequence", "NA")
+    marked_aa = sequence_fields.get("aa_sequence_junction_marked", "NA")
+
+    if frame not in {"inframe", "out_of_frame"}:
+        reasons.append(f"frame_{frame}")
+    if altered_aa in {"", "NA"} or marked_aa in {"", "NA"}:
+        reasons.append("no_altered_protein")
+    if wt_aa in {"", "NA"}:
+        reasons.append("no_wildtype_protein")
+    if not allow_non_methionine_start:
+        if wt_aa not in {"", "NA"} and not wt_aa.startswith("M"):
+            reasons.append("wildtype_protein_does_not_start_with_methionine")
+        if altered_aa not in {"", "NA"} and not altered_aa.startswith("M"):
+            reasons.append("altered_protein_does_not_start_with_methionine")
+    if marked_aa not in {"", "NA"}:
+        pipe_pos = marked_aa.find("|")
+        if pipe_pos < 0:
+            reasons.append("missing_junction_pipe")
+        elif pipe_pos == len(marked_aa) - 1:
+            reasons.append("junction_pipe_at_protein_end")
+        elif frame == "inframe" and pipe_pos == 0:
+            reasons.append("inframe_junction_pipe_at_protein_start")
+    if confidence_level == "low":
+        reasons.append("low_sequence_confidence")
+    return sorted(set(reasons))
+
+
 def fasta_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.:+|-]", "_", value)
 
@@ -787,11 +911,14 @@ def process_file(
     out_tsv: Path,
     out_nt_fasta: Path,
     out_aa_fasta: Path,
+    rejected_tsv: Path,
     transcripts: Dict[str, Transcript],
     seq_cache: Dict[Tuple[str, int, int], str],
+    allow_non_methionine_start: bool,
 ) -> Dict[str, int]:
     rows = read_tsv(input_path)
     out_rows: List[Dict[str, str]] = []
+    rejected_rows: List[Dict[str, str]] = []
     nt_records: List[Tuple[str, str]] = []
     aa_records: List[Tuple[str, str]] = []
     stats: DefaultDict[str, int] = defaultdict(int)
@@ -800,38 +927,14 @@ def process_file(
         stats["input_rows"] += 1
         tx = choose_transcript(row, transcripts)
         if tx is None:
-            sequence_fields = {
-                "nt_sequence": "NA",
-                "nt_sequence_junction_marked": "NA",
-                "aa_sequence": "NA",
-                "aa_sequence_junction_marked": "NA",
-                "junction_nt_offset": "NA",
-                "junction_aa_offset": "NA",
-                "translation_frame": "NA",
-                "reading_frame": "unknown",
-                "donor_breakpoint": "NA",
-                "acceptor_breakpoint": "NA",
-                "qc_flags": "no_transcript_model",
-            }
+            sequence_fields = failed_sequence_fields("no_transcript_model")
             gene_id = row.get("matched_gene_id", row.get("gene_ids", "NA"))
             gene_name = row.get("matched_gene_name", row.get("gene_names", "NA"))
             transcript_id = row.get("matched_transcript_id", "NA")
         else:
             sequence_fields = build_sequences(row, tx, seq_cache)
             if "error" in sequence_fields:
-                sequence_fields.update({
-                    "nt_sequence": "NA",
-                    "nt_sequence_junction_marked": "NA",
-                    "aa_sequence": "NA",
-                    "aa_sequence_junction_marked": "NA",
-                    "junction_nt_offset": "NA",
-                    "junction_aa_offset": "NA",
-                    "translation_frame": "NA",
-                    "reading_frame": "unknown",
-                    "donor_breakpoint": "NA",
-                    "acceptor_breakpoint": "NA",
-                    "qc_flags": sequence_fields["error"],
-                })
+                sequence_fields = failed_sequence_fields(sequence_fields["error"])
             gene_id = tx.gene_id or row.get("matched_gene_id", "NA")
             gene_name = tx.gene_name or row.get("matched_gene_name", "NA")
             transcript_id = tx.transcript_id
@@ -845,16 +948,13 @@ def process_file(
         nt_id = fasta_id(f"{event_id}|nt|row{idx}")
         aa_id = fasta_id(f"{event_id}|aa|row{idx}")
 
-        if sequence_fields["nt_sequence"] != "NA":
-            nt_records.append((nt_id, sequence_fields["nt_sequence"]))
-        if sequence_fields["aa_sequence"] != "NA":
-            aa_records.append((aa_id, sequence_fields["aa_sequence"]))
-
         unique_reads = row.get("unique_reads", "0") or "0"
         multimap_reads = row.get("multimap_reads", "0") or "0"
         total_reads = row.get("total_reads", unique_reads) or unique_reads
         event_class = row.get("ssnip_event_class", row.get("event_class", "NA"))
         peptide_sequence = sequence_fields["aa_sequence_junction_marked"]
+        filter_reasons = sequence_filter_reasons(sequence_fields, conf, allow_non_methionine_start)
+        sequence_eligible = not filter_reasons
 
         out = {
             "#gene1": gene_name,
@@ -896,18 +996,50 @@ def process_file(
             "max_splice_overhang": row.get("max_splice_overhang", "NA"),
             "qc_confidence": conf,
             "qc_flags": qc_flags,
+            "sequence_eligible": "1" if sequence_eligible else "0",
+            "sequence_filter_reason": "PASS" if sequence_eligible else ";".join(filter_reasons),
             "nt_sequence_junction_marked": sequence_fields["nt_sequence_junction_marked"],
             "aa_sequence_junction_marked": sequence_fields["aa_sequence_junction_marked"],
             "junction_nt_offset": sequence_fields["junction_nt_offset"],
             "junction_aa_offset": sequence_fields["junction_aa_offset"],
+            "first_changed_aa_offset": sequence_fields["first_changed_aa_offset"],
             "translation_frame": sequence_fields["translation_frame"],
-            "nt_fasta_id": nt_id if sequence_fields["nt_sequence"] != "NA" else "NA",
-            "aa_fasta_id": aa_id if sequence_fields["aa_sequence"] != "NA" else "NA",
+            "frame_method": sequence_fields["frame_method"],
+            "wt_cds_length": sequence_fields["wt_cds_length"],
+            "altered_cds_length": sequence_fields["altered_cds_length"],
+            "cds_length_delta": sequence_fields["cds_length_delta"],
+            "wt_aa_length": sequence_fields["wt_aa_length"],
+            "altered_aa_length": sequence_fields["altered_aa_length"],
+            "altered_stop_detected": sequence_fields["altered_stop_detected"],
+            "nt_fasta_id": nt_id if sequence_eligible else "NA",
+            "aa_fasta_id": aa_id if sequence_eligible else "NA",
             "source_sj": row.get("source_sj", "NA"),
             "source_spl3": str(input_path),
         }
-        out_rows.append(out)
+
         stats[f"confidence_{conf}"] += 1
+        stats[f"frame_{sequence_fields['reading_frame']}"] += 1
+        if sequence_eligible:
+            if sequence_fields["nt_sequence"] != "NA":
+                nt_records.append((nt_id, sequence_fields["nt_sequence"]))
+            if sequence_fields["aa_sequence"] != "NA":
+                aa_records.append((aa_id, sequence_fields["aa_sequence"]))
+            out_rows.append(out)
+            stats[f"output_frame_{sequence_fields['reading_frame']}"] += 1
+        else:
+            compact_rejected = dict(out)
+            compact_rejected.update(
+                {
+                    "peptide_sequence": "NA",
+                    "nt_sequence_junction_marked": "NA",
+                    "aa_sequence_junction_marked": "NA",
+                    "nt_fasta_id": "NA",
+                    "aa_fasta_id": "NA",
+                }
+            )
+            rejected_rows.append(compact_rejected)
+            for reason in filter_reasons:
+                stats[f"rejected_{reason}"] += 1
 
     fieldnames = [
         "#gene1", "gene2", "gene_id1", "gene_id2", "transcript_id1", "transcript_id2",
@@ -917,8 +1049,11 @@ def process_file(
         "chrom", "strand", "star_intron_start", "star_intron_end", "donor_boundary", "acceptor_boundary",
         "ssnip_event_class", "ssnip_event_raw", "left_feature", "right_feature", "skipped_exon_ids",
         "unique_reads", "multimap_reads", "total_reads", "max_splice_overhang",
-        "qc_confidence", "qc_flags", "nt_sequence_junction_marked", "aa_sequence_junction_marked",
-        "junction_nt_offset", "junction_aa_offset", "translation_frame", "nt_fasta_id", "aa_fasta_id",
+        "qc_confidence", "qc_flags", "sequence_eligible", "sequence_filter_reason",
+        "nt_sequence_junction_marked", "aa_sequence_junction_marked",
+        "junction_nt_offset", "junction_aa_offset", "first_changed_aa_offset", "translation_frame",
+        "frame_method", "wt_cds_length", "altered_cds_length", "cds_length_delta",
+        "wt_aa_length", "altered_aa_length", "altered_stop_detected", "nt_fasta_id", "aa_fasta_id",
         "source_sj", "source_spl3",
     ]
 
@@ -927,6 +1062,10 @@ def process_file(
         writer = csv.DictWriter(out, fieldnames=fieldnames, delimiter="\t", lineterminator="\n", extrasaction="ignore")
         writer.writeheader()
         writer.writerows(out_rows)
+    with rejected_tsv.open("w", encoding="utf-8", newline="") as out:
+        writer = csv.DictWriter(out, fieldnames=fieldnames, delimiter="\t", lineterminator="\n", extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rejected_rows)
     with out_nt_fasta.open("w", encoding="utf-8") as out:
         for rec_id, seq in nt_records:
             out.write(f">{rec_id}\n{wrap_fasta(seq)}\n")
@@ -934,20 +1073,45 @@ def process_file(
         for rec_id, seq in aa_records:
             out.write(f">{rec_id}\n{wrap_fasta(seq)}\n")
     stats["output_rows"] = len(out_rows)
+    stats["rejected_rows"] = len(rejected_rows)
     stats["nt_fasta_records"] = len(nt_records)
     stats["aa_fasta_records"] = len(aa_records)
     return dict(stats)
 
 
-def output_paths(input_path: Path, root: Path, out_dir: Optional[Path], args: argparse.Namespace) -> Tuple[Path, Path, Path]:
+def output_paths(
+    input_path: Path,
+    root: Path,
+    out_dir: Optional[Path],
+    args: argparse.Namespace,
+) -> Tuple[Path, Path, Path, Path]:
     out_tsv = output_path_for(input_path, root, out_dir, args.input_suffix, args.out_suffix, args.output_subdir)
     out_nt = output_path_for(input_path, root, out_dir, args.input_suffix, args.nt_fasta_suffix, args.output_subdir)
     out_aa = output_path_for(input_path, root, out_dir, args.input_suffix, args.aa_fasta_suffix, args.output_subdir)
-    return out_tsv, out_nt, out_aa
+    rejected_tsv = output_path_for(
+        input_path,
+        root,
+        out_dir,
+        args.input_suffix,
+        args.rejected_suffix,
+        args.output_subdir,
+    )
+    return out_tsv, out_nt, out_aa, rejected_tsv
 
 
 def print_stats(path: Path, stats: Dict[str, int]) -> None:
-    fields = ["input_rows", "output_rows", "nt_fasta_records", "aa_fasta_records", "confidence_high", "confidence_medium", "confidence_low"]
+    fields = [
+        "input_rows",
+        "output_rows",
+        "rejected_rows",
+        "output_frame_inframe",
+        "output_frame_out_of_frame",
+        "nt_fasta_records",
+        "aa_fasta_records",
+        "confidence_high",
+        "confidence_medium",
+        "confidence_low",
+    ]
     details = " ".join(f"{field}={stats.get(field, 0)}" for field in fields)
     print(f"[spl4] {path}: {details}", file=sys.stderr)
 
@@ -990,17 +1154,36 @@ def main() -> int:
     written = 0
     skipped = 0
     for input_path in inputs:
-        out_tsv, out_nt, out_aa = output_paths(input_path, root, out_dir, args)
-        outputs_exist = out_tsv.exists() and out_nt.exists() and out_aa.exists()
-        if outputs_exist and not args.force:
-            print(f"[spl4][skip] outputs exist: {out_tsv}", file=sys.stderr)
+        out_tsv, out_nt, out_aa, rejected_tsv = output_paths(input_path, root, out_dir, args)
+        outputs = (out_tsv, out_nt, out_aa, rejected_tsv)
+        existing_outputs = [path for path in outputs if path.exists()]
+        if existing_outputs and not args.force:
+            if len(existing_outputs) == len(outputs):
+                print(f"[spl4][skip] outputs exist: {out_tsv}", file=sys.stderr)
+            else:
+                missing = ", ".join(str(path) for path in outputs if not path.exists())
+                print(
+                    f"[spl4][skip] partial or pre-frame-fix outputs exist for {out_tsv}; "
+                    f"rerun with --force (missing: {missing})",
+                    file=sys.stderr,
+                )
             skipped += 1
             continue
         print(f"[spl4] {out_tsv} <- {input_path}", file=sys.stderr)
+        print(f"[spl4] rejected-event audit: {rejected_tsv}", file=sys.stderr)
         if args.dry_run:
             written += 1
             continue
-        stats = process_file(input_path, out_tsv, out_nt, out_aa, transcripts, seq_cache)
+        stats = process_file(
+            input_path,
+            out_tsv,
+            out_nt,
+            out_aa,
+            rejected_tsv,
+            transcripts,
+            seq_cache,
+            args.allow_non_methionine_start,
+        )
         print_stats(out_tsv, stats)
         written += 1
 

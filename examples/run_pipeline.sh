@@ -21,7 +21,7 @@ Usage:
   $0 splicing spl3.5 [PATIENT] [--root SPLICING_DIR] [--normal-ref TSV] [--outdir DIR] [--max-normal-prevalence X] [--normal-total-samples N] [--max-normal-sample-count N] [--ignore-strand] [-f] [--dry-run]
   $0 splicing build-normal-ref --snaptron-dir DIR [--out TSV.GZ] [--coordinate-mode star-intron|boundary] [--total-samples N] [--min-sample-count N] [--min-total-reads N] [--min-prevalence X] [--canonical-only] [--drop-unknown-strand] [--include-tissue-summary] [-f] [--dry-run]
   $0 splicing liftover-normal-ref --input REF37.tsv.gz --out REF38.tsv.gz --chain hg19ToHg38.over.chain.gz [--engine python|ucsc] [--liftover-bin liftOver] [-f] [--dry-run]
-  $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--input-suffix SUFFIX] [--include-noncanonical] [-f] [--dry-run]
+  $0 splicing spl4 [PATIENT] [--root SPLICING_DIR] [--gtf GTF] [--fasta FASTA] [--outdir DIR] [--input-suffix SUFFIX] [--include-noncanonical] [--allow-non-methionine-start] [-f] [--dry-run]
   $0 mupexi [PATIENT] [--outdir DIR] [--run-fusions] [--fusion-only] [--run-splicing] [--splicing-only] [--hla HLA_STRING] [--expr EXPR_TSV] [--fusion FUSION_ARRIBA_TSV] [--splicing SPL4_TSV] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 cleanup [PATIENT] [--execute] [--threads N] [--nodes N] [--ppn N] [--mem SIZE] [--walltime HH:MM:SS] [-f] [--skip-running]
   $0 all [PATIENT] [-f]
@@ -452,6 +452,7 @@ run_splicing_spl4() {
   local input_suffix="${6:-}"
   local dry_run="${7:-0}"
   local include_noncanonical="${8:-0}"
+  local allow_non_methionine_start="${9:-0}"
   local splicing_root_arg=""
   local gtf_arg=""
   local fasta_arg=""
@@ -459,6 +460,7 @@ run_splicing_spl4() {
   local input_suffix_arg=""
   local dry_run_arg=""
   local include_noncanonical_arg=""
+  local allow_non_methionine_start_arg=""
   if [ -n "$splicing_root" ]; then splicing_root_arg="SPLICING_ROOT=$splicing_root"; fi
   if [ -n "$gtf" ]; then gtf_arg="GTF=$gtf"; fi
   if [ -n "$fasta" ]; then fasta_arg="FASTA=$fasta"; fi
@@ -466,10 +468,11 @@ run_splicing_spl4() {
   if [ -n "$input_suffix" ]; then input_suffix_arg="SPLICING_INPUT_SUFFIX=$input_suffix"; fi
   if [ "$dry_run" = "1" ]; then dry_run_arg="DRY_RUN=1"; fi
   if [ "$include_noncanonical" = "1" ]; then include_noncanonical_arg="INCLUDE_NONCANONICAL=1"; fi
+  if [ "$allow_non_methionine_start" = "1" ]; then allow_non_methionine_start_arg="ALLOW_NON_METHIONINE_START=1"; fi
   if [ -n "$sample" ]; then
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $input_suffix_arg $dry_run_arg $include_noncanonical_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" SAMPLE="$sample" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $input_suffix_arg $dry_run_arg $include_noncanonical_arg $allow_non_methionine_start_arg $force_arg
   else
-    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $input_suffix_arg $dry_run_arg $include_noncanonical_arg $force_arg
+    PIPELINE_DEFAULTS="$PIPELINE_DEFAULTS" make -C "$REPO" run_splicing_spl4 CONFIG="$CONFIG" $splicing_root_arg $gtf_arg $fasta_arg $outdir_arg $input_suffix_arg $dry_run_arg $include_noncanonical_arg $allow_non_methionine_start_arg $force_arg
   fi
 }
 
@@ -1254,6 +1257,7 @@ case "$cmd" in
         input_suffix=""
         dry_run="0"
         include_noncanonical="0"
+        allow_non_methionine_start="0"
         if [ $# -gt 0 ] && [[ "${1:-}" != -* ]]; then
           sample="$1"
           shift
@@ -1267,10 +1271,11 @@ case "$cmd" in
             --input-suffix) input_suffix="${2:-}"; shift 2 ;;
             --dry-run) dry_run="1"; shift ;;
             --include-noncanonical) include_noncanonical="1"; shift ;;
+            --allow-non-methionine-start) allow_non_methionine_start="1"; shift ;;
             *) echo "Unknown splicing option: $1" >&2; exit 1 ;;
           esac
         done
-        run_splicing_spl4 "$sample" "$splicing_root" "$gtf" "$fasta" "$outdir" "$input_suffix" "$dry_run" "$include_noncanonical"
+        run_splicing_spl4 "$sample" "$splicing_root" "$gtf" "$fasta" "$outdir" "$input_suffix" "$dry_run" "$include_noncanonical" "$allow_non_methionine_start"
         ;;
       *)
         echo "Unknown splicing task: ${task:-<missing>}" >&2

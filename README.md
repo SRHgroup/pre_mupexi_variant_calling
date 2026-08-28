@@ -40,7 +40,7 @@ Splicing:
 2. `spl2` # call novel splice junctions by comparing merged STAR junctions to the GTF annotation.
 3. `spl3` # classify novel junctions into SSNIP-style event classes: `A3+`, `A3-`, `A5+`, `A5-`, `ES`, `junction_in_exon`, `junction_in_intron`, or `other`.
 4. `spl3.5` # optional normal-junction filtering against a compact GTEx/Snaptron/in-house normal reference before sequence reconstruction.
-5. `spl4` # reconstruct neojunction nucleotide/protein sequences and write an Arriba-like TSV plus NT/AA FASTA files for MuPeXI2.
+5. `spl4` # compare reconstructed wild-type and altered CDSs, classify frame by CDS length change modulo 3, and write sequence-eligible events for MuPeXI2.
 
 ## Dependency model
 
@@ -163,6 +163,8 @@ ${patient}_RNA_${tumor_tag}.spl4.neojunctions.nt.fa
 ${patient}_RNA_${tumor_tag}.spl4.neojunctions.aa.fa
 ```
 
+`spl4` excludes events that cannot produce a defensible altered protein from the MuPeXI-facing TSV. It records every excluded row and reason in `${patient}_RNA_${tumor_tag}.spl4.sequence_rejected.tsv`. Junction position within a codon is retained as QC information but is not used to call a frameshift.
+
 Run MuPeXI2 with neosplicing only:
 
 ```bash
@@ -220,7 +222,7 @@ If you use the project-folder wrapper (`examples/run_pipeline.sh`), you can chec
 ./run_pipeline.sh watch-step spl4 Pat101 10
 ```
 
-The splicing cohort check validates `spl1`, `spl2`, `spl3`, optional `spl3.5`, and all three `spl4` outputs. An empty `spl4` NT/AA FASTA is accepted when the output TSV exists and is non-empty, because a successfully processed sample can have no translated records.
+The splicing cohort check validates `spl1`, `spl2`, `spl3`, optional `spl3.5`, and all four `spl4` outputs, including the rejection audit. An empty `spl4` NT/AA FASTA is accepted when the output TSV exists and is non-empty, because a successfully processed sample can have no translated records.
 
 Legacy STAR folders/files with a duplicated patient prefix, such as `43-DE-B_43-DE-B_RNA_TUMOR`, are accepted as `DONE_LEGACY_NAME`. `spl2` uses the canonical patient target for its output basename and sample label, preventing the malformed upstream name from propagating into `spl2` through `spl4`.
 

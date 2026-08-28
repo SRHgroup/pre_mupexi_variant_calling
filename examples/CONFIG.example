@@ -46,6 +46,8 @@ dna_bam_suffix="md.bam"
 # splicing_normal_total_samples="9166"
 # If spl3.5 is used, make spl4 read the filtered cancer-unique file:
 # splicing_spl4_input_suffix=".spl3.5.cancer_unique.tsv"
+# spl4 requires reconstructed WT and altered proteins to start with methionine by default.
+# splicing_spl4_allow_non_methionine_start="false"
 # Optional one-time Snaptron normal-reference build resources.
 # splicing_reference_modules="tools anaconda3/2025.06-1"
 # splicing_reference_qsub_nodes="1"
