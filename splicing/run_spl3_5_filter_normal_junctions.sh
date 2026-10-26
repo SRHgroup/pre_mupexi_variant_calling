@@ -89,7 +89,7 @@ else
   spl3_5_outdir="$spl3_5_root"
 fi
 
-max_normal_prevalence="${max_normal_prevalence_override:-${splicing_normal_max_prevalence:-0.01}}"
+max_normal_prevalence="${max_normal_prevalence_override:-${splicing_normal_max_prevalence:-0}}"
 normal_total_samples="${normal_total_samples_override:-${splicing_normal_total_samples:-0}}"
 max_normal_sample_count="${max_normal_sample_count_override:-${splicing_normal_max_sample_count:-}}"
 if [ "${splicing_normal_ignore_strand:-0}" = "1" ] || [ "${splicing_normal_ignore_strand:-0}" = "true" ]; then

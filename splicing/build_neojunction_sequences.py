@@ -15,6 +15,21 @@ INPUT_SUFFIX = ".spl3.event_annotated.tsv"
 OUTPUT_SUFFIX = ".spl4.neojunctions.tsv"
 NT_FASTA_SUFFIX = ".spl4.neojunctions.nt.fa"
 AA_FASTA_SUFFIX = ".spl4.neojunctions.aa.fa"
+NORMAL_ANNOTATION_FIELDS = [
+    "normal_ref_match",
+    "normal_status",
+    "normal_filter_reason",
+    "normal_sample_count",
+    "normal_total_reads",
+    "normal_prevalence",
+    "normal_source",
+    "normal_tissue_count",
+    "normal_tissue_sample_counts",
+    "normal_tissue_read_counts",
+    "normal_broad_tissue_count",
+    "normal_broad_tissue_sample_counts",
+    "normal_broad_tissue_read_counts",
+]
 REJECTED_SUFFIX = ".spl4.sequence_rejected.tsv"
 CANONICAL_CHROMS = {str(i) for i in range(1, 23)} | {"X", "Y"}
 
@@ -1016,6 +1031,8 @@ def process_file(
             "source_sj": row.get("source_sj", "NA"),
             "source_spl3": str(input_path),
         }
+        for field in NORMAL_ANNOTATION_FIELDS:
+            out[field] = row.get(field, "NA") or "NA"
 
         stats[f"confidence_{conf}"] += 1
         stats[f"frame_{sequence_fields['reading_frame']}"] += 1
@@ -1049,6 +1066,7 @@ def process_file(
         "chrom", "strand", "star_intron_start", "star_intron_end", "donor_boundary", "acceptor_boundary",
         "ssnip_event_class", "ssnip_event_raw", "left_feature", "right_feature", "skipped_exon_ids",
         "unique_reads", "multimap_reads", "total_reads", "max_splice_overhang",
+        *NORMAL_ANNOTATION_FIELDS,
         "qc_confidence", "qc_flags", "sequence_eligible", "sequence_filter_reason",
         "nt_sequence_junction_marked", "aa_sequence_junction_marked",
         "junction_nt_offset", "junction_aa_offset", "first_changed_aa_offset", "translation_frame",

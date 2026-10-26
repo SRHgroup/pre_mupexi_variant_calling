@@ -43,8 +43,12 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--max-normal-prevalence",
         type=float,
-        default=0.01,
-        help="Keep junctions only when normal prevalence is below this value. Default: 0.01.",
+        default=0.0,
+        help=(
+            "Keep junctions only when normal prevalence is below this value. "
+            "The strict default, 0, removes every exact normal-reference match; "
+            "set 0.01 explicitly for the permissive SSNIP-style threshold."
+        ),
     )
     ap.add_argument(
         "--normal-total-samples",

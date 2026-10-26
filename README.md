@@ -116,9 +116,10 @@ Optional normal filtering before sequence reconstruction:
 
 ```bash
 ./run_pipeline.sh splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.tsv.gz --canonical-only
-./run_pipeline.sh splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.with_tissues.GRCh37.tsv.gz --canonical-only --include-tissue-summary
-./run_pipeline.sh splicing liftover-normal-ref --input /path/to/normal_splice_junction_reference.GRCh37.tsv.gz --out /path/to/normal_splice_junction_reference.GRCh38.tsv.gz --chain /path/to/hg19ToHg38.over.chain.gz
-./run_pipeline.sh splicing spl3.5 Pat21 --normal-ref /path/to/normal_junctions.tsv.gz --max-normal-prevalence 0.01
+./run_pipeline.sh splicing build-normal-ref --snaptron-dir /path/to/snaptron_gtex --out /path/to/normal_splice_junction_reference.with_tissues.native_hg38.tsv.gz --canonical-only --include-tissue-summary
+# Only for an independently verified GRCh37 reference, not the Snaptron gtex compilation above:
+./run_pipeline.sh splicing liftover-normal-ref --input /path/to/verified_GRCh37_reference.tsv.gz --out /path/to/reference.GRCh38.tsv.gz --chain /path/to/hg19ToHg38.over.chain.gz
+./run_pipeline.sh splicing spl3.5 Pat21 --normal-ref /path/to/normal_junctions.tsv.gz --max-normal-prevalence 0
 ./run_pipeline.sh splicing spl4 Pat21 --input-suffix .spl3.5.cancer_unique.tsv
 ```
 
@@ -132,7 +133,7 @@ samples.fields.tsv
 
 It writes a compact normal reference with `chrom`, `left_boundary`, `right_boundary`, `strand`, normal sample counts, read counts, and prevalence. By default it treats Snaptron `start/end` as STAR-style intron coordinates and writes `left_boundary = start - 1`, `right_boundary = end` to match this pipeline's `spl2/spl3` coordinates.
 
-Snaptron GTEx files may be GRCh37. The compact reference must be in the same genome build as `spl3` before exact filtering; if your Snaptron input is GRCh37 and your cohort is GRCh38, run `liftover-normal-ref` before using the reference in `spl3.5`. The default liftover engine is pure Python and reads the UCSC chain file directly, so it does not require a system `liftOver` binary. It maps the two splice-boundary positions independently and writes unmapped/summary audit files.
+The hosted human Snaptron compilations, including the recount2 `gtex` compilation, use hg38 coordinates. Do not apply an hg19-to-hg38 chain to that download. The compact reference must be in the same genome build and coordinate convention as `spl3`; use `liftover-normal-ref` only when the input reference has been independently verified as GRCh37. The default liftover engine is pure Python and reads the UCSC chain file directly, so it does not require a system `liftOver` binary. It maps the two splice-boundary positions independently and writes unmapped/summary audit files.
 
 The compact normal reference for `spl3.5` should contain at least:
 
@@ -146,9 +147,9 @@ It may also contain:
 normal_sample_count	normal_total_reads	normal_prevalence	source
 ```
 
-When built with `--include-tissue-summary`, the reference also carries `normal_tissue_sample_counts`, `normal_tissue_read_counts`, `normal_broad_tissue_sample_counts`, and `normal_broad_tissue_read_counts` from `samples.tsv` metadata. `spl3.5` copies those labels into patient-level outputs and records tissue-specific match/filter counts in `*.spl3.5.normal_filter_summary.tsv`.
+When built with `--include-tissue-summary`, the reference also carries `normal_tissue_sample_counts`, `normal_tissue_read_counts`, `normal_broad_tissue_sample_counts`, and `normal_broad_tissue_read_counts` from `samples.tsv` metadata. `spl3.5` copies those labels into patient-level outputs and records tissue-specific match/filter counts in `*.spl3.5.normal_filter_summary.tsv`. `spl4` preserves these row-level normal-reference annotations in its final neojunction TSV.
 
-Rows matching the normal reference at or above `--max-normal-prevalence` are written to `*.spl3.5.normal_present.tsv`; retained rows are written to `*.spl3.5.cancer_unique.tsv`.
+Rows matching the normal reference at or above `--max-normal-prevalence` are written to `*.spl3.5.normal_present.tsv`; retained rows are written to `*.spl3.5.cancer_unique.tsv`. The default is strict (`0`): any exact normal-reference match is removed. Set `--max-normal-prevalence 0.01` explicitly only for the more permissive SSNIP-style mode that retains normal matches observed below 1% prevalence.
 
 Splicing outputs are written under `${splicing_outdir}/${patient}_RNA_${tumor_tag}` or `${datadir}/splicing/${patient}_RNA_${tumor_tag}`. The main MuPeXI2 input is:
 

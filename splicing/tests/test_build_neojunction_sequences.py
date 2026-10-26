@@ -140,6 +140,16 @@ class FrameClassificationTests(unittest.TestCase):
     def test_process_file_separates_eligible_and_rejected_events(self):
         tx, seq_cache = self.make_transcript(first_length=8, skipped_length=9)
         eligible = self.event_row(tx)
+        eligible.update(
+            {
+                "normal_ref_match": "1",
+                "normal_status": "present_below_threshold",
+                "normal_sample_count": "7",
+                "normal_total_reads": "18",
+                "normal_prevalence": "0.0007637",
+                "normal_tissue_sample_counts": "Bladder=2;Testis=5",
+            }
+        )
         unchanged = self.event_row(tx, acceptor_exon_index=1)
         transcripts = {tx.transcript_id: tx, spl4.strip_version(tx.transcript_id): tx}
 
@@ -176,6 +186,9 @@ class FrameClassificationTests(unittest.TestCase):
         self.assertEqual(stats["rejected_rows"], 1)
         self.assertEqual(output_rows[0]["reading_frame"], "inframe")
         self.assertEqual(output_rows[0]["sequence_eligible"], "1")
+        self.assertEqual(output_rows[0]["normal_status"], "present_below_threshold")
+        self.assertEqual(output_rows[0]["normal_sample_count"], "7")
+        self.assertEqual(output_rows[0]["normal_tissue_sample_counts"], "Bladder=2;Testis=5")
         self.assertIn("frame_no_protein_change", rejected_rows[0]["sequence_filter_reason"])
         self.assertEqual(rejected_rows[0]["peptide_sequence"], "NA")
 

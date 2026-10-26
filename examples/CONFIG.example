@@ -32,9 +32,11 @@ dna_bam_suffix="md.bam"
 # right_boundary/end, and optionally strand. Useful optional columns:
 # normal_sample_count/gtex_sample_count/sample_count, normal_total_reads,
 # normal_prevalence/gtex_prevalence, source.
-# splicing_normal_junction_ref="/path/to/normal_splice_junction_reference.tsv.gz"
+# Hosted human Snaptron compilations, including recount2 gtex, are already hg38.
+# Do not liftover that download; point to its native compact reference directly.
+# splicing_normal_junction_ref="/path/to/normal_splice_junction_reference.with_tissues.native_hg38.tsv.gz"
 # Build the reference with --include-tissue-summary to carry GTEx tissue labels into spl3.5 outputs.
-# Optional names for build-specific normal references before/after liftover.
+# Optional names for an independently verified GRCh37 reference and its lifted output.
 # splicing_normal_junction_ref_grch37="/path/to/normal_splice_junction_reference.GRCh37.tsv.gz"
 # splicing_normal_junction_ref_grch38="/path/to/normal_splice_junction_reference.GRCh38.tsv.gz"
 # splicing_liftover_chain="/path/to/hg19ToHg38.over.chain.gz"
@@ -42,7 +44,9 @@ dna_bam_suffix="md.bam"
 # Set splicing_liftover_engine="ucsc" only if you have a compatible UCSC liftOver binary.
 # splicing_liftover_engine="python"
 # splicing_liftover_bin="liftOver"
-# splicing_normal_max_prevalence="0.01"
+# Strict default: remove every exact normal-reference match. Set "0.01" explicitly
+# only when the permissive SSNIP-style normal prevalence threshold is intended.
+splicing_normal_max_prevalence="0"
 # splicing_normal_total_samples="9166"
 # If spl3.5 is used, make spl4 read the filtered cancer-unique file:
 # splicing_spl4_input_suffix=".spl3.5.cancer_unique.tsv"
